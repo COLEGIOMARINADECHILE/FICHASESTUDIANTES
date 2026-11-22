@@ -35,21 +35,35 @@
 
   <!-- INGRESO -->
   <main id="login-view" class="login" hidden>
-    <div class="login__photo" role="img" aria-label="Fotografía del Colegio Marina de Chile"></div>
+    <section class="login__hero">
+      <div class="login__crest">
+        <img class="crest" data-logo="school" alt="Escudo del Colegio Marina de Chile" hidden>
+        <span class="crest crest--fallback" data-logo-fallback><i data-lucide="anchor" class="ico" aria-hidden="true"></i></span>
+      </div>
+      <div class="login__title">
+        <p class="login__school" data-brand="tagline">Colegio Marina de Chile</p>
+        <h1 class="login__name" data-brand="name">Trayectoria Escolar</h1>
+        <p class="login__claim">El acompañamiento de cada estudiante, en un solo lugar.</p>
+      </div>
+      <ul class="login__areas" aria-label="Áreas del sistema">
+        <li data-tone="conv"><i data-lucide="heart-handshake" class="ico" aria-hidden="true"></i>Convivencia</li>
+        <li data-tone="pie"><i data-lucide="puzzle" class="ico" aria-hidden="true"></i>Inclusión PIE</li>
+        <li data-tone="obs"><i data-lucide="eye" class="ico" aria-hidden="true"></i>Observaciones</li>
+        <li data-tone="enf"><i data-lucide="heart-pulse" class="ico" aria-hidden="true"></i>Enfermería</li>
+        <li data-tone="plan"><i data-lucide="list-checks" class="ico" aria-hidden="true"></i>Planes de apoyo</li>
+      </ul>
+      <div class="login__slep"><img class="slep-logo" data-logo="slep" alt="Logo del Servicio Local de Educación Pública Andalién Sur" hidden></div>
+    </section>
     <div class="login__panel">
       <form id="login-form" class="login__form" onsubmit="app.handleLogin(event)">
-        <div class="brand brand--login">
-          <img class="brand__logo" data-logo="school" alt="Logo del Colegio Marina de Chile" hidden>
-          <span class="brand__mark" data-logo-fallback><i data-lucide="heart-handshake" class="ico" aria-hidden="true"></i></span>
-          <span><span class="brand__name" data-brand="name">Trayectoria Escolar</span><br><span class="brand__sub" data-brand="tagline">Colegio Marina de Chile</span></span>
-        </div>
         <div>
-          <h1>Ingresar al sistema</h1>
+          <h2 class="login__h">Ingresar</h2>
           <p class="login__lede">Elija su perfil, su nombre y escriba su clave.</p>
         </div>
+        <p id="login-empty" class="login__empty" hidden></p>
         <fieldset class="field" style="border:0;padding:0;margin:0">
           <legend class="field__label">1. Perfil</legend>
-          <div id="login-roles" class="segs"></div>
+          <div id="login-roles" class="roles"></div>
         </fieldset>
         <label class="field"><span class="field__label">2. Nombre</span>
           <select id="login-user" class="input" onchange="app.checkLogin()" disabled><option value="">Cargando...</option></select>
@@ -60,8 +74,7 @@
             <button type="button" class="icon-btn" aria-label="Mostrar clave" onclick="app.togglePassword(this)"><i data-lucide="eye" class="ico" aria-hidden="true"></i></button>
           </span>
         </label>
-        <button type="submit" id="login-btn" class="btn btn--primary" style="min-height:3rem" disabled>Entrar al sistema</button>
-        <div class="login__foot"><img class="slep-logo" data-logo="slep" alt="Logo del Servicio Local de Educación Pública Andalién Sur" hidden></div>
+        <button type="submit" id="login-btn" class="btn btn--primary btn--lg" disabled>Entrar al sistema</button>
       </form>
     </div>
   </main>

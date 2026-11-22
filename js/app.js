@@ -75,13 +75,27 @@ window.app = {
   renderLogin() {
     const { roles = [], users = [] } = State.loginOptions || {};
     const sel = State.loginRole || '';
-    el('login-roles').innerHTML = roles.map(r => `<button type="button" class="seg" aria-pressed="${sel === r}" onclick="app.selectRole(${jsq(r)})">${esc(r)}</button>`).join('');
+    const roleIcon = { 'Docente': 'book-open', 'Asistente de la Educación': 'hand-helping', 'Directivo': 'landmark', 'Convivencia': 'heart-handshake', 'UTP': 'graduation-cap', 'Administrador': 'shield-check', 'Equipo PIE': 'puzzle' };
+    el('login-roles').innerHTML = roles.map(r => {
+      const n = users.filter(u => u.role === r).length;
+      return `<button type="button" class="role" data-tone="${ROLE_TONE[r] || 'neutral'}" aria-pressed="${sel === r}" onclick="app.selectRole(${jsq(r)})">${ico(roleIcon[r] || 'user')}<span class="role__name">${esc(r)}</span><span class="role__count num">${n}</span></button>`;
+    }).join('');
+    const vacio = !users.length && !State.demo;
+    el('login-empty').hidden = !vacio;
+    if (vacio) el('login-empty').innerHTML = `${ico('alert-triangle')}<span><strong>Aún no hay funcionarios registrados.</strong> En el editor de Apps Script ejecute la función <span class="num">restablecerAdmin</span> y lea la clave en el registro de ejecución.</span>`;
     const list = users.filter(u => u.role === sel);
     el('login-user').innerHTML = `<option value="">${sel ? 'Seleccione a la persona...' : 'Primero elija un perfil'}</option>` + list.map(u => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('');
     el('login-user').disabled = !sel;
     this.checkLogin();
   },
-  selectRole(r) { State.loginRole = r; this.renderLogin(); el('login-user').focus(); },
+  selectRole(r) {
+    State.loginRole = r;
+    this.renderLogin();
+    icons();
+    const list = (State.loginOptions.users || []).filter(u => u.role === r);
+    if (list.length === 1) { el('login-user').value = list[0].id; this.checkLogin(); el('login-password').focus(); }
+    else el('login-user').focus();
+  },
   checkLogin() {
     const hasUser = !!el('login-user').value;
     el('login-password').disabled = !hasUser;
