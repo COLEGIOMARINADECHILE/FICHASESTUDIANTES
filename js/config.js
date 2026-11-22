@@ -2,7 +2,7 @@
 window.APP_CONFIG = {
   // URL de la aplicación web publicada en Google Apps Script (termina en /exec).
   // Si se deja vacía, la página abre en modo demostración y no guarda nada.
-  API_URL: '',
+  API_URL: 'https://script.google.com/macros/s/AKfycbxjoqs7IXH2ZMUZ-d1TwnSIa5_PE3qmSWEDizesyQQM0AqOYUHtFvlwouADxfDtSToC/exec',
 
   // Nombre del sistema que se muestra en el ingreso, el menú y la pestaña del navegador.
   // También se puede cambiar desde Administración > Nombre, logos e IA (ese valor tiene prioridad).
