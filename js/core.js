@@ -25,6 +25,7 @@ const INIT_VARS = {
   appName: '',
   appTagline: '',
   soloGoogle: false,
+  loginImages: [],
   aiConfigured: false
 };
 
@@ -296,7 +297,7 @@ const Demo = {
       (this.audit = this.audit || []).push({ fecha: new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19), funcionario: u?.name || '', perfil: u?.customRole || u?.role || '', accion, seccion: col || (action === 'registrarEvento' ? 'Estudiantes' : action === 'login' || action === 'logout' ? 'Sesión' : ''), registro: p.id || p.studentId || '', detalle: p.data?.name || p.data?.type || p.kind || '' });
     }
     switch (action) {
-      case 'bootstrap': return { soloGoogle: !!this.db.variables.soloGoogle, appName: this.db.variables.appName, appTagline: this.db.variables.appTagline, roles: this.db.variables.roles, users: this.db.users.map(u => ({ id: u.id, name: u.name, role: u.role })), schoolLogo: this.db.variables.schoolLogo, slepLogo: this.db.variables.slepLogo, bgImage: this.db.variables.bgImage };
+      case 'bootstrap': return { loginImages: this.db.variables.loginImages || [], soloGoogle: !!this.db.variables.soloGoogle, appName: this.db.variables.appName, appTagline: this.db.variables.appTagline, roles: this.db.variables.roles, users: this.db.users.map(u => ({ id: u.id, name: u.name, role: u.role })), schoolLogo: this.db.variables.schoolLogo, slepLogo: this.db.variables.slepLogo, bgImage: this.db.variables.bgImage };
       case 'login': { if (this.db.variables.soloGoogle) throw new Error('El ingreso es solo con su cuenta de Google @andaliensur.cl.'); const u = this.db.users.find(x => sameId(x.id, p.userId)); if (!u) throw new Error('Usuario no encontrado'); if (u.active === false) throw new Error('Usuario inactivo'); return { token: 'demo', user: clone(u) }; }
       case 'getAll': { const out = clone(this.db); out.me = clone(this.db.users.find(u => sameId(u.id, State.currentUser?.id)) || State.currentUser); return out; }
       case 'save': {

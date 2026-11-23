@@ -9,21 +9,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="css/app.css?v=2026-11-24d">
+  <link rel="stylesheet" href="css/app.css?v=2026-11-24e">
 
   <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=2026-11-24d"></script>
-  <script defer src="js/core.js?v=2026-11-24d"></script>
-  <script defer src="js/app.js?v=2026-11-24d"></script>
-  <script defer src="js/plans.js?v=2026-11-24d"></script>
-  <script defer src="js/export.js?v=2026-11-24d"></script>
-  <script defer src="js/imports.js?v=2026-11-24d"></script>
-  <script defer src="js/people.js?v=2026-11-24d"></script>
-  <script defer src="js/audit.js?v=2026-11-24d"></script>
+  <script defer src="js/config.js?v=2026-11-24e"></script>
+  <script defer src="js/core.js?v=2026-11-24e"></script>
+  <script defer src="js/app.js?v=2026-11-24e"></script>
+  <script defer src="js/plans.js?v=2026-11-24e"></script>
+  <script defer src="js/export.js?v=2026-11-24e"></script>
+  <script defer src="js/imports.js?v=2026-11-24e"></script>
+  <script defer src="js/people.js?v=2026-11-24e"></script>
+  <script defer src="js/audit.js?v=2026-11-24e"></script>
   <script async src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
@@ -37,55 +37,68 @@
   </div>
 
   <!-- INGRESO -->
-  <main id="login-view" class="login" hidden>
-    <section class="login__hero">
-      <div class="login__crest">
-        <img class="crest" data-logo="school" alt="Escudo del Colegio Marina de Chile" hidden>
-        <span class="crest crest--fallback" data-logo-fallback><i data-lucide="anchor" class="ico" aria-hidden="true"></i></span>
+  <main id="login-view" class="login login--v2" hidden>
+    <div id="login-bg" class="login__bg" aria-hidden="true"></div>
+    <div class="login__veil" aria-hidden="true"></div>
+
+    <header class="login__top">
+      <div class="logos">
+        <span class="logos__item">
+          <img class="logos__school" data-logo="school" alt="Logo del Colegio Marina de Chile" hidden>
+          <span class="logos__fallback" data-logo-fallback><i data-lucide="anchor" class="ico" aria-hidden="true"></i></span>
+        </span>
+        <span class="logos__item logos__item--slep"><img class="logos__slep" data-logo="slep" alt="Logo del Servicio Local de Educación Pública Andalién Sur" hidden></span>
       </div>
-      <div class="login__title">
-        <p class="login__school" data-brand="tagline">Colegio Marina de Chile</p>
-        <h1 class="login__name" data-brand="name">Trayectoria Escolar</h1>
-        <p class="login__claim">El acompañamiento de cada estudiante, en un solo lugar.</p>
-      </div>
+    </header>
+
+    <section class="login__intro">
+      <p class="login__school" data-brand="tagline">Colegio Marina de Chile</p>
+      <h1 class="login__name" data-brand="name">Trayectoria Escolar</h1>
+      <p class="login__claim">El acompañamiento de cada estudiante, en un solo lugar.</p>
       <ul class="login__areas" aria-label="Áreas del sistema">
-        <li data-tone="conv"><i data-lucide="heart-handshake" class="ico" aria-hidden="true"></i>Convivencia</li>
-        <li data-tone="pie"><i data-lucide="puzzle" class="ico" aria-hidden="true"></i>Inclusión PIE</li>
-        <li data-tone="obs"><i data-lucide="eye" class="ico" aria-hidden="true"></i>Observaciones</li>
-        <li data-tone="enf"><i data-lucide="heart-pulse" class="ico" aria-hidden="true"></i>Enfermería</li>
-        <li data-tone="plan"><i data-lucide="list-checks" class="ico" aria-hidden="true"></i>Planes de apoyo</li>
+        <li><i data-lucide="heart-handshake" class="ico" aria-hidden="true"></i>Convivencia</li>
+        <li><i data-lucide="puzzle" class="ico" aria-hidden="true"></i>Inclusión PIE</li>
+        <li><i data-lucide="eye" class="ico" aria-hidden="true"></i>Observaciones</li>
+        <li><i data-lucide="heart-pulse" class="ico" aria-hidden="true"></i>Enfermería</li>
+        <li><i data-lucide="list-checks" class="ico" aria-hidden="true"></i>Planes de apoyo</li>
       </ul>
-      <div class="login__slep"><img class="slep-logo" data-logo="slep" alt="Logo del Servicio Local de Educación Pública Andalién Sur" hidden></div>
     </section>
+
     <div class="login__panel">
       <form id="login-form" class="login__form" onsubmit="app.handleLogin(event)">
         <div>
           <h2 class="login__h">Bienvenido</h2>
-          <p class="login__lede">¿Con qué perfil trabaja en el colegio?</p>
+          <p class="login__lede">Ingrese con su cuenta institucional.</p>
         </div>
         <p id="login-empty" class="login__empty" hidden></p>
         <div id="login-google" class="login__google" hidden>
           <div id="login-google-btn"></div>
-          <p class="login__or"><span>o ingrese con su perfil y clave</span></p>
         </div>
-        <fieldset class="login__fieldset">
-          <legend class="sr-only">Perfil</legend>
-          <div id="login-roles" class="roles"></div>
-        </fieldset>
-        <div id="login-steps" class="login__steps" hidden>
-          <label class="field"><span class="field__label">Su nombre</span>
-            <select id="login-user" class="input input--lg" onchange="app.checkLogin()" disabled><option value="">Cargando...</option></select>
-          </label>
-          <label class="field"><span class="field__label">Contraseña</span>
-            <span class="pass">
-              <input type="password" id="login-password" class="input input--lg" autocomplete="current-password" oninput="app.checkLogin()" disabled required>
-              <button type="button" class="icon-btn" aria-label="Mostrar clave" onclick="app.togglePassword(this)"><i data-lucide="eye" class="ico" aria-hidden="true"></i></button>
-            </span>
-          </label>
-          <button type="submit" id="login-btn" class="btn btn--primary btn--lg" disabled>Entrar al sistema<i data-lucide="arrow-right" class="ico" aria-hidden="true"></i></button>
-        </div>
+        <details id="login-more" class="login__more">
+          <summary><i data-lucide="users" class="ico" aria-hidden="true"></i><span>Ingresar con perfil y clave</span><i data-lucide="chevron-down" class="ico login__chev" aria-hidden="true"></i></summary>
+          <div class="login__more-body">
+            <fieldset class="login__fieldset">
+              <legend class="field__label">1. Elija su perfil</legend>
+              <div id="login-roles" class="roles"></div>
+            </fieldset>
+            <div id="login-steps" class="login__steps" hidden>
+              <label class="field"><span class="field__label">2. Su nombre</span>
+                <select id="login-user" class="input input--lg" onchange="app.checkLogin()" disabled><option value="">Cargando...</option></select>
+              </label>
+              <label class="field"><span class="field__label">3. Contraseña</span>
+                <span class="pass">
+                  <input type="password" id="login-password" class="input input--lg" autocomplete="current-password" oninput="app.checkLogin()" disabled required>
+                  <button type="button" class="icon-btn" aria-label="Mostrar clave" onclick="app.togglePassword(this)"><i data-lucide="eye" class="ico" aria-hidden="true"></i></button>
+                </span>
+              </label>
+              <button type="submit" id="login-btn" class="btn btn--primary btn--lg" disabled>Entrar al sistema<i data-lucide="arrow-right" class="ico" aria-hidden="true"></i></button>
+            </div>
+          </div>
+        </details>
       </form>
     </div>
+
+    <div id="login-dots" class="login__dots"></div>
   </main>
 
   <!-- APLICACIÓN -->

@@ -68,6 +68,86 @@ window.app = {
     });
   },
 
+  // ---------------- FONDOS DE LA PORTADA (se alternan con un fundido) ----------------
+  loginImageList() {
+    const v = State.variables, o = State.loginOptions || {};
+    const custom = (State.currentUser ? v.loginImages : null) || o.loginImages || v.loginImages || [];
+    const list = custom.length ? custom : [o.bgImage || v.bgImage || 'img/COLEGIO.jpg', 'img/portada-1.jpg', 'img/portada-2.jpg', 'img/portada-3.jpg'];
+    return [...new Set(list.filter(Boolean))];
+  },
+  startLoginSlides() {
+    const key = this.loginImageList().join('|');
+    if (this._slidesKey === key) return;
+    this._slidesKey = key;
+    clearInterval(this._slideTimer);
+    const bg = el('login-bg'), dots = el('login-dots');
+    bg.innerHTML = ''; dots.innerHTML = '';
+    const ok = [];
+    const show = i => {
+      ok.forEach((layer, k) => layer.classList.toggle('is-on', k === i));
+      [...dots.children].forEach((d, k) => d.setAttribute('aria-pressed', k === i));
+      this._slide = i;
+    };
+    const addDots = () => {
+      dots.innerHTML = ok.length > 1 ? ok.map((_, k) => `<button type="button" class="login__dot" aria-label="Ver imagen ${k + 1}" aria-pressed="${k === 0}"></button>`).join('') : '';
+      [...dots.children].forEach((d, k) => d.addEventListener('click', () => { show(k); this.restartSlides(ok, show); }));
+    };
+    // Solo se muestran las imágenes que realmente cargan
+    this.loginImageList().forEach(src => {
+      const img = new Image();
+      img.onload = () => {
+        const layer = document.createElement('div');
+        layer.className = 'login__slide';
+        layer.style.backgroundImage = `url("${String(src).replace(/"/g, '%22')}")`;
+        bg.appendChild(layer);
+        ok.push(layer);
+        if (ok.length === 1) show(0);
+        addDots();
+        this.restartSlides(ok, show);
+      };
+      img.src = src;
+    });
+  },
+  restartSlides(ok, show) {
+    clearInterval(this._slideTimer);
+    if (ok.length < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    this._slideTimer = setInterval(() => show(((this._slide || 0) + 1) % ok.length), 7000);
+  },
+
+  // Editor de las fotografías de la portada (Administración > Nombre, logos e IA)
+  loginImagesEditorHtml() {
+    if (!State.tempLoginImages) State.tempLoginImages = [...(State.variables.loginImages || [])];
+    const list = State.tempLoginImages;
+    return `<div class="panel__head"><h2>${ico('images')}Fotografías de fondo de la portada</h2>${chip(`${list.length} imagen(es)`, 'obs')}</div>
+      <p class="muted small">Se muestran de fondo en la pantalla de ingreso y cambian cada 7 segundos con un fundido. Use fotografías horizontales del colegio (ideal 1920 x 1080 px). Si no agrega ninguna, se usa la fotografía principal y los archivos <span class="num">img/portada-1.jpg</span>, <span class="num">portada-2.jpg</span> y <span class="num">portada-3.jpg</span> del sitio.</p>
+      ${list.length ? `<ol class="thumbs">${list.map((src, i) => `<li class="thumb"><img src="${esc(src)}" alt="Fotografía de portada ${i + 1}" loading="lazy" onerror="this.closest('li').dataset.broken='1'"><span class="thumb__n num">${i + 1}</span>
+        <span class="thumb__actions">
+          <button type="button" class="icon-btn icon-btn--sm" aria-label="Mover antes" ${i === 0 ? 'disabled' : ''} onclick="app.moveLoginImage(${i}, -1)">${ico('arrow-left')}</button>
+          <button type="button" class="icon-btn icon-btn--sm" aria-label="Mover después" ${i === list.length - 1 ? 'disabled' : ''} onclick="app.moveLoginImage(${i}, 1)">${ico('arrow-right')}</button>
+          <button type="button" class="icon-btn icon-btn--sm icon-btn--danger" aria-label="Quitar imagen" onclick="app.removeLoginImage(${i})">${ico('trash-2')}</button></span></li>`).join('')}</ol>` : ''}
+      <div class="grid-2">
+        ${fieldHtml('Agregar por dirección', `<div class="row-field"><input id="login-img-url" class="input" placeholder="img/portada-1.jpg o https://..."><button type="button" class="btn" onclick="app.addLoginImage(el('login-img-url').value)">${ico('plus')}Agregar</button></div>`)}
+        ${fieldHtml('O subir desde el computador (máx. 600 KB)', `<input type="file" class="file" accept="image/jpeg,image/png,image/webp" onchange="app.uploadLoginImage(event)">`)}
+      </div>
+      <p class="note">${ico('info')}Los cambios se aplican al presionar "Guardar y aplicar cambios". Para fotografías pesadas, súbalas a la carpeta <span class="num">img/</span> de GitHub y agréguelas por dirección.</p>`;
+  },
+  refreshLoginImagesEditor() { el('login-images-panel').innerHTML = this.loginImagesEditorHtml(); icons(); },
+  addLoginImage(src) {
+    src = String(src || '').trim();
+    if (!src) return toast('Escriba la dirección de la imagen', 'error');
+    State.tempLoginImages.push(src);
+    this.refreshLoginImagesEditor();
+  },
+  async uploadLoginImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 600 * 1024) return toast('La imagen pesa más de 600 KB. Súbala a la carpeta img/ de GitHub y agréguela por dirección.', 'error');
+    State.tempLoginImages.push(await readFileAsDataURL(file));
+    this.refreshLoginImagesEditor();
+  },
+  removeLoginImage(i) { State.tempLoginImages.splice(i, 1); this.refreshLoginImagesEditor(); },
+  moveLoginImage(i, d) { const a = State.tempLoginImages; [a[i], a[i + d]] = [a[i + d], a[i]]; this.refreshLoginImagesEditor(); },
+
   applyPhoto(src) {
     document.documentElement.style.setProperty('--login-photo', src ? `url("${String(src).replace(/"/g, '%22')}")` : 'none');
   },
@@ -83,9 +163,12 @@ window.app = {
     // Ingreso solo con Google: se ocultan los perfiles y la clave
     const solo = !!State.loginOptions?.soloGoogle && !State.demo;
     const form = el('login-form');
-    form.querySelector('.login__fieldset').hidden = solo;
-    form.querySelector('.login__or').hidden = solo;
-    form.querySelector('.login__lede').textContent = solo ? `Ingrese con su cuenta institucional @${State.loginOptions.dominio || 'andaliensur.cl'}.` : '¿Con qué perfil trabaja en el colegio?';
+    const hayGoogle = !!(State.loginOptions?.googleClientId || window.APP_CONFIG?.GOOGLE_CLIENT_ID) && !State.demo;
+    el('login-more').hidden = solo;
+    if (!hayGoogle && !el('login-more').dataset.init) { el('login-more').open = true; } // sin Google, el desplegable parte abierto
+    el('login-more').dataset.init = '1';
+    form.querySelector('.login__lede').textContent = `Ingrese con su cuenta institucional @${State.loginOptions?.dominio || 'andaliensur.cl'}${solo ? '.' : ', o despliegue el ingreso con perfil y clave.'}`;
+    this.startLoginSlides();
     form.classList.toggle('is-google-only', solo);
     el('login-steps').hidden = !sel || solo;
     const vacio = !users.length && !State.demo && !solo;
@@ -139,6 +222,7 @@ window.app = {
     await DB.load();
     State.currentView = this.isQuickOnly() ? 'quick' : 'dashboard';
     State.welcome = true;
+    clearInterval(this._slideTimer); this._slidesKey = null; // detiene los fondos de la portada
     this.render();
   },
   /** Resumen legible de lo que el perfil permite hacer. */
@@ -1198,7 +1282,8 @@ window.app = {
       <div class="panel"><div class="panel__head"><h2>${ico('key')}API Key de inteligencia artificial (Groq)</h2>${chip(v.aiConfigured ? 'Configurada' : 'Sin configurar', v.aiConfigured ? 'conv' : 'warn')}</div>
         <p class="muted">La clave se guarda en el servidor de Apps Script y nunca se envía al navegador. Deje el campo vacío para conservar la actual.</p>
         <div class="row-field"><input type="password" id="cfg-apikey" class="input" placeholder="gsk_..." autocomplete="off" aria-label="API Key"><button class="btn" onclick="app.saveApiKey()">Guardar clave</button></div></div>
-      <div class="grid-3">${img('schoolLogo', 'Logo del colegio', 'logo-sch', 'preview-logo-izq')}${img('slepLogo', 'Logo SLEP', 'logo-slep', 'preview-logo-der')}${img('bgImage', 'Fotografía de ingreso', 'bg-img-input', 'preview-bg-img')}</div>
+      <div class="grid-3">${img('schoolLogo', 'Logo del colegio', 'logo-sch', 'preview-logo-izq')}${img('slepLogo', 'Logo SLEP', 'logo-slep', 'preview-logo-der')}${img('bgImage', 'Fotografía principal', 'bg-img-input', 'preview-bg-img')}</div>
+      <div class="panel" id="login-images-panel">${this.loginImagesEditorHtml()}</div>
       <div class="form-foot"><span></span><button class="btn btn--primary" onclick="app.saveLogos()">Guardar y aplicar cambios</button></div></section>`;
   },
   admin_knowledge() {
@@ -1236,8 +1321,8 @@ window.app = {
     el(previewId).style.visibility = '';
   },
   async saveLogos() {
-    const patch = { appName: el('cfg-app-name').value.trim(), appTagline: el('cfg-app-tagline').value.trim(), schoolLogo: el('logo-sch').value.trim(), slepLogo: el('logo-slep').value.trim(), bgImage: el('bg-img-input').value.trim() };
-    try { await DB.saveVars(patch); this.applyPhoto(patch.bgImage); this.applyBranding(); toast('Configuración guardada'); } catch (e) { toast(e.message, 'error'); }
+    const patch = { appName: el('cfg-app-name').value.trim(), appTagline: el('cfg-app-tagline').value.trim(), schoolLogo: el('logo-sch').value.trim(), slepLogo: el('logo-slep').value.trim(), bgImage: el('bg-img-input').value.trim(), loginImages: [...(State.tempLoginImages || State.variables.loginImages || [])] };
+    try { await DB.saveVars(patch); this._slidesKey = null; State.loginOptions = { ...State.loginOptions, loginImages: patch.loginImages, bgImage: patch.bgImage }; this.applyPhoto(patch.bgImage); this.applyBranding(); toast('Configuración guardada'); } catch (e) { toast(e.message, 'error'); }
   },
   async saveApiKey() {
     const value = el('cfg-apikey').value.trim();
