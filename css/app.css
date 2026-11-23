@@ -923,3 +923,14 @@ h1, h2 { color: var(--color-heading); }
   .side, .no-print, #toast-container { display: none !important; }
   body { background: var(--doc-paper); }
 }
+
+/* Insignia PIE: identifica de un vistazo a quienes reciben apoyo del Programa de Integración */
+.pie-badge {
+  display: inline-flex; align-items: center; gap: 0.25em; vertical-align: middle;
+  padding: 0.1em 0.5em; border-radius: 999px; font-size: 0.72rem; font-weight: 700; line-height: 1.5;
+  background: var(--tone-pie-soft); color: var(--tone-pie-ink);
+  border: 1px solid color-mix(in oklch, currentColor 30%, transparent); white-space: nowrap;
+}
+.pie-badge svg { width: 0.95em; height: 0.95em; }
+.pie-badge--sm { margin-top: 0.35rem; align-self: flex-start; }
+.entry__name .pie-badge { font-size: 0.8rem; margin-left: 0.4rem; }

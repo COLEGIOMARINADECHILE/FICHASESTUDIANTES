@@ -164,7 +164,7 @@ ${b.tagline}`.trim();
   },
 
   // ---------------- REGISTROS POR CATEGORÍA (contadores clicables) ----------------
-  RECORD_CATS: { proto: ['Protocolos', 'alert-octagon'], conv: ['Intervenciones de Convivencia', 'heart-handshake'], pie: ['Intervenciones PIE', 'puzzle'], obs: ['Observaciones docentes', 'eye'], enf: ['Atenciones de enfermería', 'heart-pulse'] },
+  RECORD_CATS: { proto: ['Protocolos', 'alert-octagon'], conv: ['Intervenciones de Convivencia', 'heart-handshake'], pie: ['Trabajo PIE (intervenciones, planes y documentos)', 'puzzle'], obs: ['Observaciones docentes', 'eye'], enf: ['Atenciones de enfermería', 'heart-pulse'] },
   /** Convivencia o PIE según el perfil de quien registró; los protocolos van aparte. */
   recordCategory(h) {
     if (h.type === PROTOCOLO) return 'proto';
@@ -185,6 +185,10 @@ ${b.tagline}`.trim();
     const items = [];
     students.forEach(s => {
       if (['proto', 'conv', 'pie'].includes(cat)) s.history.filter(h => !this.isCarta(h) && this.recordCategory(h) === cat).forEach(h => items.push({ s, h, kind: 'int' }));
+      if (cat === 'pie') {
+        State.rawInclusionReports.filter(r => sameId(r.studentId, s.id)).forEach(h => items.push({ s, h, kind: 'plan' }));
+        State.rawEvidences.filter(e => sameId(e.studentId, s.id) && e.area === 'PIE').forEach(h => items.push({ s, h, kind: 'doc' }));
+      }
       if (cat === 'obs') s.observations.forEach(h => items.push({ s, h, kind: 'obs' }));
       if (cat === 'enf') s.nursing.forEach(h => items.push({ s, h, kind: 'enf' }));
     });
@@ -199,6 +203,12 @@ ${b.tagline}`.trim();
           <p class="muted">Existe una intervención registrada, pero es confidencial. Puede solicitar la información a quien la registró.</p>
           <footer class="record__foot"><span>${ico('user')}Registrado por ${esc(h.professional)}</span><button class="btn btn--sm" onclick="app.requestRecord(${jsq(h.id)})">${ico('mail')}Solicitar información</button></footer>
         </article>`;
+      if (kind === 'plan' || kind === 'doc') return `<article class="record" data-tone="pie">
+        <header class="record__head"><span class="record__icon">${ico(kind === 'plan' ? 'clipboard-check' : 'file-text')}</span><div><span class="record__date num">${fmtDate(h.date)}${h.anio ? ` (año ${esc(h.anio)})` : ''}</span><h3>${esc(h.type || (kind === 'plan' ? 'Plan PIE' : 'Documento PIE'))}</h3>${quien}</div>
+          ${kind === 'doc' || h.evidenceId ? `<button class="btn btn--sm" onclick="app.openEvidence(${jsq(kind === 'doc' ? h.id : h.evidenceId)})">${ico('external-link')}Abrir</button>` : ''}</header>
+        <p class="small">${kind === 'plan' ? `${(h.estrategias || []).length} estrategia(s) en ${new Set((h.estrategias || []).map(e => e.ambito)).size} ámbito(s). Archivo: ${esc(h.fuente || '-')}` : `${esc(h.fileName || '')}${h.description ? `. ${esc(h.description)}` : ''}`}</p>
+        <footer class="record__foot"><span>${ico('user')}${esc(h.responsablePlan || h.uploadedBy || 'Equipo PIE')}</span>${varios && hasAccess('ver_fichas') ? `<button class="btn btn--sm btn--ghost" onclick="ui.close(); State.detailTab='pie'; app.openStudent(${jsq(s.id)})">Ver ficha PIE</button>` : ''}</footer>
+      </article>`;
       const detalle = kind === 'obs' ? esc(h.content) : kind === 'enf' ? `Motivo: ${esc(h.reason)}\nIntervención: ${esc(h.intervention)}${h.observation ? `\nObservación: ${esc(h.observation)}` : ''}` : esc(h.background || '');
       const prot = h.protocol ? `<p class="small"><strong>Protocolo:</strong> ${esc(h.protocol.type)}. <strong>Estado:</strong> ${esc(h.protocol.status || 'En Proceso')}.</p>` : '';
       return `<article class="record" data-tone="${cat}">

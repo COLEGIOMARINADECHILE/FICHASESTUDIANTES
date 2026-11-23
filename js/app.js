@@ -332,7 +332,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -370,6 +370,7 @@ window.app = {
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail', 'traspaso']],
+      ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
       ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), []],
@@ -422,13 +423,33 @@ window.app = {
   },
   current() { return this.getStudent(State.selectedStudentId); },
   /** Conteo único de registros por estudiante (antes se repetía en 6 lugares). */
+  /** Planes y documentos PIE por estudiante (se recalcula solo cuando cambian los datos). */
+  pieIndex() {
+    const key = `${State.rawEvidences.length}|${State.rawInclusionReports.length}|${State.lastSync}`;
+    if (this._pieKey === key && this._pieIdx) return this._pieIdx;
+    const idx = new Map();
+    const get = id => { const k = String(id); if (!idx.has(k)) idx.set(k, { plans: 0, docs: 0, ultima: '' }); return idx.get(k); };
+    State.rawInclusionReports.forEach(r => { const x = get(r.studentId); x.plans++; if ((r.date || '') > x.ultima) x.ultima = r.date || ''; });
+    State.rawEvidences.forEach(e => { if (e.area !== 'PIE') return; const x = get(e.studentId); x.docs++; if ((e.date || '') > x.ultima) x.ultima = e.date || ''; });
+    this._pieKey = key; this._pieIdx = idx;
+    return idx;
+  },
+  /** ¿Recibe apoyo PIE? Tiene plan, documentos PIE o intervenciones del Equipo PIE. */
+  isPie(s) {
+    const p = this.pieIndex().get(String(s.id));
+    return !!(p && (p.plans || p.docs)) || (s.history || []).some(h => this.recordCategory(h) === 'pie');
+  },
+  pieBadge(s) { return this.isPie(s) ? `<span class="pie-badge" title="Recibe apoyo del Programa de Integración Escolar">${ico('puzzle')}PIE</span>` : ''; },
   countRecords(s) {
     const n = { proto: 0, conv: 0, pie: 0 };
     s.history.forEach(h => { n[this.recordCategory(h)]++; });
-    const { proto, conv, pie } = n;
+    const p = this.pieIndex().get(String(s.id)) || { plans: 0, docs: 0 };
+    // El trabajo PIE incluye intervenciones del equipo PIE, planes y documentos (informes, derivaciones...)
+    const pie = n.pie + p.plans + p.docs;
+    const { proto, conv } = n;
     const convPie = conv + pie;
     const obs = s.observations.length, enf = s.nursing.length;
-    return { proto, conv, pie, convPie, obs, enf, total: proto + convPie + obs + enf };
+    return { proto, conv, pie, piePlans: p.plans, pieDocs: p.docs, convPie, obs, enf, total: proto + convPie + obs + enf };
   },
   formatStudentName(fullName) {
     if (!fullName || fullName.includes(',')) return fullName;
@@ -502,8 +523,9 @@ window.app = {
     const open = hasAccess('acceso_total') || ac.length === 0;
     const html = Object.entries(CYCLES).map(([cycle, data]) => {
       const cards = data.courses.filter(c => open || ac.includes(c)).map(c => {
-        const n = all.filter(s => s.curso === c && s.status !== 'blocked').length;
-        return `<button type="button" class="course" data-tone="${data.tone}" onclick="app.openCourse(${jsq(c)})"><span class="course__name">${esc(c)}</span><span class="course__count"><span class="num">${n}</span> estudiantes</span></button>`;
+        const enCurso = all.filter(s => s.curso === c && s.status !== 'blocked');
+        const n = enCurso.length, np = enCurso.filter(s => this.isPie(s)).length;
+        return `<button type="button" class="course" data-tone="${data.tone}" onclick="app.openCourse(${jsq(c)})"><span class="course__name">${esc(c)}</span><span class="course__count"><span class="num">${n}</span> estudiantes</span>${np ? `<span class="pie-badge pie-badge--sm">${ico('puzzle')}${np} PIE</span>` : ''}</button>`;
       }).join('');
       return cards ? `<section class="cycle"><h2 class="cycle__title">${ico(data.icon)}${esc(cycle)}</h2><div class="course-grid">${cards}</div></section>` : '';
     }).join('');
@@ -512,6 +534,7 @@ window.app = {
   openCourse(name) { State.filterCourse = name; this.navigate('students'); },
   setFilter(c) { State.filterCourse = c; this.renderStudents(); icons(); },
   toggleShowWithdrawn(v) { State.showWithdrawn = v; this.renderStudents(); icons(); },
+  toggleOnlyPie(v) { State.onlyPie = v; this.renderStudents(); icons(); },
   async updateProfJefe(course, name) {
     try {
       const dbc = State.rawCoursesDB.find(c => sameId(c.id, course) || c.name === course);
@@ -524,6 +547,7 @@ window.app = {
     const course = State.filterCourse;
     const all = this.getStudents();
     let f = all.filter(s => (!course || s.curso === course) && (State.showWithdrawn || s.status !== 'blocked'));
+    if (State.onlyPie) f = f.filter(s => this.isPie(s));
     const q = (el('student-search').value || '').toLowerCase();
     if (q) f = f.filter(s => s.name.toLowerCase().includes(q) || s.rut.includes(q));
     f.sort((a, b) => a.name.localeCompare(b.name));
@@ -552,6 +576,7 @@ window.app = {
           ${courses.map(c => `<button type="button" class="seg" aria-pressed="false" onclick="app.setFilter(${jsq(c)})">${esc(c)}</button>`).join('')}
         </div>`}
         <label class="check"><input type="checkbox" ${State.showWithdrawn ? 'checked' : ''} onchange="app.toggleShowWithdrawn(this.checked)"><span>Ver retirados</span></label>
+        <label class="check"><input type="checkbox" ${State.onlyPie ? 'checked' : ''} onchange="app.toggleOnlyPie(this.checked)"><span>Solo estudiantes PIE (${all.filter(s => (!course || s.curso === course) && s.status !== 'blocked' && this.isPie(s)).length})</span></label>
       </div>`;
 
     // Panorama del curso
@@ -563,7 +588,7 @@ window.app = {
         <section class="panel panorama">
           <div class="panel__head"><h2>Panorama de ${esc(course)}</h2><button class="btn btn--primary" onclick="app.createNewCoursePlan()">${ico('sparkles')}Nuevo plan de curso</button></div>
           <div class="stats stats--5">
-            ${stat('proto', 'Protocolos')}${stat('conv', 'Convivencia')}${stat('pie', 'Intervenciones PIE')}${stat('obs', 'Obs. docentes')}${stat('enf', 'Enfermería')}
+            ${stat('proto', 'Protocolos')}${stat('conv', 'Convivencia')}${stat('pie', 'Trabajo PIE')}${stat('obs', 'Obs. docentes')}${stat('enf', 'Enfermería')}
           </div>
           <p class="note">${ico('mouse-pointer-click')}Pinche un número para ver los registros. Los confidenciales solo indican que existen.</p>
           <p class="note">${ico('info')}Las observaciones docentes y los registros de los estudiantes se analizan en conjunto al crear un plan de curso con IA.</p>
@@ -576,7 +601,7 @@ window.app = {
       <tbody>${f.map(s => {
         const plans = State.studentPlans.filter(p => sameId(p.studentId, s.id)).map(p => chip(p.type || 'Plan activo', 'plan', 'bookmark')).join('');
         return `<tr class="${s.status === 'blocked' ? 'is-muted' : ''}">
-          <td><span class="cell-title">${esc(s.name)}</span><span class="cell-sub num">${esc(s.rut)}</span>
+          <td><span class="cell-title">${esc(s.name)} ${this.pieBadge(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
             <span class="chips">${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
           <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Inasistencias de ${esc(s.name)}" value="${s.asistencia.inasistencias}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'inasistencias', this.value)"></td>
@@ -675,7 +700,7 @@ window.app = {
       <div class="entry__head">
         <span class="avatar avatar--lg" aria-hidden="true">${esc(s.name.charAt(0))}</span>
         <div class="entry__id">
-          <h1 class="entry__name">${esc(s.name)}</h1>
+          <h1 class="entry__name">${esc(s.name)} ${this.pieBadge(s)}</h1>
           <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}</div>
         </div>
         <div class="chips chips--end">${this.recordChips([s.id], this.countRecords(s))}</div>
@@ -693,7 +718,7 @@ window.app = {
     this.changeDetailTab(State.detailTab);
   },
 
-  TABS: [['entrevistas', 'Intervenciones', 'conv'], ['observaciones', 'Observaciones docentes', 'obs'], ['enfermeria', 'Enfermería', 'enf'], ['pie', 'Planes multi-sector (PIE / Aula)', 'pie'], ['cartas', 'Cartas y documentos', 'warn'], ['respaldos', 'Respaldos y archivos', 'conv']],
+  TABS: [['entrevistas', 'Intervenciones', 'conv'], ['observaciones', 'Observaciones docentes', 'obs'], ['enfermeria', 'Enfermería', 'enf'], ['pie', 'Trabajo PIE (planes y documentos)', 'pie'], ['cartas', 'Cartas y documentos', 'warn'], ['respaldos', 'Respaldos y archivos', 'conv']],
 
   changeDetailTab(tab) {
     State.detailTab = tab;
@@ -1166,7 +1191,7 @@ window.app = {
     const canOpen = hasAccess('ver_fichas');
     el('alerts-table-body').innerHTML = rows.length ? rows.map((s, i) => `
       <tr class="${i < 3 && !course ? 'is-flag' : ''}">
-        <td><span class="cell-title">${esc(s.name)}</span><span class="cell-sub num">${esc(s.rut)}</span></td>
+        <td><span class="cell-title">${esc(s.name)} ${this.pieBadge(s)}</span><span class="cell-sub num">${esc(s.rut)}</span></td>
         <td>${esc(s.curso)}</td>
         <td class="t-num"><span class="figure num" data-level="${s.total > 5 ? 'high' : s.total > 2 ? 'mid' : 'low'}">${s.total}</span></td>
         <td><span class="chips">${this.recordChips([s.id], s)}</span></td>

@@ -264,6 +264,56 @@ Object.assign(app, {
     try { await DB.batch(ops); toast(`${ops.length} documentos vinculados a las fichas`); }
     catch (e) { toast(e.message, 'error'); return false; }
     finally { done(); }
+    ui.close();
+    this.navigate('pie');
+  },
+
+  // ---------------- PROGRAMA PIE ----------------
+  /** Estudiantes que reciben apoyo PIE, con todo su trabajo PIE (planes, documentos e intervenciones). */
+  pieStudents() {
+    const idx = this.pieIndex();
+    return this.getStudents().filter(s => s.status !== 'blocked' && this.isPie(s)).map(s => {
+      const p = idx.get(String(s.id)) || { plans: 0, docs: 0, ultima: '' };
+      const inter = (s.history || []).filter(h => this.recordCategory(h) === 'pie');
+      const ultima = [p.ultima, ...inter.map(h => h.date || '')].sort().pop() || '';
+      return { s, plans: p.plans, docs: p.docs, inter: inter.length, ultima: String(ultima).slice(0, 10) };
+    });
+  },
+  renderPie() {
+    State.pieView = State.pieView || { course: '', q: '' };
+    const v = State.pieView;
+    const all = this.pieStudents();
+    let rows = all.filter(r => (!v.course || r.s.curso === v.course) && (!v.q || r.s.name.toLowerCase().includes(v.q.toLowerCase()) || String(r.s.rut).includes(v.q)));
+    rows.sort((a, b) => (ALL_COURSES.indexOf(a.s.curso) - ALL_COURSES.indexOf(b.s.curso)) || a.s.name.localeCompare(b.s.name));
+    const sum = k => all.reduce((a, r) => a + r[k], 0);
+    const cursos = [...new Set(all.map(r => r.s.curso))].sort((a, b) => ALL_COURSES.indexOf(a) - ALL_COURSES.indexOf(b));
+    const acciones = this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes (Word)</button><button class="btn btn--primary" onclick="app.openDriveLink()">${ico('folder-sync')}Vincular carpeta de Drive</button>` : '';
+    el('pie-actions').innerHTML = acciones;
+    el('pie-stats').innerHTML = `
+      <div class="stat" data-tone="pie"><span class="stat__num num">${all.length}</span><span class="stat__label">Estudiantes con apoyo PIE</span></div>
+      <div class="stat" data-tone="pie"><span class="stat__num num">${sum('plans')}</span><span class="stat__label">Planes PIE</span></div>
+      <div class="stat" data-tone="pie"><span class="stat__num num">${sum('docs')}</span><span class="stat__label">Documentos vinculados</span></div>
+      <div class="stat" data-tone="pie"><span class="stat__num num">${sum('inter')}</span><span class="stat__label">Intervenciones PIE</span></div>`;
+    el('pie-filters').innerHTML = `<div class="filters">
+      ${fieldHtml('Curso', `<select class="input" onchange="State.pieView.course=this.value; app.renderPie(); icons()"><option value="">Todos los cursos (${all.length})</option>${cursos.map(c => `<option value="${esc(c)}" ${c === v.course ? 'selected' : ''}>${esc(c)} (${all.filter(r => r.s.curso === c).length})</option>`).join('')}</select>`)}
+      ${fieldHtml('Buscar', `<input type="search" class="input" value="${esc(v.q)}" placeholder="Nombre o RUN" oninput="State.pieView.q=this.value; clearTimeout(app._pieT); app._pieT=setTimeout(() => { app.renderPie(); icons(); const i = document.querySelector('#pie-filters input[type=search]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250)">`)}
+    </div>`;
+    el('pie-list').innerHTML = rows.length ? `<div class="table-wrap"><table class="table">
+      <thead><tr><th>Estudiante</th><th>Curso</th><th class="t-num">Planes</th><th class="t-num">Documentos</th><th class="t-num">Intervenciones</th><th>Última actividad</th><th class="t-actions">Acciones</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><span class="cell-title">${esc(r.s.name)} ${this.pieBadge(r.s)}</span><span class="cell-sub num">${esc(r.s.rut)}</span></td>
+        <td class="small">${esc(r.s.curso)}</td>
+        <td class="t-num num">${r.plans}</td><td class="t-num num">${r.docs}</td><td class="t-num num">${r.inter}</td>
+        <td class="small num">${r.ultima ? fmtDate(r.ultima) : '-'}</td>
+        <td class="t-actions"><button class="btn btn--sm" onclick="app.openPieFicha(${jsq(r.s.id)})">${ico('folder-open')}Ver trabajo PIE</button></td>
+      </tr>`).join('')}</tbody></table></div>`
+      : empty('puzzle', all.length ? 'Ningún estudiante PIE coincide con el filtro.' : 'Aún no hay estudiantes con planes, documentos o intervenciones PIE. Cargue los planes en Word o vincule la carpeta de Drive.', 'pie');
+  },
+  openPieFicha(id) {
+    State.selectedStudentId = id;
+    this.openStudent(id);
+    State.detailTab = 'pie';
     this.render();
+    setTimeout(() => { const t = document.querySelector('[data-view="student_detail"] [role="tablist"]'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
   }
 });
