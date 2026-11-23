@@ -552,6 +552,7 @@ window.app = {
       course && canImport ? `<button class="btn" onclick="app.openAttendanceImport()">${ico('file-spreadsheet')}Cargar inasistencias</button>` : '',
       canImport ? `<button class="btn" onclick="app.openGradesImport()">${ico('file-badge')}Cargar notas (PDF)</button>` : '',
       this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('puzzle')}Cargar planes PIE</button>` : '',
+      this.canUploadActas() ? `<button class="btn" onclick="app.openActasImport()">${ico('file-check')}Subir actas firmadas (PDF)</button>` : '',
       course ? `<button class="btn" onclick="app.openTraspaso(${jsq(course)})">${ico('file-stack')}Ficha de traspaso</button>` : '',
       course ? `<button class="btn" onclick="app.openExportModal('course_full_report')">${ico('file-text')}Reporte del curso</button>` : '',
       course ? `<button class="btn" onclick="app.exportActivePlansPDF()">${ico('file-output')}Reporte planes</button>` : '',
@@ -1075,10 +1076,11 @@ window.app = {
           <span class="row-actions">${chip(...origin[c.kind])}
             ${c.kind === 'plan' ? `<button class="icon-btn" aria-label="Abrir plan" title="Abrir plan" onclick="app.editStudentPlan(${jsq(s.id)}, ${jsq(c.id)})">${ico('pencil')}</button><button class="icon-btn" aria-label="Imprimir PDF" title="Imprimir PDF" onclick="app.printStudentPlan(${jsq(c.id)})">${ico('printer')}</button>`
               : `<button class="icon-btn" aria-label="Imprimir PDF oficial" title="Imprimir PDF oficial" onclick="app.printSingleCarta(${jsq(c.id)}, ${c.kind === 'pie'})">${ico('printer')}</button>`}
+            ${c.kind === 'conv' ? this.actaButtonHtml(s, c) : ''}
             ${c.kind === 'conv' ? `<button class="icon-btn icon-btn--danger" aria-label="Eliminar carta" title="Eliminar carta" onclick="app.deleteIntervention(${jsq(c.id)})">${ico('trash-2')}</button>` : ''}
           </span></footer>
       </article>`).join('');
-    this.panel(`${this.panelHead('Documentos y cartas formales', 'folder-open')}${html ? `<div class="grid-2">${html}</div>` : empty('file-warning', 'No hay cartas, reportes ni planes registrados.', 'warn')}`);
+    this.panel(`${this.panelHead('Documentos y cartas formales', 'folder-open', this.canUploadActas() ? `<button class="btn btn--sm" onclick="app.openActasImport({ studentId: ${jsq(s.id)} })">${ico('file-up')}Subir acta firmada (PDF)</button>` : '')}${html ? `<div class="grid-2">${html}</div>` : empty('file-warning', 'No hay cartas, reportes ni planes registrados.', 'warn')}`);
   },
 
   getStudentEvidences(id) { return State.rawEvidences.filter(e => sameId(e.studentId, id)).sort((a, b) => new Date(b.date) - new Date(a.date)); },

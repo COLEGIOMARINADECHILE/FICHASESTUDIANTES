@@ -44,6 +44,9 @@ Object.assign(app, {
     ui.modal({
       title: 'Opciones de descarga', icon: 'file-down', size: 'md', okText: 'Generar archivo',
       body: `<div class="stack">
+        <div><span class="field__label">Formato del archivo</span><div class="segs" role="group" aria-label="Formato del archivo">
+          <button type="button" class="seg" id="btn-fmt-pdf" aria-pressed="${ex.format !== 'word'}" onclick="app.setExportFormat('pdf')">${ico('file-text')}PDF</button>
+          <button type="button" class="seg" id="btn-fmt-word" aria-pressed="${ex.format === 'word'}" onclick="app.setExportFormat('word')">${ico('file-type-2')}Word (editable)</button></div></div>
         <div><span class="field__label">Tamaño de papel</span><div class="segs" role="group" aria-label="Tamaño de papel">
           <button type="button" class="seg" id="btn-size-letter" aria-pressed="${ex.size === 'letter'}" onclick="app.setExportSize('letter')">Carta</button>
           <button type="button" class="seg" id="btn-size-legal" aria-pressed="${ex.size === 'legal'}" onclick="app.setExportSize('legal')">Oficio</button></div></div>
@@ -65,6 +68,11 @@ Object.assign(app, {
     });
     this.onSigRoleChange();
     this.renderCustomSignatures();
+  },
+  setExportFormat(fmt) {
+    State.export.format = fmt;
+    el('btn-fmt-pdf').setAttribute('aria-pressed', fmt !== 'word');
+    el('btn-fmt-word').setAttribute('aria-pressed', fmt === 'word');
   },
   setExportSize(sz) {
     State.export.size = sz;
@@ -335,9 +343,57 @@ Object.assign(app, {
     return `<div class="doc-avoid doc-sigs"><p class="doc-small"><strong>Firmas</strong></p><table>${rows}</table></div>`;
   },
 
+  // ---------------- DESCARGA EN WORD ----------------
+  /** Copia los estilos calculados como estilos en línea, para que Word conserve el diseño. */
+  inlineDocStyles(src, dst) {
+    const props = ['font-size', 'font-weight', 'font-style', 'color', 'background-color', 'text-align', 'vertical-align', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'margin-top', 'margin-bottom', 'border-top', 'border-right', 'border-bottom', 'border-left', 'line-height', 'text-transform', 'text-decoration'];
+    const a = [src, ...src.querySelectorAll('*')], b = [dst, ...dst.querySelectorAll('*')];
+    a.forEach((n, i) => {
+      const cs = getComputedStyle(n), t = b[i];
+      if (!t || !t.style) return;
+      t.removeAttribute('class');
+      props.forEach(p => { const v = cs.getPropertyValue(p); if (v && !/^(0px|none|normal|auto|rgba\(0, 0, 0, 0\)|0px none.*)$/.test(v)) t.style.setProperty(p, v); });
+      if (n.tagName === 'TABLE') { t.setAttribute('width', '100%'); t.style.borderCollapse = 'collapse'; t.setAttribute('cellpadding', '4'); }
+      if (n.tagName === 'IMG') { const w = Math.round(n.getBoundingClientRect().width) || 80; t.setAttribute('width', w); t.style.width = w + 'px'; t.style.height = 'auto'; }
+    });
+  },
+  async imgToDataUrl(img) {
+    if (/^data:/.test(img.src)) return img.src;
+    try { const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0); return c.toDataURL('image/png'); }
+    catch (e) { return img.src; }
+  },
+  async exportWord(area, filename, size, landscape, [mv, mh]) {
+    const clone = area.cloneNode(true);
+    this.inlineDocStyles(area, clone);
+    const imgs = [...area.querySelectorAll('img')], cimgs = [...clone.querySelectorAll('img')];
+    for (const [i, img] of imgs.entries()) { if (img.naturalWidth) cimgs[i].src = await this.imgToDataUrl(img); else cimgs[i].remove(); }
+    clone.querySelectorAll('.doc-pad').forEach(n => n.remove());
+    clone.style.width = '';
+    const papel = size === 'legal' ? (landscape ? '35.56cm 21.59cm' : '21.59cm 35.56cm') : (landscape ? '27.94cm 21.59cm' : '21.59cm 27.94cm');
+    const html = `<html><head><meta charset="utf-8"><style>@page { size: ${papel}; margin: ${mv / 10}cm ${mh / 10}cm; } body { font-family: Arial, sans-serif; font-size: 10.5pt; } p { text-align: justify; } td, th { vertical-align: top; }</style></head><body>${clone.outerHTML}</body></html>`;
+    const nombre = String(filename || 'informe.pdf').replace(/\.pdf$/i, '');
+    let blob, ext = 'docx';
+    try {
+      if (API.demo) throw new Error('demo');
+      const out = await API.call('convertirWord', { html, nombre });
+      blob = new Blob([Uint8Array.from(atob(out.base64), ch => ch.charCodeAt(0))], { type: out.mimeType });
+    } catch (e) {
+      // Respaldo sin servidor: documento Word en formato HTML (.doc), que Word abre y permite editar
+      blob = new Blob(['\ufeff', html.replace('<html>', '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">')], { type: 'application/msword' });
+      ext = 'doc';
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = `${nombre}.${ext}`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast(ext === 'docx' ? 'Documento Word descargado' : 'Documento Word descargado (formato compatible .doc)');
+  },
+
   // ---------------- GENERACIÓN DEL PDF ----------------
   async executeExport(opts = {}) {
-    if (!window.html2pdf) { toast('No se pudo cargar el generador de PDF. Revise su conexión.', 'error'); return false; }
+    const word = State.export.format === 'word' && !opts.forcePdf;
+    if (!word && !window.html2pdf) { toast('No se pudo cargar el generador de PDF. Revise su conexión.', 'error'); return false; }
     const ctx = State.export.context;
     const includeSig = opts.includeSig !== undefined ? opts.includeSig : !!el('export-sig')?.checked;
     const includeConfidential = !!el('export-confidential')?.checked;
@@ -365,7 +421,7 @@ Object.assign(app, {
     const widthPx = Math.round((paperW - mh * 2) * (96 / 25.4));
 
     ui.close();
-    const done = ui.busy('Generando documento', 'Preparando el PDF para descargar...');
+    const done = ui.busy('Generando documento', word ? 'Preparando el documento Word...' : 'Preparando el PDF para descargar...');
     const prevScroll = window.scrollY;
     window.scrollTo(0, 0);
     const host = document.createElement('div');
@@ -375,6 +431,7 @@ Object.assign(app, {
     document.documentElement.classList.add('is-exporting');
     await Promise.all(Array.from(host.querySelectorAll('img')).map(img => (img.complete && img.naturalHeight) ? null : new Promise(res => { img.onload = img.onerror = res; setTimeout(res, 4000); })));
     try {
+      if (word) { await this.exportWord(el('capture-area'), r.filename, size, landscape, [mv, mh]); return false; }
       await html2pdf().set({
         margin: [mv, mh, mv, mh], filename: r.filename, image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, letterRendering: true, backgroundColor: cssVar('--doc-paper') || null, width: widthPx, windowWidth: widthPx, scrollX: 0, scrollY: 0, x: 0, y: 0 },

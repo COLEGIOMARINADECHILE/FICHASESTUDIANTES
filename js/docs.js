@@ -253,6 +253,13 @@ Object.assign(app, {
     doc.querySelectorAll('*').forEach(n => [...n.attributes].forEach(a => {
       if (/^on/i.test(a.name) || (/^(href|src)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
     }));
+    // Celdas y párrafos completamente en negrita son títulos: se centran; el resto del texto se justifica
+    doc.querySelectorAll('td, th').forEach(n => {
+      const total = n.textContent.replace(/\s/g, '').length;
+      if (!total) return;
+      const bold = [...n.querySelectorAll('strong, b')].filter(b => !b.parentElement.closest('strong, b') || b.parentElement === n).reduce((t, b) => t + b.textContent.replace(/\s/g, '').length, 0);
+      if (bold / total >= 0.9) n.classList.add('doc-head');
+    });
     return doc.body.firstChild.innerHTML;
   },
   async openEvidence(id, editar = false) {
@@ -387,6 +394,9 @@ ${anon}` });
     const clone = el('doc-edit').cloneNode(true);
     clone.querySelectorAll('.is-empty-cell').forEach(c => c.classList.remove('is-empty-cell'));
     clone.querySelectorAll('[class=""]').forEach(c => c.removeAttribute('class'));
+    // Los textos descriptivos quedan justificados también en el Word guardado
+    clone.querySelectorAll('.doc-head').forEach(n => { n.style.textAlign = 'center'; n.classList.remove('doc-head'); });
+    clone.querySelectorAll('p, td, li').forEach(n => { if (n.textContent.trim().length > 90 && !n.style.textAlign && !n.closest('[style*="center"]')) n.style.textAlign = 'justify'; });
     const html = clone.innerHTML;
     const done = ui.busy('Guardando nueva versión', 'Creando el documento Word en el archivo de la plataforma...');
     try {

@@ -972,3 +972,20 @@ h1, h2 { color: var(--color-heading); }
 .entry__note svg { width: 1rem; height: 1rem; flex: none; }
 .course__badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.35rem; }
 .course__badges .pie-badge { margin: 0; }
+/* Textos descriptivos justificados al ver documentos e informes; los títulos y encabezados de tabla siguen centrados */
+.doc-paper :where(p:not(:has(> strong:only-child)), li, td) { text-align: justify; text-align-last: left; hyphens: manual; }
+.doc-paper th, .doc-paper h1, .doc-paper h2, .doc-paper h3 { text-align: center; text-align-last: auto; }
+
+.doc p, .doc .doc-box, .doc li { text-align: justify; }
+.doc-card__body, .strategy p { text-align: justify; }
+
+/* Actas firmadas: páginas en miniatura y datos de cada acta */
+.acta-group { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem); gap: 1rem; padding: 0.9rem; border: 1px solid var(--color-rule); border-left: 4px solid var(--tone-warn-ink); border-radius: 10px; background: var(--color-paper); }
+.acta-group[data-ok="true"] { border-left-color: var(--tone-conv-ink); }
+.acta-group__pages { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-start; }
+.acta-page { margin: 0; display: flex; flex-direction: column; gap: 0.3rem; align-items: center; width: 150px; }
+.acta-page img { width: 150px; border: 1px solid var(--color-rule); border-radius: 4px; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); }
+.acta-page figcaption { font-size: 0.72rem; color: var(--color-muted, #666); text-align: center; }
+.acta-group__form { display: flex; flex-direction: column; gap: 0.6rem; }
+@media (max-width: 760px) { .acta-group { grid-template-columns: 1fr; } }
+.doc-paper .doc-head, .doc-paper .doc-head p { text-align: center; text-align-last: auto; }

@@ -321,6 +321,7 @@ const Demo = {
         Object.assign(ev, { versiones: [...(ev.versiones || []), { fileName: ev.fileName, fecha: ev.fechaEdicion || ev.date, por: ev.editadoPor || ev.uploadedBy }], demoHtml: p.html, fileName: String(ev.fileName).replace(/\.\w+$/, '').replace(/ \(editado [^)]*\)$/, '') + ` (editado ${fecha.replace('T', ' ')}).docx`, editadoPor: State.currentUser?.name, fechaEdicion: fecha, archivado: true });
         return clone(ev);
       }
+      case 'upload': { const id = 'demo' + Date.now() + Math.random().toString(36).slice(2, 6); return { fileId: id, url: '#' }; }
       case 'archivarDocumentos': { const ids = (p.ids || []).filter(id => { const e = this.db.evidences.find(x => sameId(x.id, id)); if (e) e.archivado = true; return !!e; }); return { archivados: ids.length, errores: [], ids }; }
       case 'iaClaves': return { keys: (this.keys = this.keys || []).map((k, i) => ({ ...k, label: k.label || `Clave ${i + 1}`, usos: 0, estado: 'disponible' })) };
       case 'iaClaveAgregar': { this.keys = this.keys || []; if (!/^gsk_/.test(p.key)) throw new Error('La clave no parece una API Key de Groq (debe comenzar con gsk_).'); this.keys.push({ id: 'k' + Date.now(), label: p.label, fin: p.key.slice(-4), added: today() }); return { total: this.keys.length }; }
