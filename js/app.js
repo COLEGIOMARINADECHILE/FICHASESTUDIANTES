@@ -424,16 +424,7 @@ window.app = {
   current() { return this.getStudent(State.selectedStudentId); },
   /** Conteo único de registros por estudiante (antes se repetía en 6 lugares). */
   /** Planes y documentos PIE por estudiante (se recalcula solo cuando cambian los datos). */
-  pieIndex() {
-    const key = `${State.rawEvidences.length}|${State.rawInclusionReports.length}|${State.lastSync}`;
-    if (this._pieKey === key && this._pieIdx) return this._pieIdx;
-    const idx = new Map();
-    const get = id => { const k = String(id); if (!idx.has(k)) idx.set(k, { plans: 0, docs: 0, ultima: '' }); return idx.get(k); };
-    State.rawInclusionReports.forEach(r => { const x = get(r.studentId); x.plans++; if ((r.date || '') > x.ultima) x.ultima = r.date || ''; });
-    State.rawEvidences.forEach(e => { if (e.area !== 'PIE') return; const x = get(e.studentId); x.docs++; if ((e.date || '') > x.ultima) x.ultima = e.date || ''; });
-    this._pieKey = key; this._pieIdx = idx;
-    return idx;
-  },
+  pieIndex() { return this.areaIndex('PIE'); },
   /** ¿Recibe apoyo PIE? Tiene plan, documentos PIE o intervenciones del Equipo PIE. */
   isPie(s) {
     const p = this.pieIndex().get(String(s.id));
@@ -601,7 +592,7 @@ window.app = {
       <tbody>${f.map(s => {
         const plans = State.studentPlans.filter(p => sameId(p.studentId, s.id)).map(p => chip(p.type || 'Plan activo', 'plan', 'bookmark')).join('');
         return `<tr class="${s.status === 'blocked' ? 'is-muted' : ''}">
-          <td><span class="cell-title">${esc(s.name)} ${this.pieBadge(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
+          <td><span class="cell-title">${esc(s.name)} ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
             <span class="chips">${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
           <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Inasistencias de ${esc(s.name)}" value="${s.asistencia.inasistencias}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'inasistencias', this.value)"></td>
@@ -700,7 +691,7 @@ window.app = {
       <div class="entry__head">
         <span class="avatar avatar--lg" aria-hidden="true">${esc(s.name.charAt(0))}</span>
         <div class="entry__id">
-          <h1 class="entry__name">${esc(s.name)} ${this.pieBadge(s)}</h1>
+          <h1 class="entry__name">${esc(s.name)} ${this.areaBadges(s)}</h1>
           <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}</div>
         </div>
         <div class="chips chips--end">${this.recordChips([s.id], this.countRecords(s))}</div>
@@ -718,12 +709,12 @@ window.app = {
     this.changeDetailTab(State.detailTab);
   },
 
-  TABS: [['entrevistas', 'Intervenciones', 'conv'], ['observaciones', 'Observaciones docentes', 'obs'], ['enfermeria', 'Enfermería', 'enf'], ['pie', 'Trabajo PIE (planes y documentos)', 'pie'], ['cartas', 'Cartas y documentos', 'warn'], ['respaldos', 'Respaldos y archivos', 'conv']],
+  TABS: [['entrevistas', 'Intervenciones', 'conv'], ['observaciones', 'Observaciones docentes', 'obs'], ['enfermeria', 'Enfermería', 'enf'], ['pie', 'Trabajo PIE (planes y documentos)', 'pie'], ['repitencia', 'Riesgo de repitencia', 'warn'], ['cartas', 'Cartas y documentos', 'warn'], ['respaldos', 'Respaldos y archivos', 'conv']],
 
   changeDetailTab(tab) {
     State.detailTab = tab;
     el('detail-tabs').innerHTML = this.TABS.map(([id, label, tone]) => `<button type="button" role="tab" class="tab" data-tone="${tone}" aria-selected="${id === tab}" onclick="app.changeDetailTab('${id}')">${label}</button>`).join('');
-    ({ entrevistas: () => this.renderInterventions(), observaciones: () => this.renderSimple('observations'), enfermeria: () => this.renderSimple('nursings'), pie: () => this.renderPiePlans(), cartas: () => this.renderCartas(), respaldos: () => this.renderEvidences() })[tab]();
+    ({ entrevistas: () => this.renderInterventions(), observaciones: () => this.renderSimple('observations'), enfermeria: () => this.renderSimple('nursings'), pie: () => this.renderPiePlans(), repitencia: () => this.renderRepitencia(), cartas: () => this.renderCartas(), respaldos: () => this.renderEvidences() })[tab]();
     icons();
   },
   panel(html) { el('detail-panel').innerHTML = html; icons(); },
@@ -1062,29 +1053,7 @@ window.app = {
   },
 
   // ---------------- PIE, CARTAS Y RESPALDOS ----------------
-  renderPiePlans() {
-    const reports = State.rawInclusionReports.filter(r => sameId(r.studentId, State.selectedStudentId));
-    const html = reports.map(r => `
-      <article class="record" data-tone="pie">
-        <header class="record__head"><span class="record__icon">${ico('file-text')}</span><div><span class="record__date num">${fmtDate(r.date) || 'Sin fecha'}</span><h3>${esc(r.type || 'Plan de apoyo PIE')}</h3></div>${chip('Documento PIE', 'pie', 'network')}</header>
-        <p class="muted small">Registrado por ${esc(r.responsablePlan || 'Equipo PIE')}</p>
-        ${(r.estrategias || []).length ? `<div class="stack">${r.estrategias.map(e => `
-          <div class="strategy"><span class="cell__label">${esc(e.ambito || 'Estrategia PIE')}</span><p class="prewrap">${esc(e.descripcion)}</p>
-          ${(e.acciones || []).length ? `<ul class="bullets">${e.acciones.map(a => `<li>${esc(a.descripcion)}</li>`).join('')}</ul>` : ''}</div>`).join('')}</div>`
-          : '<p class="muted">No se encontraron acciones o estrategias explícitas en este reporte.</p>'}
-      </article>`).join('');
-    // Documentos PIE (informes, derivaciones, evaluaciones) agrupados por año
-    const docs = this.getStudentEvidences(State.selectedStudentId).filter(e => e.area === 'PIE');
-    const porAnio = {};
-    docs.forEach(d => { const y = d.anio || String(d.date || '').slice(0, 4) || 'Sin año'; (porAnio[y] = porAnio[y] || []).push(d); });
-    const docsHtml = Object.keys(porAnio).sort().reverse().map(y => `
-      <div class="pie-year"><h3>${esc(y)}</h3><div class="table-wrap"><table class="table table--dense"><thead><tr><th>Tipo</th><th>Documento</th><th>Fecha</th><th class="t-actions">Abrir</th></tr></thead><tbody>
-      ${porAnio[y].map(d => `<tr><td>${chip(d.type || 'Documento PIE', 'pie')}</td><td><span class="cell-title">${esc(d.fileName)}</span><span class="cell-sub">${esc(d.description || '')}</span></td><td class="num small">${fmtDate(d.date)}</td><td class="t-actions"><button class="icon-btn" aria-label="Abrir ${esc(d.fileName)}" title="Abrir" onclick="app.openEvidence(${jsq(d.id)})">${ico('external-link')}</button></td></tr>`).join('')}
-      </tbody></table></div></div>`).join('');
-    const acciones = this.canImportPie() ? `<div class="row-actions"><button class="btn btn--sm" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes (Word)</button><button class="btn btn--sm" onclick="app.openDriveLink()">${ico('folder-sync')}Vincular carpeta de Drive</button></div>` : '';
-    this.panel(`${this.panelHead('Planes PIE', 'puzzle', acciones)}<div class="stack">${html || empty('network', 'No hay planes PIE cargados para este estudiante.', 'pie')}</div>
-      ${this.panelHead(`Documentos PIE (${docs.length})`, 'folder-open')}${docsHtml || empty('folder-open', 'No hay informes, derivaciones ni otros documentos PIE vinculados.', 'pie')}`);
-  },
+  renderPiePlans() { this.renderAreaPlans('PIE'); },
 
   renderCartas() {
     const s = this.current();
@@ -1155,20 +1124,6 @@ window.app = {
     } catch (e) { toast('Error al subir el respaldo: ' + e.message, 'error'); }
     finally { done(); }
   },
-  async openEvidence(id) {
-    const done = ui.busy('Abriendo respaldo', 'Descargando el archivo de forma segura...');
-    try {
-      const f = await API.call('file', { id });
-      const bytes = Uint8Array.from(atob(f.base64), c => c.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: f.mimeType || 'application/octet-stream' }));
-      const a = document.createElement('a');
-      a.href = url;
-      if (/^(application\/pdf|image\/)/.test(f.mimeType || '')) a.target = '_blank'; else a.download = f.fileName || 'respaldo';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (e) { toast(e.message, 'error'); }
-    finally { done(); }
-  },
   deleteEvidence(id) {
     const ev = State.rawEvidences.find(x => sameId(x.id, id));
     ui.confirm({ title: 'Eliminar respaldo', msg: `¿Está seguro de eliminar el archivo <strong>${esc(ev?.fileName)}</strong>? Se envía a la papelera de Drive.`, action: async () => {
@@ -1191,7 +1146,7 @@ window.app = {
     const canOpen = hasAccess('ver_fichas');
     el('alerts-table-body').innerHTML = rows.length ? rows.map((s, i) => `
       <tr class="${i < 3 && !course ? 'is-flag' : ''}">
-        <td><span class="cell-title">${esc(s.name)} ${this.pieBadge(s)}</span><span class="cell-sub num">${esc(s.rut)}</span></td>
+        <td><span class="cell-title">${esc(s.name)} ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span></td>
         <td>${esc(s.curso)}</td>
         <td class="t-num"><span class="figure num" data-level="${s.total > 5 ? 'high' : s.total > 2 ? 'mid' : 'low'}">${s.total}</span></td>
         <td><span class="chips">${this.recordChips([s.id], s)}</span></td>
@@ -1227,6 +1182,7 @@ window.app = {
     el('admin-tabs').innerHTML = tabs.map(([id, icon, label]) => `<button type="button" role="tab" class="tab" aria-selected="${t === id}" onclick="app.setAdminTab('${id}')">${ico(icon)}${label}</button>`).join('');
     el('admin-content').innerHTML = this['admin_' + t]();
     icons();
+    if (t === 'logo') this.loadAiKeys();
   },
   admin_users() {
     const vigentes = State.users.filter(u => !u.eliminado);
@@ -1323,9 +1279,7 @@ window.app = {
       <div class="panel"><div class="panel__head"><h2>${ico('type')}Nombre del sistema</h2></div>
         <p class="muted">Aparece en el ingreso, en el menú y en la pestaña del navegador. Ideas: Trayectoria Escolar, Huella Estudiantil, Bitácora Estudiantil, Ruta del Estudiante, Seguimiento Integral.</p>
         <div class="grid-2">${fieldHtml('Nombre', `<input id="cfg-app-name" class="input" value="${esc(v.appName || b.name)}">`)}${fieldHtml('Subtítulo', `<input id="cfg-app-tagline" class="input" value="${esc(v.appTagline || b.tagline)}">`)}</div></div>
-      <div class="panel"><div class="panel__head"><h2>${ico('key')}API Key de inteligencia artificial (Groq)</h2>${chip(v.aiConfigured ? 'Configurada' : 'Sin configurar', v.aiConfigured ? 'conv' : 'warn')}</div>
-        <p class="muted">La clave se guarda en el servidor de Apps Script y nunca se envía al navegador. Deje el campo vacío para conservar la actual.</p>
-        <div class="row-field"><input type="password" id="cfg-apikey" class="input" placeholder="gsk_..." autocomplete="off" aria-label="API Key"><button class="btn" onclick="app.saveApiKey()">Guardar clave</button></div></div>
+      ${this.aiKeysPanelHtml()}
       <div class="grid-3">${img('schoolLogo', 'Logo del colegio', 'logo-sch', 'preview-logo-izq')}${img('slepLogo', 'Logo SLEP', 'logo-slep', 'preview-logo-der')}${img('bgImage', 'Fotografía principal', 'bg-img-input', 'preview-bg-img')}</div>
       <div class="panel" id="login-images-panel">${this.loginImagesEditorHtml()}</div>
       <div class="form-foot"><span></span><button class="btn btn--primary" onclick="app.saveLogos()">Guardar y aplicar cambios</button></div></section>`;
@@ -1367,12 +1321,6 @@ window.app = {
   async saveLogos() {
     const patch = { appName: el('cfg-app-name').value.trim(), appTagline: el('cfg-app-tagline').value.trim(), schoolLogo: el('logo-sch').value.trim(), slepLogo: el('logo-slep').value.trim(), bgImage: el('bg-img-input').value.trim(), loginImages: [...(State.tempLoginImages || State.variables.loginImages || [])] };
     try { await DB.saveVars(patch); this._slidesKey = null; State.loginOptions = { ...State.loginOptions, loginImages: patch.loginImages, bgImage: patch.bgImage }; this.applyPhoto(patch.bgImage); this.applyBranding(); toast('Configuración guardada'); } catch (e) { toast(e.message, 'error'); }
-  },
-  async saveApiKey() {
-    const value = el('cfg-apikey').value.trim();
-    if (!value) return toast('Escriba la nueva API Key', 'error');
-    try { await API.call('setSecret', { key: 'GROQ_API_KEY', value }); State.variables.aiConfigured = true; toast('API Key guardada en el servidor'); this.renderAdmin(); }
-    catch (e) { toast(e.message, 'error'); }
   },
   async saveKnowledge() {
     const title = el('kb-title').value.trim(), content = el('kb-content').value.trim();

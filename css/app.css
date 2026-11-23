@@ -934,3 +934,36 @@ h1, h2 { color: var(--color-heading); }
 .pie-badge svg { width: 0.95em; height: 0.95em; }
 .pie-badge--sm { margin-top: 0.35rem; align-self: flex-start; }
 .entry__name .pie-badge { font-size: 0.8rem; margin-left: 0.4rem; }
+/* Riesgo de repitencia: misma insignia que PIE, en tono de advertencia */
+.pie-badge--rep { background: var(--tone-warn-soft); color: var(--tone-warn-ink); }
+.pie-badge + .pie-badge { margin-left: 0.25rem; }
+
+/* Botón con apariencia de enlace (nombres de documentos) */
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--tone-conv-ink); text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.link-btn:hover { color: var(--color-heading); }
+
+/* Visor y editor de documentos */
+.doc-viewer { display: flex; flex-direction: column; gap: 0.75rem; }
+.doc-viewer__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; position: sticky; top: -1px; z-index: 2; background: var(--color-paper); padding: 0.4rem 0; border-bottom: 1px solid var(--color-rule); }
+.doc-frame { width: 100%; height: min(75vh, 900px); border: 1px solid var(--color-rule); border-radius: 8px; background: #fff; }
+.doc-paper { background: #fff; color: #1a1a1a; border: 1px solid var(--color-rule); border-radius: 8px; padding: clamp(1rem, 3vw, 2.5rem); max-height: 70vh; overflow: auto; font-size: 0.95rem; line-height: 1.55; }
+.doc-paper table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+.doc-paper td, .doc-paper th { border: 1px solid #b9bfca; padding: 0.35rem 0.5rem; vertical-align: top; min-width: 3rem; }
+.doc-paper th { background: #eef1f6; }
+.doc-paper img { max-width: 100%; height: auto; }
+.doc-paper h1, .doc-paper h2, .doc-paper h3 { color: #1f2d4d; margin: 0.8em 0 0.4em; }
+.doc-paper--img { text-align: center; }
+.doc-paper.is-editing { outline: 2px solid var(--tone-obs-ink); outline-offset: 2px; cursor: text; }
+.doc-paper.is-editing:focus { outline-color: var(--tone-conv-ink); }
+.doc-paper .is-empty-cell { background: #fff4bf; box-shadow: inset 0 0 0 2px #e0b100; }
+.doc-editor__bar .icon-btn[aria-pressed="true"] { background: var(--tone-obs-soft); }
+
+/* Ficha de traspaso: interpretación por sección y conclusión */
+.tr-interp { margin: 0.75rem 0; padding: 0.75rem 1rem; border-left: 4px solid var(--tone-obs-ink); background: var(--tone-obs-soft); border-radius: 0 8px 8px 0; }
+.tr-interp h4 { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--tone-obs-ink); }
+.tr-interp h4 svg { width: 1rem; height: 1rem; }
+.tr-interp p { margin: 0; }
+.tr-conclusion { padding: 1rem 1.25rem; border-radius: 10px; background: var(--color-shell, oklch(30% 0.08 260)); color: #fff; margin-bottom: 1rem; }
+.tr-conclusion h3 { margin: 0 0 0.4rem; color: var(--color-accent, oklch(81% 0.13 85)); font-size: 1rem; }
+.tr-conclusion p { margin: 0; line-height: 1.6; }
+.ai-keys-add { align-items: end; margin-top: 1rem; }

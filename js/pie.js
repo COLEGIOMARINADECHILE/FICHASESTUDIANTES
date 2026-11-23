@@ -5,6 +5,7 @@
 // =====================================================================
 const PIE_DOC_TYPES = [
   [/paci/i, 'PACI (Plan de Adecuación Curricular Individual)'], [/\bpai\b|plan de apoyo individual/i, 'PAI (Plan de Apoyo Individual)'],
+  [/repitencia|riesgo de (repet|reprob)|acompa[ñn]amiento|decreto\s*(n[°º.]?\s*)?67/i, 'Plan de riesgo de repitencia'],
   [/psicopedag/i, 'Informe psicopedagógico'], [/fono/i, 'Evaluación fonoaudiológica'], [/psicol/i, 'Informe psicológico'],
   [/familia/i, 'Informe a la familia'], [/deriva/i, 'Derivación'], [/certificado.*nac|nacimiento/i, 'Certificado de nacimiento'],
   [/neurol|m[eé]dic|pediatr|psiquiatr/i, 'Informe médico'], [/anamnesis/i, 'Anamnesis'], [/avance/i, 'Informe de avance'],
@@ -111,7 +112,8 @@ Object.assign(app, {
           const course = this.courseFromText(p.curso) || this.courseFromText(path.split('/').slice(-2, -1)[0] || '');
           const byRun = this.findStudentByRun(p.text);
           const student = byRun.student || this.findStudentByName(p.nombre, course) || this.findStudentByName(f.name.replace(/\.docx$/i, ''), course);
-          items.push({ file: f, path, course, run: byRun.run, nombrePlan: p.nombre, studentId: student ? String(student.id) : '', tipo: this.docType(`${f.name} ${p.text.slice(0, 400)}`), ambitos: p.ambitos, vacio: p.text.length < 1500 && !p.ambitos.some(a => a.filas.some(r => r.acciones.length > 5)), incluir: true });
+          const cabecera = p.text.slice(0, 1500);
+          items.push({ file: f, path, course, run: byRun.run, nombrePlan: p.nombre, studentId: student ? String(student.id) : '', tipo: this.docType(`${f.name} ${cabecera.slice(0, 600)}`), area: this.areaFromText(`${path} ${cabecera}`), titulo: cabecera.slice(0, 200), ambitos: p.ambitos, vacio: p.text.length < 1500 && !p.ambitos.some(a => a.filas.some(r => r.acciones.length > 5)), incluir: true });
         } catch (e) { items.push({ file: f, path, error: 'No se pudo leer el archivo', incluir: false }); }
       }
       items.forEach(it => { if (it.vacio || !it.studentId) it.incluir = !!it.studentId && !it.vacio; });
@@ -138,16 +140,17 @@ Object.assign(app, {
       </div>
       ${fieldHtml('Año de los planes', `<input type="number" class="input input--num num" value="${esc(g.anio)}" onchange="State.pieImport.anio=this.value">`, 'field--inline')}
       <div class="table-wrap"><table class="table table--dense">
-        <thead><tr><th>Cargar</th><th>Archivo</th><th>Estudiante</th><th>Tipo</th><th class="t-num">Ámbitos</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Cargar</th><th>Archivo</th><th>Estudiante</th><th>Área</th><th>Tipo</th><th class="t-num">Ámbitos</th><th>Estado</th></tr></thead>
         <tbody>${g.items.map((it, i) => `<tr>
           <td><input type="checkbox" aria-label="Cargar ${esc(it.file.name)}" ${it.incluir ? 'checked' : ''} ${it.error ? 'disabled' : ''} onchange="State.pieImport.items[${i}].incluir=this.checked; app.renderPieImport()"></td>
           <td><span class="cell-title">${esc(it.file.name)}</span><span class="cell-sub">${esc(it.path.split('/').slice(-2, -1)[0] || '')}</span></td>
           <td>${it.error ? '-' : `<select class="input" aria-label="Estudiante" onchange="State.pieImport.items[${i}].studentId=this.value; State.pieImport.items[${i}].incluir=!!this.value; app.renderPieImport()">${this.studentOptions(it.course, it.studentId)}</select>`}</td>
+          <td>${it.error ? '-' : `<select class="input" aria-label="Área del plan" onchange="State.pieImport.items[${i}].area=this.value">${options([['PIE', 'PIE'], ['Repitencia', 'Riesgo de repitencia']], it.area)}</select>`}</td>
           <td class="small">${esc(it.tipo || '')}</td>
           <td class="t-num num">${(it.ambitos || []).length}</td>
           <td>${it.error ? chip(it.error, 'proto') : it.vacio ? chip('Solo plantilla', 'warn') : it.studentId ? chip('Listo', 'conv') : chip('Elija estudiante', 'warn')}</td></tr>`).join('')}</tbody>
       </table></div>
-      <p class="muted small">Cada plan se guarda como documento en Drive y como plan PIE en la ficha del estudiante (pestaña Planes multi-sector PIE / Aula).</p>`;
+      <p class="muted small">Cada plan se guarda en el archivo de la plataforma y en la ficha del estudiante: los PAI y PACI en "Trabajo PIE" y los planes por riesgo de repitencia en su propia pestaña. Revise la columna Área antes de cargar.</p>`;
   },
   async savePiePlans() {
     const g = State.pieImport;
@@ -164,9 +167,10 @@ Object.assign(app, {
         const dataUrl = await readFileAsDataURL(it.file);
         const up = await API.call('upload', { folderName: `${curso} - ${this.clean(s.name)}`, fileName: `${g.anio}_${it.file.name}`, mimeType: it.file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', base64: String(dataUrl).split(',')[1] });
         const evId = 'drv_' + up.fileId;
-        await DB.save('evidences', { id: evId, studentId: String(s.id), studentName: this.clean(s.name), course: curso, date: today(), anio: String(g.anio), area: 'PIE', type: it.tipo, description: `Plan PIE ${g.anio}`, fileName: it.file.name, mimeType: it.file.type, uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: up.fileId, url: up.url });
+        const area = it.area || 'PIE';
+        await DB.save('evidences', { id: evId, studentId: String(s.id), studentName: this.clean(s.name), course: curso, date: today(), anio: String(g.anio), area, areaFija: true, titulo: it.titulo || '', type: it.tipo, description: `${AREAS[area].plan} ${g.anio}`, fileName: it.file.name, mimeType: it.file.type, uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: up.fileId, url: up.url, archivado: true });
         await DB.save('reports', {
-          id: 'plan_' + up.fileId, studentId: String(s.id), type: it.tipo, date: today(), anio: String(g.anio), responsablePlan: State.currentUser.name, fuente: it.file.name, evidenceId: evId,
+          id: 'plan_' + up.fileId, studentId: String(s.id), type: it.tipo, area, areaFija: true, titulo: it.titulo || '', date: today(), anio: String(g.anio), responsablePlan: State.currentUser.name, fuente: it.file.name, evidenceId: evId,
           estrategias: (it.ambitos || []).flatMap(a => a.filas.map(f => ({ ambito: a.ambito, descripcion: f.indicador || f.acciones, acciones: f.acciones && f.indicador ? [{ descripcion: f.acciones }] : [], responsable: f.responsable, seguimiento: f.seguimiento })))
         });
         ok++;
@@ -254,7 +258,7 @@ Object.assign(app, {
     d.groups.filter(g => g.studentId).forEach(g => {
       const s = State.rawStudents.find(x => sameId(x.id, g.studentId));
       g.files.filter(f => !ya.has(f.id)).forEach(f => ops.push({ col: 'evidences', id: 'drv_' + f.id, data: {
-        id: 'drv_' + f.id, studentId: String(s.id), studentName: this.clean(s.name), course: this.courseNameOf(s), date: f.updated || today(), anio: f.anio, area: 'PIE',
+        id: 'drv_' + f.id, studentId: String(s.id), studentName: this.clean(s.name), course: this.courseNameOf(s), date: f.updated || today(), anio: f.anio, area: this.areaFromText(f.path),
         type: this.docType(f.name), description: f.path.split('/').slice(-1)[0] || f.name, fileName: f.name, mimeType: f.mimeType,
         uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: f.id, url: f.url
       } }));
@@ -268,51 +272,64 @@ Object.assign(app, {
     this.navigate('pie');
   },
 
-  // ---------------- PROGRAMA PIE ----------------
-  /** Estudiantes que reciben apoyo PIE, con todo su trabajo PIE (planes, documentos e intervenciones). */
-  pieStudents() {
-    const idx = this.pieIndex();
-    return this.getStudents().filter(s => s.status !== 'blocked' && this.isPie(s)).map(s => {
+  // ---------------- PROGRAMA PIE Y RIESGO DE REPITENCIA ----------------
+  /** Estudiantes de un área con su trabajo (planes, documentos y, en PIE, intervenciones). */
+  areaStudents(area) {
+    const idx = this.areaIndex(area);
+    const tiene = area === 'PIE' ? s => this.isPie(s) : s => this.isRep(s);
+    return this.getStudents().filter(s => s.status !== 'blocked' && tiene(s)).map(s => {
       const p = idx.get(String(s.id)) || { plans: 0, docs: 0, ultima: '' };
-      const inter = (s.history || []).filter(h => this.recordCategory(h) === 'pie');
+      const inter = area === 'PIE' ? (s.history || []).filter(h => this.recordCategory(h) === 'pie') : [];
       const ultima = [p.ultima, ...inter.map(h => h.date || '')].sort().pop() || '';
       return { s, plans: p.plans, docs: p.docs, inter: inter.length, ultima: String(ultima).slice(0, 10) };
     });
   },
+  pieStudents() { return this.areaStudents('PIE'); },
   renderPie() {
-    State.pieView = State.pieView || { course: '', q: '' };
+    State.pieView = State.pieView || { course: '', q: '', area: 'PIE' };
     const v = State.pieView;
-    const all = this.pieStudents();
+    v.area = v.area || 'PIE';
+    const A = AREAS[v.area], esPie = v.area === 'PIE';
+    const all = this.areaStudents(v.area);
+    const otros = this.areaStudents(esPie ? 'Repitencia' : 'PIE').length;
     let rows = all.filter(r => (!v.course || r.s.curso === v.course) && (!v.q || r.s.name.toLowerCase().includes(v.q.toLowerCase()) || String(r.s.rut).includes(v.q)));
     rows.sort((a, b) => (ALL_COURSES.indexOf(a.s.curso) - ALL_COURSES.indexOf(b.s.curso)) || a.s.name.localeCompare(b.s.name));
     const sum = k => all.reduce((a, r) => a + r[k], 0);
     const cursos = [...new Set(all.map(r => r.s.curso))].sort((a, b) => ALL_COURSES.indexOf(a) - ALL_COURSES.indexOf(b));
-    const acciones = this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes (Word)</button><button class="btn btn--primary" onclick="app.openDriveLink()">${ico('folder-sync')}Vincular carpeta de Drive</button>` : '';
-    el('pie-actions').innerHTML = acciones;
+    const can = this.canImportPie();
+    const sinArchivar = State.rawEvidences.filter(e => this.evArea(e) && e.storage === 'drive' && !e.archivado).map(e => e.id);
+    el('pie-actions').innerHTML = can ? `
+      ${State.rawInclusionReports.length ? `<button class="btn" onclick="app.openClassifyPlans()">${ico('arrow-right-left')}Separar PIE y repitencia</button>` : ''}
+      ${sinArchivar.length ? `<button class="btn" onclick="app.archiveDocs(${jsq(sinArchivar)})">${ico('archive')}Guardar ${sinArchivar.length} documentos en el archivo</button>` : ''}
+      <button class="btn" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes (Word)</button>
+      <button class="btn btn--primary" onclick="app.openDriveLink()">${ico('folder-sync')}Vincular carpeta de Drive</button>` : '';
     el('pie-stats').innerHTML = `
-      <div class="stat" data-tone="pie"><span class="stat__num num">${all.length}</span><span class="stat__label">Estudiantes con apoyo PIE</span></div>
-      <div class="stat" data-tone="pie"><span class="stat__num num">${sum('plans')}</span><span class="stat__label">Planes PIE</span></div>
-      <div class="stat" data-tone="pie"><span class="stat__num num">${sum('docs')}</span><span class="stat__label">Documentos vinculados</span></div>
-      <div class="stat" data-tone="pie"><span class="stat__num num">${sum('inter')}</span><span class="stat__label">Intervenciones PIE</span></div>`;
+      <div class="stat" data-tone="${A.tone}"><span class="stat__num num">${all.length}</span><span class="stat__label">${esPie ? 'Estudiantes con apoyo PIE' : 'Estudiantes con plan por riesgo de repitencia'}</span></div>
+      <div class="stat" data-tone="${A.tone}"><span class="stat__num num">${sum('plans')}</span><span class="stat__label">${esPie ? 'Planes PIE (PAI / PACI)' : 'Planes de acompañamiento'}</span></div>
+      <div class="stat" data-tone="${A.tone}"><span class="stat__num num">${sum('docs')}</span><span class="stat__label">Documentos</span></div>
+      <div class="stat" data-tone="${A.tone}"><span class="stat__num num">${esPie ? sum('inter') : otros}</span><span class="stat__label">${esPie ? 'Intervenciones PIE' : 'Estudiantes PIE (aparte)'}</span></div>`;
     el('pie-filters').innerHTML = `<div class="filters">
+      <div class="segs" role="group" aria-label="Área">
+        <button type="button" class="seg" aria-pressed="${esPie}" onclick="State.pieView.area='PIE'; State.pieView.course=''; app.renderPie(); icons()">${ico('puzzle')}Programa PIE (${esPie ? all.length : otros})</button>
+        <button type="button" class="seg" aria-pressed="${!esPie}" onclick="State.pieView.area='Repitencia'; State.pieView.course=''; app.renderPie(); icons()">${ico('alert-triangle')}Riesgo de repitencia (${esPie ? otros : all.length})</button>
+      </div>
       ${fieldHtml('Curso', `<select class="input" onchange="State.pieView.course=this.value; app.renderPie(); icons()"><option value="">Todos los cursos (${all.length})</option>${cursos.map(c => `<option value="${esc(c)}" ${c === v.course ? 'selected' : ''}>${esc(c)} (${all.filter(r => r.s.curso === c).length})</option>`).join('')}</select>`)}
       ${fieldHtml('Buscar', `<input type="search" class="input" value="${esc(v.q)}" placeholder="Nombre o RUN" oninput="State.pieView.q=this.value; clearTimeout(app._pieT); app._pieT=setTimeout(() => { app.renderPie(); icons(); const i = document.querySelector('#pie-filters input[type=search]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250)">`)}
     </div>`;
     el('pie-list').innerHTML = rows.length ? `<div class="table-wrap"><table class="table">
-      <thead><tr><th>Estudiante</th><th>Curso</th><th class="t-num">Planes</th><th class="t-num">Documentos</th><th class="t-num">Intervenciones</th><th>Última actividad</th><th class="t-actions">Acciones</th></tr></thead>
+      <thead><tr><th>Estudiante</th><th>Curso</th><th class="t-num">Planes</th><th class="t-num">Documentos</th>${esPie ? '<th class="t-num">Intervenciones</th>' : ''}<th>Última actividad</th><th class="t-actions">Acciones</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
-        <td><span class="cell-title">${esc(r.s.name)} ${this.pieBadge(r.s)}</span><span class="cell-sub num">${esc(r.s.rut)}</span></td>
+        <td><span class="cell-title">${esc(r.s.name)} ${this.areaBadges(r.s)}</span><span class="cell-sub num">${esc(r.s.rut)}</span></td>
         <td class="small">${esc(r.s.curso)}</td>
-        <td class="t-num num">${r.plans}</td><td class="t-num num">${r.docs}</td><td class="t-num num">${r.inter}</td>
+        <td class="t-num num">${r.plans}</td><td class="t-num num">${r.docs}</td>${esPie ? `<td class="t-num num">${r.inter}</td>` : ''}
         <td class="small num">${r.ultima ? fmtDate(r.ultima) : '-'}</td>
-        <td class="t-actions"><button class="btn btn--sm" onclick="app.openPieFicha(${jsq(r.s.id)})">${ico('folder-open')}Ver trabajo PIE</button></td>
+        <td class="t-actions"><button class="btn btn--sm" onclick="app.openPieFicha(${jsq(r.s.id)}, '${esPie ? 'pie' : 'repitencia'}')">${ico('folder-open')}${esPie ? 'Ver trabajo PIE' : 'Ver plan'}</button></td>
       </tr>`).join('')}</tbody></table></div>`
-      : empty('puzzle', all.length ? 'Ningún estudiante PIE coincide con el filtro.' : 'Aún no hay estudiantes con planes, documentos o intervenciones PIE. Cargue los planes en Word o vincule la carpeta de Drive.', 'pie');
+      : empty(A.icon, all.length ? 'Ningún estudiante coincide con el filtro.' : esPie ? 'Aún no hay estudiantes con planes, documentos o intervenciones PIE. Cargue los planes en Word o vincule la carpeta de Drive.' : 'No hay planes por riesgo de repitencia. Si los cargó como PIE, use "Separar PIE y repitencia".', A.tone);
   },
-  openPieFicha(id) {
-    State.selectedStudentId = id;
+  openPieFicha(id, tab = 'pie') {
     this.openStudent(id);
-    State.detailTab = 'pie';
+    State.detailTab = tab;
     this.render();
     setTimeout(() => { const t = document.querySelector('[data-view="student_detail"] [role="tablist"]'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
   }

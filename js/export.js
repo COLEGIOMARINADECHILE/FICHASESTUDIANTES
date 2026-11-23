@@ -283,14 +283,16 @@ Object.assign(app, {
         talleres: listaSimple(a.talleres, t => esc(t))
       };
       const an = d.analisis;
-      const analisis = an ? `<div class="doc-avoid">${docH('Análisis para el equipo del próximo año (IA)')}<div class="doc-box doc-pre">${esc(an.resumen || '')}</div>
+      const interp = k => an?.interpretaciones?.[k] ? `<p class="doc-muted"><strong>Interpretación (IA):</strong> ${esc(an.interpretaciones[k])}</p>` : '';
+      const analisis = an ? `<div class="doc-avoid">${docH('Conclusión general e interpretación (IA)')}${an.conclusion_general ? `<div class="doc-box doc-pre"><strong>Conclusión general:</strong> ${esc(an.conclusion_general)}</div>` : ''}${an.resumen ? `<div class="doc-box doc-pre">${esc(an.resumen)}</div>` : ''}
         ${[['Fortalezas', an.fortalezas], ['Desafíos y alertas', an.desafios], ['Recomendaciones para planificar', an.recomendaciones], ['Apoyos sugeridos', an.apoyos_sugeridos]].filter(([, l]) => (l || []).length).map(([t, l]) => `<p><strong>${t}:</strong></p><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}
-        ${(an.focos_por_asignatura || []).length ? docTable(['Asignatura', 'Foco sugerido'], an.focos_por_asignatura.map(f => [esc(f.asignatura), esc(f.sugerencia)]), '') : ''}</div>` : '';
+        ${(an.focos_por_asignatura || []).length ? docTable(['Asignatura', 'Foco sugerido'], an.focos_por_asignatura.map(f => [esc(f.asignatura), esc(f.sugerencia)]), '') : ''}
+        <p class="doc-muted">Interpretación generada con IA a partir de datos agregados y sin identificar a los estudiantes (Ley 19.628 y Ley 21.719). Revisada por el equipo antes de su uso.</p></div>` : '';
       return {
         filename: `Ficha_Traspaso_${String(State.traspasoCourse).replace(/\s+/g, '_')}_${State.traspasoAnio}.pdf`, title: 'FICHA DE CARACTERIZACIÓN Y TRASPASO',
         body: `${docKv([[['Curso', esc(State.traspasoCourse)], ['Año', esc(State.traspasoAnio)]], [['Profesor(a) jefe', esc(app.profJefeOf(State.traspasoCourse) || '-')], ['Profesor(a) especialista', esc(d.profesorEspecialista || '-')]], [['Asistencia promedio', `${a.promAsis}%`], ['Promedio del curso', a.promCurso]]])}
           ${graficos ? `<div class="doc-avoid" style="margin:8px 0 14px">${graficos}</div>` : ''}
-          ${TRASPASO_SECCIONES.map(([k, t]) => `<div class="doc-avoid">${docH(t)}${auto[k] || ''}${d.secciones?.[k]?.texto ? `<div class="doc-box doc-pre">${esc(d.secciones[k].texto)}</div>` : ''}</div>`).join('')}
+          ${TRASPASO_SECCIONES.map(([k, t]) => `<div class="doc-avoid">${docH(t)}${auto[k] || ''}${interp(k)}${d.secciones?.[k]?.texto ? `<div class="doc-box doc-pre">${esc(d.secciones[k].texto)}</div>` : ''}</div>`).join('')}
           ${analisis}`
       };
     },

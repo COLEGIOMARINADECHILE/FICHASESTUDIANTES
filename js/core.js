@@ -310,6 +310,21 @@ const Demo = {
       case 'remove': this.db[col] = this.db[col].filter(x => !sameId(x.id, p.id)); return { removed: 1 };
       case 'import': p.docs.forEach(d => this.handle('save', { col, id: d.id, data: d })); return { saved: p.docs.length };
       case 'changePassword': case 'logout': case 'setSecret': return {};
+      case 'file': {
+        const ev = (this.db.evidences || []).find(x => sameId(x.id, p.id)) || {};
+        const html = ev.demoHtml || `<h1>${esc(ev.fileName || 'Documento de ejemplo')}</h1><p>Documento de demostración del estudiante ${esc(ev.studentName || '')}. En el sistema real aquí se muestra el archivo de Drive.</p><table><tr><th>Ámbito</th><th>Acciones</th><th>Responsable</th></tr><tr><td>ÁMBITO PEDAGÓGICO</td><td>Apoyo en lectura dos veces por semana</td><td></td></tr><tr><td>ÁMBITO FAMILIAR</td><td></td><td>Profesor jefe</td></tr></table>`;
+        return { base64: btoa(unescape(encodeURIComponent(html))), mimeType: 'text/html', fileName: ev.fileName || 'documento.html' };
+      }
+      case 'guardarDocumento': {
+        const ev = this.db.evidences.find(x => sameId(x.id, p.id));
+        const fecha = new Date().toISOString().slice(0, 16);
+        Object.assign(ev, { versiones: [...(ev.versiones || []), { fileName: ev.fileName, fecha: ev.fechaEdicion || ev.date, por: ev.editadoPor || ev.uploadedBy }], demoHtml: p.html, fileName: String(ev.fileName).replace(/\.\w+$/, '').replace(/ \(editado [^)]*\)$/, '') + ` (editado ${fecha.replace('T', ' ')}).docx`, editadoPor: State.currentUser?.name, fechaEdicion: fecha, archivado: true });
+        return clone(ev);
+      }
+      case 'archivarDocumentos': { const ids = (p.ids || []).filter(id => { const e = this.db.evidences.find(x => sameId(x.id, id)); if (e) e.archivado = true; return !!e; }); return { archivados: ids.length, errores: [], ids }; }
+      case 'iaClaves': return { keys: (this.keys = this.keys || []).map((k, i) => ({ ...k, label: k.label || `Clave ${i + 1}`, usos: 0, estado: 'disponible' })) };
+      case 'iaClaveAgregar': { this.keys = this.keys || []; if (!/^gsk_/.test(p.key)) throw new Error('La clave no parece una API Key de Groq (debe comenzar con gsk_).'); this.keys.push({ id: 'k' + Date.now(), label: p.label, fin: p.key.slice(-4), added: today() }); return { total: this.keys.length }; }
+      case 'iaClaveQuitar': this.keys = (this.keys || []).filter(k => k.id !== p.id); return { total: this.keys.length };
       case 'notificarAsignacion': return { enviado: (this.db.users.find(x => sameId(x.id, p.userId)) || {}).email || 'sin correo' };
       case 'getAudit': return { rows: [...(this.audit || [])].reverse(), total: (this.audit || []).length };
       case 'notificarAcceso': { const u = this.db.users.find(x => sameId(x.id, p.userId)); u.accesoNotificado = today(); return { enviado: u.email, fecha: u.accesoNotificado, quedan: 99 }; }

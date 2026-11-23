@@ -186,8 +186,8 @@ ${b.tagline}`.trim();
     students.forEach(s => {
       if (['proto', 'conv', 'pie'].includes(cat)) s.history.filter(h => !this.isCarta(h) && this.recordCategory(h) === cat).forEach(h => items.push({ s, h, kind: 'int' }));
       if (cat === 'pie') {
-        State.rawInclusionReports.filter(r => sameId(r.studentId, s.id)).forEach(h => items.push({ s, h, kind: 'plan' }));
-        State.rawEvidences.filter(e => sameId(e.studentId, s.id) && e.area === 'PIE').forEach(h => items.push({ s, h, kind: 'doc' }));
+        State.rawInclusionReports.filter(r => sameId(r.studentId, s.id) && this.planArea(r) === 'PIE').forEach(h => items.push({ s, h, kind: 'plan' }));
+        State.rawEvidences.filter(e => sameId(e.studentId, s.id) && this.evArea(e) === 'PIE').forEach(h => items.push({ s, h, kind: 'doc' }));
       }
       if (cat === 'obs') s.observations.forEach(h => items.push({ s, h, kind: 'obs' }));
       if (cat === 'enf') s.nursing.forEach(h => items.push({ s, h, kind: 'enf' }));

@@ -76,6 +76,7 @@ Object.assign(app, {
       if (p && p.bajo >= 2) motivos.push(`${p.bajo} asignaturas bajo 4,0`);
       else if (p && p.bajo === 1 && p.pg < 4.5) motivos.push('1 asignatura bajo 4,0 y promedio bajo 4,5');
       if (s.asistencia.real < 85) motivos.push(`asistencia ${s.asistencia.real} %`);
+      if (this.isRep(s)) motivos.push('tiene plan por riesgo de repitencia');
       if (motivos.length) riesgo.push({ s, motivos });
     });
 
@@ -92,8 +93,8 @@ Object.assign(app, {
       return { s, planes, apoyos };
     }).filter(x => x.planes.length || x.apoyos);
     const pie = activos.map(s => {
-      const reps = State.rawInclusionReports.filter(r => sameId(r.studentId, s.id));
-      const docs = State.rawEvidences.filter(e => sameId(e.studentId, s.id) && e.area === 'PIE');
+      const reps = State.rawInclusionReports.filter(r => sameId(r.studentId, s.id) && this.planArea(r) === 'PIE');
+      const docs = State.rawEvidences.filter(e => sameId(e.studentId, s.id) && this.evArea(e) === 'PIE');
       return { s, tipos: [...new Set(reps.map(r => r.type))], ambitos: reps.reduce((a, r) => a + (r.estrategias || []).length, 0), docs: docs.length, ultima: [...reps.map(r => r.date), ...docs.map(d => d.date)].sort().pop() || '' };
     }).filter(x => x.tipos.length || x.docs);
     const talleres = State.coursePlans.filter(p => p.course === course && (!p.date || enAnio(p.date))).flatMap(p => (p.actions || []).map(a => a.name).filter(Boolean));
@@ -145,7 +146,7 @@ Object.assign(app, {
       <button class="btn" onclick="app.navigate('students')">${ico('arrow-left')}Volver al curso</button>
       <div class="row-actions">
         <label class="field field--inline"><span class="field__label">Año</span><input type="number" class="input input--num num" value="${esc(State.traspasoAnio)}" onchange="State.traspasoAnio=this.value; State.trDraft=null; app.renderTraspaso(); icons()"></label>
-        <button class="btn" onclick="app.analyzeTraspasoAI()">${ico('sparkles')}Analizar con IA</button>
+        <button class="btn" onclick="app.analyzeTraspasoAI()">${ico('sparkles')}${d.analisis ? 'Volver a interpretar con IA' : 'Interpretar con IA'}</button>
         <button class="btn" onclick="app.openExportModal('traspaso')">${ico('file-output')}PDF de la ficha</button>
         <button class="btn btn--primary" onclick="app.saveTraspaso()">${ico('save')}Guardar ficha</button>
       </div>`;
@@ -192,6 +193,7 @@ Object.assign(app, {
       <div class="panel__head"><h2>${ico(icon)}${titulo}</h2>
         <div class="row-actions">${as ? chip(`Asignado a ${as.userName}`, 'obs', 'user-check') : ''}${sec.estado === 'completo' ? chip('Completo', 'conv', 'check') : chip('Pendiente', 'warn')}</div></div>
       ${autoHtml ? `<div class="tr-auto">${autoHtml}</div>` : ''}
+      ${d.analisis?.interpretaciones?.[k] ? `<div class="tr-interp"><h4>${ico('sparkles')}Interpretación con IA</h4><p>${esc(d.analisis.interpretaciones[k])}</p></div>` : ''}
       ${fieldHtml(ayuda, `<textarea class="input" rows="3" ${can ? '' : 'readonly'} placeholder="${can ? 'Escriba aquí los antecedentes...' : 'Solo lectura'}" oninput="(State.trDraft.secciones['${k}'] = State.trDraft.secciones['${k}'] || {}).texto=this.value">${esc(sec.texto || '')}</textarea>`)}
       ${sec.actualizado ? `<p class="note">Actualizado el ${fmtDate(sec.actualizado)} por ${esc(sec.por || '')}.</p>` : ''}
       <div class="form-foot">
@@ -281,12 +283,14 @@ ${b.tagline}`;
       <ul class="ruled">${tareas.map(x => `<li><span><strong>${esc(x.titulo)}</strong> <span class="muted small">Ficha de traspaso ${esc(x.t.course)} ${esc(x.t.anio)}</span></span><button class="btn btn--sm btn--primary" onclick="State.traspasoAnio=${jsq(x.t.anio)}; app.openTraspaso(${jsq(x.t.course)})">Completar</button></li>`).join('')}</ul></section>`;
   },
 
-  // ---------------- ANÁLISIS CON IA ----------------
+  // ---------------- INTERPRETACIÓN CON IA ----------------
   traspasoAnalysisHtml(an, fecha) {
     const ul = arr => (arr || []).length ? `<ul class="tr-list">${arr.map(x => `<li>${esc(typeof x === 'string' ? x : `${x.asignatura || x.area || ''}: ${x.sugerencia || x.texto || ''}`)}</li>`).join('')}</ul>` : '<p class="muted small">Sin elementos.</p>';
+    const nivel = { bajo: ['Nivel de alerta bajo', 'conv'], medio: ['Nivel de alerta medio', 'warn'], alto: ['Nivel de alerta alto', 'proto'] }[String(an.nivel_alerta || '').toLowerCase()];
     return `<section class="panel tr-ai">
-      <div class="panel__head"><h2>${ico('sparkles')}Análisis para el equipo del próximo año</h2><span class="muted small">Generado con IA${fecha ? ` el ${fmtDate(fecha)}` : ''}. Revíselo antes de compartirlo.</span></div>
-      <p class="tr-ai__summary">${esc(an.resumen || '')}</p>
+      <div class="panel__head"><h2>${ico('sparkles')}Conclusión general e interpretación</h2><div class="row-actions">${nivel ? chip(nivel[0], nivel[1], 'gauge') : ''}<span class="muted small">Generado con IA${fecha ? ` el ${fmtDate(fecha)}` : ''}. Revíselo antes de compartirlo.</span></div></div>
+      ${an.conclusion_general ? `<div class="tr-conclusion"><h3>Conclusión general</h3><p>${esc(an.conclusion_general)}</p></div>` : ''}
+      ${an.resumen ? `<p class="tr-ai__summary">${esc(an.resumen)}</p>` : ''}
       <div class="grid-2">
         <div class="subpanel" data-tone="conv"><h4>${ico('thumbs-up')}Fortalezas del curso</h4>${ul(an.fortalezas)}</div>
         <div class="subpanel" data-tone="proto"><h4>${ico('alert-triangle')}Desafíos y alertas</h4>${ul(an.desafios)}</div>
@@ -294,31 +298,64 @@ ${b.tagline}`;
       <div class="subpanel"><h4>${ico('calendar-check')}Recomendaciones para planificar</h4>${ul(an.recomendaciones)}</div>
       ${(an.focos_por_asignatura || []).length ? `<div class="subpanel"><h4>${ico('book-open')}Focos por asignatura</h4>${ul(an.focos_por_asignatura)}</div>` : ''}
       ${(an.apoyos_sugeridos || []).length ? `<div class="subpanel"><h4>${ico('life-buoy')}Apoyos y coordinación sugeridos</h4>${ul(an.apoyos_sugeridos)}</div>` : ''}
+      <p class="note">${ico('shield-check')}Cada sección de la ficha muestra su propia interpretación. A la IA solo se enviaron datos agregados y textos sin nombres, RUN ni datos de salud (Ley 19.628 y Ley 21.719).</p>
     </section>`;
   },
-  analyzeTraspasoAI() {
+  /** Datos del curso para la IA: agregados, sin nombres ni RUN, sin diagnósticos. */
+  traspasoDatosIA() {
     const a = State.trData, d = State.trDraft;
-    AI.run('Analizando la ficha de traspaso', 'La IA revisa rendimiento, asistencia, convivencia y PIE del curso...', async () => {
-      const resumen = {
-        curso: State.traspasoCourse, anio: State.traspasoAnio, matricula: a.activos.length, incorporados: a.incorporados.length, retirados: a.retirados.length,
-        promedio_curso: a.promCurso, asistencia_promedio: a.promAsis, distribucion_asistencia: a.asisDist,
-        rendimiento: a.rendimiento.map(r => ({ asignatura: r.nombre, bajo4: r.bajo, entre4y59: r.medio, sobre6: r.alto, promedio: r.promedio })),
-        riesgo_repitencia: a.riesgo.length, bajo_85_asistencia: a.asistencia.length, estudiantes_con_alertas_disciplina: a.disciplina.length,
-        registros: a.registros, estudiantes_pie: a.pie.length, apoyos_socioemocionales: a.socio.length, talleres: a.talleres.slice(0, 15),
-        ritmo: (RITMO_OPCIONES.find(o => o[0] === d.ritmo) || [, 'Sin definir'])[1],
-        observaciones_equipo: Object.fromEntries(TRASPASO_SECCIONES.map(([k, t]) => [t, String(d.secciones[k]?.texto || '').slice(0, 700)]).filter(([, v]) => v))
-      };
-      const r = await AI.json(`Actúa como jefe de UTP y orientador de un colegio público en Chile. Analiza la ficha de caracterización y traspaso del curso para que los docentes que lo recibirán el próximo año planifiquen sus actividades. Usa SOLO los datos entregados, sin inventar estudiantes ni cifras, y sin mencionar nombres de estudiantes.
+    const cuenta = arr => arr.reduce((m, x) => { m[x] = (m[x] || 0) + 1; return m; }, {});
+    const anon = t => this.anonimizar(String(t || '').slice(0, 900), a.activos.concat(a.retirados));
+    return {
+      curso: State.traspasoCourse, anio: State.traspasoAnio,
+      matricula: { inicial: a.matriculaInicial, actual: a.activos.length, incorporados: a.incorporados.length, retirados: a.retirados.length, motivos_retiro: a.retirados.map(s => anon(s.motivoRetiro)).filter(Boolean) },
+      rendimiento: { promedio_curso: a.promCurso, estudiantes_con_notas: a.conNotas, por_asignatura: a.rendimiento.map(r => ({ asignatura: r.nombre, bajo_4: r.bajo, de_4_a_5_9: r.medio, sobre_6: r.alto, promedio: r.promedio })) },
+      riesgo: { estudiantes: a.riesgo.length, motivos: cuenta(a.riesgo.flatMap(x => x.motivos.map(m => m.replace(/[\d.,]+/g, '#').trim()))) },
+      asistencia: { promedio: a.promAsis, bajo_85: a.asisDist.bajo85, entre_85_y_89: a.asisDist.entre, sobre_90: a.asisDist.sobre, porcentajes_bajo_85: a.asistencia.map(s => s.asistencia.real) },
+      disciplina: { estudiantes_con_alertas: a.disciplina.length, protocolos: a.disciplina.reduce((t, x) => t + x.prot, 0), faltas_graves: a.disciplina.reduce((t, x) => t + x.graves, 0), anotaciones_negativas: a.disciplina.reduce((t, x) => t + x.anot, 0) },
+      socioemocional: { estudiantes_con_apoyo: a.socio.length, planes: cuenta(a.socio.flatMap(x => x.planes)), intervenciones_apoyo: a.socio.reduce((t, x) => t + x.apoyos, 0) },
+      pie: { estudiantes: a.pie.length, tipos_de_plan: cuenta(a.pie.flatMap(x => x.tipos)), documentos: a.pie.reduce((t, x) => t + x.docs, 0) },
+      registros_del_anio: a.registros,
+      ritmo: (RITMO_OPCIONES.find(o => o[0] === d.ritmo) || [, 'Sin definir'])[1],
+      talleres: a.talleres.slice(0, 15),
+      observaciones_del_equipo: Object.fromEntries(TRASPASO_SECCIONES.map(([k]) => [k, anon(d.secciones[k]?.texto)]).filter(([, v]) => v))
+    };
+  },
+  async analyzeTraspasoAI() {
+    if (!AI.ready()) return;
+    const ok = await this.iaConsent(`Curso ${esc(State.traspasoCourse)} ${esc(State.traspasoAnio)}: cantidades de matrícula, notas por asignatura, asistencia, registros de convivencia, apoyos PIE (solo cantidades y tipos de plan), ritmo, talleres y los textos escritos por el equipo, a los que se les quitan nombres, RUN, correos y teléfonos.`);
+    if (!ok) return;
+    const d = State.trDraft;
+    AI.run('Interpretando la ficha de traspaso', 'La IA interpreta cada sección y redacta una conclusión general...', async () => {
+      const datos = this.traspasoDatosIA();
+      const claves = TRASPASO_SECCIONES.map(([k, t]) => `"${k}": "${t}"`).join(', ');
+      const r = await API.call('ai', { motivo: `Interpretación de la ficha de traspaso ${State.traspasoCourse} ${State.traspasoAnio}`, json: true, prompt: `Actúa como jefe de UTP y orientador de un colegio público en Chile. Interpreta la ficha de caracterización y traspaso del curso para que el equipo que lo recibirá el próximo año planifique. Reglas:
+- Usa SOLO los datos entregados. No inventes cifras, estudiantes ni situaciones.
+- No identifiques a ninguna persona: no hay nombres y no debes intentar deducirlos. "[estudiante]" reemplaza a un nombre.
+- No hagas diagnósticos clínicos ni etiquetes a estudiantes; habla del curso y de patrones.
+- Interpreta: explica qué significan los datos, compara entre asignaturas o grupos, y señala implicancias pedagógicas.
+- Si una sección no tiene datos suficientes, dilo en una frase y sugiere qué información falta.
+- Lenguaje claro, profesional y respetuoso, en español de Chile.
+
+SECCIONES DE LA FICHA: {${claves}}
 
 DATOS DEL CURSO (JSON):
-${JSON.stringify(resumen).slice(0, 9000)}
+${JSON.stringify(datos).slice(0, 14000)}
 
 Devuelve SOLO un JSON con esta estructura:
-{"resumen": "Diagnóstico general del curso en 4 a 6 líneas", "fortalezas": ["..."], "desafios": ["..."], "recomendaciones": ["Recomendaciones concretas de planificación para el primer mes y el año"], "focos_por_asignatura": [{"asignatura": "...", "sugerencia": "..."}], "apoyos_sugeridos": ["Coordinaciones con PIE, convivencia, familias o redes"]}`);
-      d.analisis = r;
+{"interpretaciones": {"matricula": "2 a 4 oraciones", "rendimiento": "...", "riesgo": "...", "asistencia": "...", "disciplina": "...", "socioemocional": "...", "pie": "...", "aprendizaje": "...", "ritmo": "...", "talleres": "...", "otros": "..."},
+"conclusion_general": "Conclusión integrada de 6 a 10 líneas que relacione rendimiento, asistencia, convivencia y apoyos, con prioridades para el próximo año",
+"nivel_alerta": "bajo | medio | alto",
+"resumen": "Diagnóstico breve en 2 o 3 líneas",
+"fortalezas": ["..."], "desafios": ["..."],
+"recomendaciones": ["Acciones concretas para el primer mes y el año"],
+"focos_por_asignatura": [{"asignatura": "...", "sugerencia": "..."}],
+"apoyos_sugeridos": ["Coordinación con PIE, convivencia, familias o redes"]}` });
+      d.analisis = r.json;
       d.analisisFecha = today();
+      d.analisisPor = State.currentUser.name;
       await this.saveTraspaso(true);
-      toast('Análisis generado y guardado en la ficha');
+      toast('Interpretación generada y guardada en la ficha');
       this.renderTraspaso(); icons();
     });
   }
