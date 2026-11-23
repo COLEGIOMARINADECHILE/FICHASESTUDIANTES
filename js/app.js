@@ -169,7 +169,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -207,6 +207,7 @@ window.app = {
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
       ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), []],
+      ['audit', 'scroll-text', 'Bitácora', this.canSeeAudit(), ['audit']],
       ['admin', 'settings', 'Administración', hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'), ['admin']]
     ];
     el('nav-menu').innerHTML = items.filter(i => i[3]).map(([id, icon, label, , views]) =>

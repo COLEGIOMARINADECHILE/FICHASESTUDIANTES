@@ -9,20 +9,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="css/app.css?v=2026-11-23b">
+  <link rel="stylesheet" href="css/app.css?v=2026-11-23c">
 
   <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=2026-11-23b"></script>
-  <script defer src="js/core.js?v=2026-11-23b"></script>
-  <script defer src="js/app.js?v=2026-11-23b"></script>
-  <script defer src="js/plans.js?v=2026-11-23b"></script>
-  <script defer src="js/export.js?v=2026-11-23b"></script>
-  <script defer src="js/imports.js?v=2026-11-23b"></script>
-  <script defer src="js/people.js?v=2026-11-23b"></script>
+  <script defer src="js/config.js?v=2026-11-23c"></script>
+  <script defer src="js/core.js?v=2026-11-23c"></script>
+  <script defer src="js/app.js?v=2026-11-23c"></script>
+  <script defer src="js/plans.js?v=2026-11-23c"></script>
+  <script defer src="js/export.js?v=2026-11-23c"></script>
+  <script defer src="js/imports.js?v=2026-11-23c"></script>
+  <script defer src="js/people.js?v=2026-11-23c"></script>
+  <script defer src="js/audit.js?v=2026-11-23c"></script>
   <script async src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
@@ -101,15 +102,28 @@
       <div class="side__body">
         <nav id="nav-menu" class="nav" aria-label="Menú principal"></nav>
         <div class="side__user">
+          <div class="who">
+            <span id="user-avatar" class="avatar" aria-hidden="true"></span>
+            <span class="who__text"><span id="user-name" class="who__name"></span><span id="user-role" class="who__role"></span></span>
+          </div>
+          <div class="who__actions">
+            <button type="button" class="side-btn" onclick="app.changeMyPassword()"><i data-lucide="key-round" class="ico" aria-hidden="true"></i>Mi clave</button>
+            <button type="button" class="side-btn side-btn--out" onclick="app.logout()"><i data-lucide="log-out" class="ico" aria-hidden="true"></i>Cerrar sesión</button>
+          </div>
           <div class="side__slep"><img class="slep-logo" data-logo="slep" alt="Logo del SLEP Andalién Sur" hidden></div>
-          <div class="who"><span id="user-avatar" class="avatar" aria-hidden="true"></span><span><span id="user-name" class="who__name"></span><br><span id="user-role" class="who__role"></span></span></div>
-          <button type="button" class="btn" onclick="app.changeMyPassword()"><i data-lucide="key" class="ico" aria-hidden="true"></i>Cambiar mi clave</button>
-          <button type="button" class="btn" onclick="app.logout()"><i data-lucide="log-out" class="ico" aria-hidden="true"></i>Cerrar sesión</button>
         </div>
       </div>
     </aside>
 
     <main id="main" class="main">
+      <!-- BITÁCORA -->
+      <section data-view="audit" class="page" hidden>
+        <header class="page__head"><div><h1>Bitácora</h1><p class="lede">Ingresos, creaciones, modificaciones, eliminaciones y registros de cada funcionario</p></div></header>
+        <section id="audit-filters" class="panel"></section>
+        <section id="audit-people" class="panel"></section>
+        <section id="audit-list" class="panel"></section>
+      </section>
+
       <!-- REGISTRO RÁPIDO -->
       <section data-view="quick" class="page" hidden>
         <header class="page__head"><div><h1>Registro rápido</h1><p class="lede">Anotaciones, atrasos e inasistencias de los estudiantes</p></div></header>

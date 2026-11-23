@@ -16,7 +16,7 @@ const INIT_VARS = {
   professionals: ['Psicólogo/a', 'Trabajador/a Social', 'Orientador/a', 'Inspector/a General', 'Encargado/a Convivencia', 'Docente Jefe', 'Enfermero/a'],
   progressLevels: ['No Iniciado', 'En Proceso', 'Logrado', 'No Logrado', 'Requiere Modificación'],
   roles: ['Docente', 'Asistente de la Educación', 'Directivo', 'Convivencia', 'UTP', 'Administrador', 'Equipo PIE'],
-  functionsList: ['gestionar_usuarios', 'editar_fichas', 'ver_fichas', 'agregar_entrevistas', 'ver_reportes', 'ver_todos_reportes', 'configurar_sistema', 'gestionar_protocolos', 'ver_top_intervenciones', 'ver_resumen_cursos', 'registro_rapido'],
+  functionsList: ['gestionar_usuarios', 'editar_fichas', 'ver_fichas', 'agregar_entrevistas', 'ver_reportes', 'ver_todos_reportes', 'configurar_sistema', 'gestionar_protocolos', 'ver_top_intervenciones', 'ver_resumen_cursos', 'registro_rapido', 'ver_bitacora'],
   schoolLogo: 'img/logo-colegio.png',
   slepLogo: 'img/logo-slep.png',
   bgImage: 'img/COLEGIO.jpg',
@@ -38,7 +38,8 @@ const FUNCTION_LABELS = {
   gestionar_protocolos: 'Gestión confidencial de protocolos',
   ver_top_intervenciones: 'Ver alertas preventivas',
   ver_resumen_cursos: 'Ver resumen por cursos',
-  registro_rapido: 'Registro rápido: anotaciones, atrasos e inasistencias (paradocentes; sin ver fichas)'
+  registro_rapido: 'Registro rápido: anotaciones, atrasos e inasistencias (paradocentes; sin ver fichas)',
+  ver_bitacora: 'Ver la bitácora de acciones de los funcionarios'
 };
 
 // Texto de confidencialidad que se envía a cada funcionario (Ley N° 21.719)
@@ -285,6 +286,12 @@ const Demo = {
     if (!this.db) this.seed();
     const clone = v => JSON.parse(JSON.stringify(v));
     const col = p.col;
+    const accion = { login: 'Ingreso', remove: 'Eliminación', registrarEvento: 'Registro rápido', notificarAcceso: 'Aviso de acceso', logout: 'Cierre de sesión', batch: 'Modificación masiva', import: 'Traspaso de datos', save: Array.isArray(this.db[col]) && this.db[col].some(x => sameId(x.id, p.id)) ? 'Modificación' : 'Creación' }[action];
+    if (accion && !this._inner) {
+      const u = action === 'login' ? this.db.users.find(x => sameId(x.id, p.userId)) : State.currentUser;
+      const d = new Date();
+      (this.audit = this.audit || []).push({ fecha: new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19), funcionario: u?.name || '', perfil: u?.customRole || u?.role || '', accion, seccion: col || (action === 'registrarEvento' ? 'Estudiantes' : action === 'login' || action === 'logout' ? 'Sesión' : ''), registro: p.id || p.studentId || '', detalle: p.data?.name || p.data?.type || p.kind || '' });
+    }
     switch (action) {
       case 'bootstrap': return { appName: this.db.variables.appName, appTagline: this.db.variables.appTagline, roles: this.db.variables.roles, users: this.db.users.map(u => ({ id: u.id, name: u.name, role: u.role })), schoolLogo: this.db.variables.schoolLogo, slepLogo: this.db.variables.slepLogo, bgImage: this.db.variables.bgImage };
       case 'login': { const u = this.db.users.find(x => sameId(x.id, p.userId)); if (!u) throw new Error('Usuario no encontrado'); if (u.active === false) throw new Error('Usuario inactivo'); return { token: 'demo', user: clone(u) }; }
@@ -295,10 +302,11 @@ const Demo = {
         if (i > -1) arr[i] = (p.merge || col === 'users') ? { ...arr[i], ...doc } : doc; else arr.push(doc);
         return clone(i > -1 ? arr[i] : doc);
       }
-      case 'batch': p.ops.forEach(op => this.handle('save', { col: op.col, id: op.id, data: op.data, merge: op.merge })); return { saved: p.ops.length };
+      case 'batch': this._inner = true; p.ops.forEach(op => this.handle('save', { col: op.col, id: op.id, data: op.data, merge: op.merge })); this._inner = false; return { saved: p.ops.length };
       case 'remove': this.db[col] = this.db[col].filter(x => !sameId(x.id, p.id)); return { removed: 1 };
       case 'import': p.docs.forEach(d => this.handle('save', { col, id: d.id, data: d })); return { saved: p.docs.length };
       case 'changePassword': case 'logout': case 'setSecret': return {};
+      case 'getAudit': return { rows: [...(this.audit || [])].reverse(), total: (this.audit || []).length };
       case 'notificarAcceso': { const u = this.db.users.find(x => sameId(x.id, p.userId)); u.accesoNotificado = today(); return { enviado: u.email, fecha: u.accesoNotificado, quedan: 99 }; }
       case 'registrarEvento': {
         const s = this.db.students.find(x => sameId(x.id, p.studentId));
