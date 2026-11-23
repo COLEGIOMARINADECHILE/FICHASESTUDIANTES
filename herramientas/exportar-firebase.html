@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Descargar respaldo de Firebase</title>
+<!-- Herramienta de uso local. NO subir a GitHub: contiene la configuración del proyecto antiguo. -->
+<style>
+  :root { --paper: #f7f5ef; --card: #ffffff; --ink: #172a4f; --muted: #5b6478; --gold: #e2b24a; --ok: #1e7a52; --err: #b4232a; --rule: #dfe3ea; }
+  * { box-sizing: border-box; }
+  html, body { overflow-x: clip; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--paper); color: var(--ink); font: 16px/1.5 system-ui, "Segoe UI", sans-serif; }
+  main { width: min(100%, 40rem); background: var(--card); border-radius: 16px; padding: 32px; box-shadow: 0 0 0 1px var(--rule), 0 24px 48px -24px rgba(23, 42, 79, 0.35); border-top: 6px solid var(--gold); }
+  h1 { margin: 0 0 8px; font-size: 1.75rem; line-height: 1.15; }
+  p { margin: 0 0 16px; color: var(--muted); }
+  ol { margin: 0 0 24px; padding-left: 1.2rem; color: var(--muted); }
+  button { min-height: 52px; width: 100%; border: 0; border-radius: 10px; background: var(--ink); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button:hover { background: #22396a; }
+  button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  #log { margin-top: 20px; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 0.95rem; }
+  #log li { display: flex; justify-content: space-between; border-bottom: 1px solid var(--rule); padding: 4px 0; }
+  .ok { color: var(--ok); font-weight: 600; } .err { color: var(--err); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Descargar respaldo de Firebase</h1>
+  <p>Copia todos los datos de la página antigua a un archivo en su computador. No modifica nada en Firebase.</p>
+  <ol>
+    <li>Presione el botón y espere a que termine (puede tardar uno o dos minutos).</li>
+    <li>Se descargará un archivo <strong>respaldo-firebase-AAAA-MM-DD.json</strong>.</li>
+    <li>En la página nueva, entre como administrador y vaya a <strong>Administración &gt; Traspasar datos</strong>. Suba ese archivo.</li>
+  </ol>
+  <button id="go" type="button">Descargar respaldo</button>
+  <ul id="log" aria-live="polite"></ul>
+  <p id="status" style="margin-top:16px"></p>
+</main>
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+  import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+  // Configuración del proyecto antiguo (la misma que tenía la página anterior)
+  const firebaseConfig = {
+    apiKey: 'AIzaSyBK705oQdyThLOZc9COOvbvjMh_etpOCxI',
+    authDomain: 'planes-22dc9.firebaseapp.com',
+    projectId: 'planes-22dc9',
+    storageBucket: 'planes-22dc9.firebasestorage.app',
+    messagingSenderId: '845789114775',
+    appId: '1:845789114775:web:bbacfa3bee4c2afc2a94d2'
+  };
+  const COLECCIONES = ['variables', 'users', 'courses', 'students', 'interventions', 'observations', 'nursings', 'reports', 'knowledgeDocs', 'coursePlans', 'studentPlans', 'evidences'];
+
+  const log = document.getElementById('log');
+  const status = document.getElementById('status');
+  const btn = document.getElementById('go');
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Descargando...';
+    log.innerHTML = '';
+    status.textContent = '';
+    try {
+      const db = getFirestore(initializeApp(firebaseConfig));
+      const salida = { origen: 'firebase:' + firebaseConfig.projectId, exportado: new Date().toISOString(), colecciones: {} };
+      for (const c of COLECCIONES) {
+        const li = document.createElement('li');
+        li.innerHTML = `<span>${c}</span><span>leyendo...</span>`;
+        log.appendChild(li);
+        const snap = await getDocs(collection(db, c));
+        salida.colecciones[c] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        li.lastElementChild.textContent = `${snap.size} registros`;
+        li.lastElementChild.className = 'ok';
+      }
+      const blob = new Blob([JSON.stringify(salida)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `respaldo-firebase-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      status.innerHTML = '<span class="ok">Listo. Revise su carpeta de Descargas.</span> Guarde el archivo en un lugar seguro: contiene datos de estudiantes.';
+    } catch (e) {
+      console.error(e);
+      status.innerHTML = `<span class="err">No se pudo descargar:</span> ${e.message}. Revise su conexión a internet e intente de nuevo.`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Descargar respaldo';
+    }
+  });
+</script>
+</body>
+</html>

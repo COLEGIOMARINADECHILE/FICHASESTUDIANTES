@@ -1,0 +1,263 @@
+'use strict';
+// =====================================================================
+// FUNCIONARIOS Y ACCESOS: correos institucionales, aviso de cuenta,
+// cursos asignados, registro rápido (paradocentes), solicitudes de
+// información confidencial y registro de notas del estudiante.
+// =====================================================================
+Object.assign(app, {
+  domain() { return State.loginOptions?.dominio || 'andaliensur.cl'; },
+  pageUrl() { return location.origin + location.pathname.replace(/index\.html$/, ''); },
+  /** Datos para el diseño del correo: dirección de la página y logos (direcciones completas). */
+  mailExtras() {
+    const abs = src => !src ? '' : String(src).startsWith('data:') ? src : new URL(src, location.href).href;
+    const b = this.brand();
+    return { pageUrl: this.pageUrl(), appName: b.name, logoUrl: abs(b.school), slepUrl: abs(b.slep) };
+  },
+
+  // ---------------- CORREOS INSTITUCIONALES ----------------
+  /** "Juan Andrés Pérez Soto" → juan.perez@andaliensur.cl ; "PÉREZ SOTO, JUAN" → juan.perez@... */
+  suggestEmail(fullName) {
+    const clean = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z\s,]/g, ' ').replace(/\s+/g, ' ').trim();
+    let txt = clean(fullName).replace(/\(.*?\)/g, '');
+    let first, last;
+    if (txt.includes(',')) {
+      const [ap, no] = txt.split(',').map(s => s.trim().split(' ').filter(Boolean));
+      first = (no || [])[0]; last = (ap || [])[0];
+    } else {
+      const t = txt.split(' ').filter(Boolean);
+      first = t[0];
+      last = t.length >= 4 ? t[2] : t[1];
+    }
+    return first && last ? `${first}.${last}@${this.domain()}` : '';
+  },
+  async saveUserEmail(id, input) {
+    const email = input.value.trim().toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { input.setAttribute('aria-invalid', 'true'); return toast('El correo no es válido', 'error'); }
+    if (email && State.users.some(u => !sameId(u.id, id) && String(u.email || '').toLowerCase() === email)) { input.setAttribute('aria-invalid', 'true'); return toast('Ese correo ya está asignado a otro funcionario', 'error'); }
+    input.removeAttribute('aria-invalid');
+    try { await DB.patch('users', id, { email }); toast('Correo guardado'); }
+    catch (e) { toast(e.message, 'error'); }
+  },
+  suggestAllEmails() {
+    const list = State.users.filter(u => !u.email);
+    ui.modal({
+      title: 'Sugerir correos institucionales', icon: 'at-sign', size: 'lg', okText: 'Guardar correos',
+      body: `<p class="modal__msg">Se propone <span class="num">nombre.apellido@${this.domain()}</span> a partir del nombre. Revise y corrija antes de guardar; deje vacío el que no corresponda.</p>
+        <div class="table-wrap"><table class="table table--dense"><thead><tr><th>Funcionario</th><th>Correo propuesto</th></tr></thead><tbody>
+        ${list.map(u => `<tr><td>${esc(u.name)}<span class="cell-sub">${esc(u.role)}</span></td><td><input type="email" class="input input--email" data-uid="${esc(u.id)}" value="${esc(this.suggestEmail(u.name))}" aria-label="Correo de ${esc(u.name)}"></td></tr>`).join('')}
+        </tbody></table></div>`,
+      onOk: async body => {
+        const ops = [];
+        const seen = new Set(State.users.filter(u => u.email).map(u => u.email.toLowerCase()));
+        for (const inp of body.querySelectorAll('[data-uid]')) {
+          const email = inp.value.trim().toLowerCase();
+          if (!email) continue;
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast(`Correo no válido: ${email}`, 'error'); return false; }
+          if (seen.has(email)) { toast(`Correo repetido: ${email}`, 'error'); return false; }
+          seen.add(email);
+          ops.push({ col: 'users', id: inp.dataset.uid, data: { email }, merge: true });
+        }
+        if (!ops.length) return;
+        await DB.batch(ops);
+        toast(`${ops.length} correos guardados`);
+        this.renderAdmin();
+      }
+    });
+  },
+
+  // ---------------- AVISO DE CUENTA AL FUNCIONARIO ----------------
+  accessMessage(u, withPassword) {
+    const b = this.brand();
+    const google = !!State.loginOptions?.googleClientId;
+    const cursos = (u.assignedCourses || []).length ? `Cursos asignados: ${u.assignedCourses.join(', ')}.` : 'Tiene acceso a todos los cursos que su perfil permite.';
+    const pasos = [];
+    pasos.push(`1. Abra ${this.pageUrl()}`);
+    if (google) pasos.push(`2. Presione "Acceder con Google" y use su cuenta ${u.email}.`);
+    if (withPassword) pasos.push(`${google ? '3. Si prefiere usar clave: elija' : '2. Elija'} el perfil "${u.role}", su nombre y escriba la clave temporal: **{CLAVE}**`, `${google ? '4' : '3'}. Cambie la clave en "Cambiar mi clave", abajo en el menú.`);
+    else if (!google) pasos.push(`2. Elija el perfil "${u.role}", su nombre y escriba su clave.`);
+    return `Estimado(a) ${u.name}:
+
+Se habilitó su cuenta en ${b.name}, el sistema de seguimiento de estudiantes del ${b.tagline}.
+
+**Cómo ingresar**
+${pasos.join('\n')}
+
+Su perfil: ${u.customRole || u.role}. ${cursos}
+
+${TXT_CONFIDENCIALIDAD}
+
+Ante cualquier duda, responda este correo.
+
+Saludos cordiales,
+${State.currentUser.name}
+${State.currentUser.customRole || ''}`.trim();
+  },
+  openNotifyModal(id) {
+    const u = State.users.find(x => sameId(x.id, id));
+    if (!u) return;
+    if (!u.email) return toast('Primero registre el correo institucional del funcionario', 'error');
+    const google = !!State.loginOptions?.googleClientId;
+    ui.modal({
+      title: `Aviso de acceso a ${u.name}`, icon: 'send', size: 'lg', okText: 'Enviar correo',
+      body: `<div class="stack">
+        <p class="modal__msg">Se enviará a <strong>${esc(u.email)}</strong> desde la cuenta de Google dueña del Apps Script. Puede editar el texto.</p>
+        <label class="check"><input type="checkbox" id="notify-pass" ${google ? '' : 'checked'} onchange="el('notify-text').value = app.accessMessage(State.users.find(x => sameId(x.id, ${jsq(u.id)})), this.checked)"><span>Incluir una clave temporal nueva (reemplaza la actual; se genera al enviar)</span></label>
+        ${fieldHtml('Asunto', `<input id="notify-subject" class="input" value="Su cuenta en ${esc(this.brand().name)}">`)}
+        ${fieldHtml('Mensaje', `<textarea id="notify-text" class="input" rows="16">${esc(this.accessMessage(u, !google))}</textarea>`)}
+      </div>`,
+      onOk: async () => {
+        const mensaje = el('notify-text').value;
+        if (el('notify-pass').checked && !mensaje.includes('{CLAVE}')) { toast('El mensaje debe contener {CLAVE} donde irá la clave temporal', 'error'); return false; }
+        const out = await API.call('notificarAcceso', { userId: u.id, asunto: el('notify-subject').value, mensaje, remitente: this.brand().tagline, ...this.mailExtras() });
+        u.accesoNotificado = out.fecha;
+        toast(`Aviso enviado a ${out.enviado}`);
+        if (State.currentView === 'admin') this.renderAdmin();
+      }
+    });
+  },
+  notifyPending() {
+    const list = State.users.filter(u => u.email && !u.accesoNotificado && u.active !== false);
+    const google = !!State.loginOptions?.googleClientId;
+    ui.confirm({
+      title: 'Enviar avisos pendientes', icon: 'send', tone: 'conv', okText: `Enviar ${list.length} correos`,
+      msg: `Se enviará el aviso de acceso a ${list.length} funcionario(s) con correo y sin aviso previo${google ? '' : ', cada uno con una clave temporal nueva'}.<br><br>${list.map(u => esc(u.name)).join(', ')}`,
+      action: async () => {
+        ui.close();
+        const done = ui.busy('Enviando avisos', '');
+        let ok = 0;
+        try {
+          for (const u of list) {
+            el('busy-msg').textContent = `${ok + 1} de ${list.length}: ${u.name}`;
+            const out = await API.call('notificarAcceso', { userId: u.id, asunto: `Su cuenta en ${this.brand().name}`, mensaje: this.accessMessage(u, !google), remitente: this.brand().tagline, ...this.mailExtras() });
+            u.accesoNotificado = out.fecha;
+            ok++;
+          }
+          toast(`${ok} avisos enviados`);
+        } catch (e) { toast(`Se enviaron ${ok}. Se detuvo: ${e.message}`, 'error'); }
+        finally { done(); this.renderAdmin(); }
+        return false;
+      }
+    });
+  },
+
+  // ---------------- ACCESO DE DOCENTES A UN CURSO ----------------
+  courseAccessHtml(course) {
+    const withAccess = State.users.filter(u => (u.assignedCourses || []).includes(course));
+    const others = State.users.filter(u => !(u.assignedCourses || []).includes(course) && !(u.functions || []).includes('acceso_total')).sort((a, b) => a.name.localeCompare(b.name));
+    return `<div class="access">
+      <span class="field__label">Funcionarios con acceso a este curso</span>
+      <div class="chips">${withAccess.map(u => `<span class="chip chip--removable" data-tone="${ROLE_TONE[u.role] || 'neutral'}">${esc(u.name)}<button type="button" aria-label="Quitar acceso a ${esc(u.name)}" onclick="app.setCourseAccess(${jsq(u.id)}, ${jsq(course)}, false)">${ico('x')}</button></span>`).join('') || '<span class="muted small">Nadie asignado específicamente.</span>'}</div>
+      <div class="row-field"><select id="course-access-user" class="input" aria-label="Funcionario"><option value="">Elegir funcionario...</option>${options(others.map(u => [u.id, `${u.name} (${u.role})`]))}</select><button type="button" class="btn" onclick="app.setCourseAccess(el('course-access-user').value, ${jsq(course)}, true)">${ico('user-plus')}Dar acceso</button></div>
+      <p class="muted small">Un funcionario con cursos asignados solo ve esos cursos. Si no tiene ninguno asignado, ve todos los que su perfil permite.</p>
+    </div>`;
+  },
+  async setCourseAccess(userId, course, add) {
+    const u = State.users.find(x => sameId(x.id, userId));
+    if (!u) return toast('Elija un funcionario', 'error');
+    const list = new Set(u.assignedCourses || []);
+    if (add) list.add(course); else list.delete(course);
+    try {
+      await DB.patch('users', u.id, { assignedCourses: [...list] });
+      toast(add ? `${u.name} ahora puede ver ${course}` : `Se quitó el acceso de ${u.name} a ${course}`);
+      this.renderStudents(); icons();
+    } catch (e) { toast(e.message, 'error'); }
+  },
+
+  // ---------------- SOLICITAR INFORMACIÓN CONFIDENCIAL ----------------
+  requestRecord(id) {
+    const r = State.rawInterventions.find(x => sameId(x.id, id));
+    if (!r) return;
+    const author = State.users.find(u => sameId(u.id, r.professionalId));
+    const s = this.current();
+    if (!author?.email) return toast('El autor no tiene correo registrado. Solicite la información a Convivencia Escolar.', 'error');
+    const subject = `Solicitud de información confidencial: ${s?.name || ''}`;
+    const body = `Estimado(a) ${author.name}:\n\nSolicito acceso o un reporte del registro "${r.type}" del ${fmtDate(r.date)} sobre el estudiante ${s?.name || ''} (${s?.curso || ''}), para fines de acompañamiento en mi rol de ${State.currentUser.customRole || State.currentUser.role}.\n\nMe comprometo a resguardar la confidencialidad de la información conforme a la Ley N° 21.719.\n\nSaludos,\n${State.currentUser.name}`;
+    location.href = `mailto:${encodeURIComponent(author.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  },
+
+  // ---------------- REGISTRO RÁPIDO (paradocentes y docentes) ----------------
+  renderQuick() {
+    const ac = State.currentUser.assignedCourses || [];
+    const all = State.rawStudents.map(s => ({ ...s, curso: this.courseNameOf(s), name: this.clean(s.name) })).filter(s => s.status !== 'blocked' && (hasAccess('acceso_total') || !ac.length || ac.includes(s.curso)));
+    const courses = ALL_COURSES.filter(c => all.some(s => s.curso === c));
+    if (State.quickCourse && !courses.includes(State.quickCourse)) State.quickCourse = '';
+    const q = (State.quickSearch || '').toLowerCase();
+    const list = all.filter(s => (!State.quickCourse || s.curso === State.quickCourse) && (!q || s.name.toLowerCase().includes(q) || String(s.rut || '').includes(q))).sort((a, b) => a.name.localeCompare(b.name));
+    el('quick-controls').innerHTML = `
+      ${fieldHtml('Curso', `<select class="input" onchange="State.quickCourse=this.value; app.renderQuick(); icons()"><option value="">Todos mis cursos</option>${options(courses, State.quickCourse)}</select>`)}
+      ${fieldHtml('Buscar estudiante', `<input type="search" class="input" id="quick-search" value="${esc(State.quickSearch || '')}" placeholder="Nombre o RUN" oninput="State.quickSearch=this.value; app.renderQuickList()">`)}`;
+    State.quickList = list;
+    this.renderQuickList();
+  },
+  renderQuickList() {
+    const q = (State.quickSearch || '').toLowerCase();
+    const list = (State.quickList || []).filter(s => !q || s.name.toLowerCase().includes(q) || String(s.rut || '').includes(q));
+    el('quick-list').innerHTML = !State.quickCourse && !q
+      ? empty('school', 'Elija un curso o busque un estudiante para registrar.')
+      : list.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Estudiante</th><th>Curso</th><th class="t-actions">Registrar</th></tr></thead><tbody>
+        ${list.slice(0, 200).map(s => `<tr><td><span class="cell-title">${esc(s.name)}</span><span class="cell-sub num">${esc(s.rut)}</span></td><td>${esc(s.curso)}</td>
+          <td class="t-actions"><div class="row-actions">
+            <button class="btn btn--sm" onclick="app.quickEvent(${jsq(s.id)}, 'anotacion')">${ico('pen-line')}Anotación</button>
+            <button class="btn btn--sm" onclick="app.quickEvent(${jsq(s.id)}, 'atraso')">${ico('clock')}Atraso</button>
+            <button class="btn btn--sm" onclick="app.quickEvent(${jsq(s.id)}, 'inasistencia')">${ico('calendar-x')}Inasistencia</button>
+          </div></td></tr>`).join('')}</tbody></table></div>` : empty('search-x', 'No se encontraron estudiantes.');
+    icons();
+  },
+  quickEvent(studentId, kind) {
+    const s = State.rawStudents.find(x => sameId(x.id, studentId));
+    if (!s) return;
+    const title = { anotacion: 'Registrar anotación', atraso: 'Registrar atraso', inasistencia: 'Registrar inasistencia' }[kind];
+    ui.modal({
+      title, icon: { anotacion: 'pen-line', atraso: 'clock', inasistencia: 'calendar-x' }[kind], tone: kind === 'anotacion' ? 'obs' : 'warn', size: 'md', okText: 'Guardar registro',
+      body: `<div class="stack">
+        <p class="modal__msg"><strong>${esc(this.clean(s.name))}</strong>, ${esc(this.courseNameOf(s))}</p>
+        ${fieldHtml('Fecha', `<input type="date" id="qe-date" class="input" value="${today()}">`)}
+        ${kind === 'anotacion' ? `<div><span class="field__label">Tipo de anotación</span><div class="segs" role="group" aria-label="Tipo de anotación">
+            <button type="button" class="seg" id="qe-neg" aria-pressed="true" onclick="el('qe-neg').setAttribute('aria-pressed','true'); el('qe-pos').setAttribute('aria-pressed','false')">Negativa</button>
+            <button type="button" class="seg" id="qe-pos" aria-pressed="false" onclick="el('qe-pos').setAttribute('aria-pressed','true'); el('qe-neg').setAttribute('aria-pressed','false')">Positiva</button></div></div>
+          ${fieldHtml('Detalle de la anotación', '<textarea id="qe-detail" class="input" rows="4" placeholder="Describa el hecho de forma objetiva..."></textarea>')}`
+          : fieldHtml('Observación (opcional)', `<input id="qe-detail" class="input" placeholder="${kind === 'atraso' ? 'Hora de llegada, motivo informado...' : 'Motivo informado, aviso del apoderado...'}">`)}
+      </div>`,
+      onOk: async () => {
+        const detail = el('qe-detail').value.trim();
+        if (kind === 'anotacion' && !detail) { toast('Escriba el detalle de la anotación', 'error'); return false; }
+        await API.call('registrarEvento', { studentId: s.id, kind, date: el('qe-date').value, detail, tipo: kind === 'anotacion' && el('qe-pos').getAttribute('aria-pressed') === 'true' ? 'Positiva' : 'Negativa' });
+        toast(`${{ anotacion: 'Anotación registrada', atraso: 'Atraso registrado', inasistencia: 'Inasistencia registrada' }[kind]} para ${this.clean(s.name)}`);
+        DB.load().catch(() => {});
+      }
+    });
+  },
+
+  // ---------------- REGISTRO DE NOTAS DEL ESTUDIANTE ----------------
+  gradesTable(rec) {
+    const cols = rec.columnas || [];
+    return `<table class="table table--dense grades"><thead><tr><th>Asignatura</th>${cols.map(c => `<th class="t-num">${esc(c)}</th>`).join('')}</tr></thead><tbody>
+      ${(rec.asignaturas || []).map(a => `<tr><td>${esc(a.nombre)}</td>${a.valores.map((v, i) => `<td class="t-num num" ${i === a.valores.length - 1 ? 'data-final' : ''} data-low="${parseFloat(String(v).replace(',', '.')) < 4}">${esc(v)}</td>`).join('')}</tr>`).join('')}
+      </tbody></table>`;
+  },
+  openGradesModal() {
+    const s = this.current();
+    if (!s) return;
+    const recs = Object.values(s.calificaciones || {}).sort((a, b) => String(b.anio).localeCompare(String(a.anio)));
+    const canDel = hasAccess('editar_fichas');
+    ui.modal({
+      title: `Registro de notas de ${s.name}`, icon: 'graduation-cap', tone: 'pie', size: 'xl', okText: 'Incluir en un reporte PDF', cancelText: 'Cerrar', hideOk: !recs.length,
+      body: recs.length ? recs.map(r => `
+        <section class="grades-year">
+          <div class="subpanel__head"><h3>Año ${esc(r.anio)}${r.periodo ? ` (${esc(r.periodo)})` : ''}</h3>
+            <div class="row-actions">${chip(`Promedio general ${r.promedioGeneral || '-'}`, parseFloat(String(r.promedioGeneral).replace(',', '.')) < 4 ? 'proto' : 'conv')}
+            ${r.asistencia?.promedio ? chip(`Asistencia ${r.asistencia.promedio}%`, 'obs') : ''}
+            ${canDel ? `<button class="icon-btn icon-btn--danger" aria-label="Eliminar notas ${esc(r.anio)}" title="Eliminar este registro" onclick="app.deleteGrades(${jsq(r.anio)})">${ico('trash-2')}</button>` : ''}</div></div>
+          ${this.gradesTable(r)}
+          <p class="note">${ico('info')}Curso en el informe: ${esc(r.curso || '-')}. Profesor(a) jefe: ${esc(r.profesorJefe || '-')}. ${r.asistencia ? `Días trabajados ${r.asistencia.trabajados ?? '-'}, inasistencias ${r.asistencia.inasistencias ?? '-'}.` : ''} Cargado el ${fmtDate(r.cargado)} por ${esc(r.cargadoPor || '')}.</p>
+        </section>`).join('') : empty('graduation-cap', 'Este estudiante no tiene notas registradas. Cárguelas desde el curso con "Cargar notas (PDF)".', 'pie'),
+      onOk: () => { State.export.includeGrades = true; setTimeout(() => this.openExportModal('student_internal'), 50); }
+    });
+  },
+  deleteGrades(anio) {
+    const s = State.rawStudents.find(x => sameId(x.id, State.selectedStudentId));
+    const cal = { ...(s.calificaciones || {}) };
+    delete cal[anio];
+    ui.confirm({ title: `Eliminar notas ${anio}`, msg: '¿Eliminar este registro de notas del estudiante?', action: async () => { await DB.patch('students', s.id, { calificaciones: cal }); toast('Registro de notas eliminado'); this.renderStudentDetail(); } });
+  }
+});

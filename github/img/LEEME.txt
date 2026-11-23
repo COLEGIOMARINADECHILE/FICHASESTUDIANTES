@@ -1,0 +1,12 @@
+Guarde aquí los logos con estos nombres exactos:
+
+  logo-colegio.png   Escudo del Colegio Marina de Chile
+  logo-slep.png      Logo del SLEP Andalién Sur
+  COLEGIO.jpg        Fotografía del colegio para la pantalla de ingreso (opcional)
+
+Para cambiarlos más adelante hay dos caminos:
+  1. Reemplazar el archivo en esta carpeta con el mismo nombre y subirlo a GitHub.
+  2. Ir a Administración > Nombre, logos e IA y subir la imagen nueva (máximo 600 KB).
+     Ese valor tiene prioridad sobre los archivos de esta carpeta.
+
+Los logos aparecen en la pantalla de ingreso, en el menú lateral y en el encabezado de todos los PDF.
