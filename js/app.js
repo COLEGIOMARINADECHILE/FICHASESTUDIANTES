@@ -88,6 +88,8 @@ window.app = {
     el('login-user').innerHTML = `<option value="">${sel ? 'Seleccione a la persona...' : 'Primero elija un perfil'}</option>` + list.map(u => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('');
     el('login-user').disabled = !sel;
     this.checkLogin();
+    this.renderGoogleLogin();
+    if (!window.google?.accounts?.id && State.loginOptions?.googleClientId) setTimeout(() => this.renderGoogleLogin(), 1200);
   },
   selectRole(r) {
     State.loginRole = r;
@@ -115,15 +117,37 @@ window.app = {
     btn.disabled = true; btn.classList.add('is-loading');
     try {
       const r = await API.call('login', { userId: el('login-user').value, password: el('login-password').value });
-      API.setToken(r.token);
-      State.currentUser = r.user;
-      await DB.load();
-      State.currentView = 'dashboard';
       el('login-password').value = '';
       if (r.master) toast('Ingreso con clave maestra');
-      this.render();
+      await this.startSession(r);
     } catch (err) { toast(err.message, 'error'); }
     finally { btn.classList.remove('is-loading'); this.checkLogin(); }
+  },
+  async startSession(r) {
+    API.setToken(r.token);
+    State.currentUser = r.user;
+    await DB.load();
+    State.currentView = this.isQuickOnly() ? 'quick' : 'dashboard';
+    this.render();
+  },
+  /** Paradocente: solo registra anotaciones, atrasos e inasistencias; no ve fichas. */
+  isQuickOnly() { return hasAccess('registro_rapido') && !hasAccess('ver_fichas') && !hasAccess('editar_fichas') && !hasAccess('agregar_entrevistas'); },
+
+  // Ingreso con cuenta institucional de Google (se activa cuando el servidor tiene GOOGLE_CLIENT_ID)
+  renderGoogleLogin() {
+    const id = State.loginOptions?.googleClientId;
+    const box = el('login-google');
+    box.hidden = !id;
+    if (!id || !window.google?.accounts?.id || box.dataset.ready === id) return;
+    google.accounts.id.initialize({ client_id: id, hd: State.loginOptions.dominio, callback: res => this.handleGoogle(res) });
+    google.accounts.id.renderButton(el('login-google-btn'), { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width: 320, locale: 'es' });
+    box.dataset.ready = id;
+  },
+  async handleGoogle(res) {
+    const done = ui.busy('Ingresando', 'Verificando su cuenta institucional...');
+    try { await this.startSession(await API.call('loginGoogle', { credential: res.credential })); }
+    catch (err) { toast(err.message, 'error'); }
+    finally { done(); }
   },
   logout() {
     API.call('logout').catch(() => {});
@@ -145,7 +169,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -175,8 +199,10 @@ window.app = {
 
   renderNav() {
     const v = State.currentView;
-    const items = [
+    const quick = this.isQuickOnly();
+    const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']]] : [
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
+      ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
@@ -337,6 +363,7 @@ window.app = {
     el('students-title').textContent = course || 'Todos los estudiantes';
     el('students-actions').innerHTML = [
       course && canImport ? `<button class="btn" onclick="app.openAttendanceImport()">${ico('file-spreadsheet')}Cargar inasistencias</button>` : '',
+      canImport ? `<button class="btn" onclick="app.openGradesImport()">${ico('file-badge')}Cargar notas (PDF)</button>` : '',
       course ? `<button class="btn" onclick="app.openExportModal('course_full_report')">${ico('file-text')}Reporte del curso</button>` : '',
       course ? `<button class="btn" onclick="app.exportActivePlansPDF()">${ico('file-output')}Reporte planes</button>` : '',
       course ? `<button class="btn" onclick="app.openCoursePlans()">${ico('clipboard-list')}Planes del curso</button>` : '',
@@ -346,11 +373,12 @@ window.app = {
     const courses = Array.from(new Set(all.map(s => s.curso))).sort();
     el('student-course-filters').innerHTML = `
       ${course ? `<label class="field field--inline"><span class="field__label">Profesor jefe</span><input class="input" value="${esc(this.profJefeOf(course))}" placeholder="Escriba el nombre y presione Enter" onchange="app.updateProfJefe(${jsq(course)}, this.value)"></label>` : ''}
+      ${course && hasAccess('gestionar_usuarios') ? this.courseAccessHtml(course) : ''}
       <div class="filters">
-        <div class="segs" role="group" aria-label="Filtrar por curso">
-          <button type="button" class="seg" aria-pressed="${!course}" onclick="app.setFilter('')">Todos</button>
-          ${courses.map(c => `<button type="button" class="seg" aria-pressed="${course === c}" onclick="app.setFilter(${jsq(c)})">${esc(c)}</button>`).join('')}
-        </div>
+        ${course ? '<span></span>' : `<div class="segs" role="group" aria-label="Filtrar por curso">
+          <button type="button" class="seg" aria-pressed="true" onclick="app.setFilter('')">Todos</button>
+          ${courses.map(c => `<button type="button" class="seg" aria-pressed="false" onclick="app.setFilter(${jsq(c)})">${esc(c)}</button>`).join('')}
+        </div>`}
         <label class="check"><input type="checkbox" ${State.showWithdrawn ? 'checked' : ''} onchange="app.toggleShowWithdrawn(this.checked)"><span>Ver retirados</span></label>
       </div>`;
 
@@ -604,6 +632,7 @@ window.app = {
         <article class="record" data-tone="neutral">
           <header class="record__head"><span class="record__icon">${ico('lock')}</span><div><span class="record__date num">${fmtDate(r.date)}</span><h3>${esc(r.type)}</h3></div></header>
           <p class="muted">El detalle de este registro es confidencial. Solo el equipo de Convivencia, UTP o Dirección puede ver su contenido y antecedentes.</p>
+          <div class="row-actions"><button class="btn btn--sm" onclick="app.requestRecord(${jsq(r.id)})">${ico('mail')}Solicitar información al autor</button></div>
           <footer class="record__foot">${ico('user')}Registrado por ${esc(r.professional)}</footer>
         </article>`;
       const isProt = r.type === PROTOCOLO;
@@ -1006,10 +1035,18 @@ window.app = {
     icons();
   },
   admin_users() {
-    return `<section class="panel"><div class="panel__head"><h2>Directorio de personal</h2><button class="btn btn--primary" onclick="app.openUserModal()">${ico('user-plus')}Nuevo funcionario</button></div>
-      <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Perfil</th><th>Estado</th><th class="t-actions">Acciones</th></tr></thead><tbody>
-      ${State.users.map(u => `<tr><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, ROLE_TONE[u.role] || 'neutral')}</td><td>${u.active === false ? chip('Inactivo', 'neutral') : chip('Activo', 'conv')}</td>
-        <td class="t-actions"><div class="row-actions"><button class="icon-btn" aria-label="Cambiar clave" title="Cambiar clave" onclick="app.resetUserPassword(${jsq(u.id)})">${ico('key')}</button><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.openUserModal(${jsq(u.id)})">${ico('edit')}</button><button class="icon-btn icon-btn--danger" aria-label="Eliminar" title="Eliminar" onclick="app.deleteUser(${jsq(u.id)})">${ico('trash-2')}</button></div></td></tr>`).join('')}
+    const sinCorreo = State.users.filter(u => !u.email).length;
+    const pendientes = State.users.filter(u => u.email && !u.accesoNotificado && u.active !== false).length;
+    return `<section class="panel"><div class="panel__head"><h2>Directorio de personal</h2><div class="row-actions">
+        <button class="btn" ${sinCorreo ? '' : 'disabled'} onclick="app.suggestAllEmails()">${ico('at-sign')}Sugerir correos (${sinCorreo})</button>
+        <button class="btn" ${pendientes ? '' : 'disabled'} onclick="app.notifyPending()">${ico('send')}Enviar avisos pendientes (${pendientes})</button>
+        <button class="btn btn--primary" onclick="app.openUserModal()">${ico('user-plus')}Nuevo funcionario</button></div></div>
+      <p class="muted small">El correo institucional permite ingresar con la cuenta de Google @${this.domain()}. Edítelo directamente en la tabla: se guarda al salir del campo.</p>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Perfil</th><th>Correo institucional</th><th>Estado</th><th class="t-actions">Acciones</th></tr></thead><tbody>
+      ${State.users.map(u => `<tr><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, ROLE_TONE[u.role] || 'neutral')}</td>
+        <td><input type="email" class="input input--email" aria-label="Correo de ${esc(u.name)}" value="${esc(u.email || '')}" placeholder="nombre.apellido@${this.domain()}" onchange="app.saveUserEmail(${jsq(u.id)}, this)"><span class="cell-sub">${u.accesoNotificado ? `Aviso enviado el ${fmtDate(u.accesoNotificado)}` : 'Sin aviso enviado'}</span></td>
+        <td>${u.active === false ? chip('Inactivo', 'neutral') : chip('Activo', 'conv')}</td>
+        <td class="t-actions"><div class="row-actions"><button class="icon-btn" aria-label="Enviar aviso de acceso" title="Enviar aviso de acceso" onclick="app.openNotifyModal(${jsq(u.id)})">${ico('send')}</button><button class="icon-btn" aria-label="Cambiar clave" title="Cambiar clave" onclick="app.resetUserPassword(${jsq(u.id)})">${ico('key')}</button><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.openUserModal(${jsq(u.id)})">${ico('edit')}</button><button class="icon-btn icon-btn--danger" aria-label="Eliminar" title="Eliminar" onclick="app.deleteUser(${jsq(u.id)})">${ico('trash-2')}</button></div></td></tr>`).join('')}
       </tbody></table></div></section>`;
   },
   admin_students() {
@@ -1118,7 +1155,8 @@ window.app = {
         ${fieldHtml('Nombre completo', `<input class="input" value="${esc(f.name)}" oninput="State.tempUserForm.name=this.value">`)}
         ${fieldHtml('Cargo específico (opcional)', `<input class="input" placeholder="Encargada de Convivencia Escolar" value="${esc(f.customRole)}" oninput="State.tempUserForm.customRole=this.value">`)}
         ${fieldHtml('Perfil de permisos', `<select class="input" onchange="State.tempUserForm.role=this.value">${options(State.variables.roles, f.role)}</select>`)}
-        ${fieldHtml(State.editingUserId ? 'Nueva clave (vacío = sin cambios)' : 'Clave inicial', `<input class="input" type="text" autocomplete="off" value="${esc(f.password)}" oninput="State.tempUserForm.password=this.value">`)}
+        ${fieldHtml(State.editingUserId ? 'Nueva clave (vacío = sin cambios)' : 'Clave inicial (vacío = se genera sola)', `<input class="input" type="text" autocomplete="off" value="${esc(f.password)}" oninput="State.tempUserForm.password=this.value">`)}
+        ${fieldHtml(`Correo institucional (@${this.domain()})`, `<div class="row-field"><input class="input" type="email" id="user-email" value="${esc(f.email)}" placeholder="nombre.apellido@${this.domain()}" oninput="State.tempUserForm.email=this.value.trim().toLowerCase()"><button type="button" class="btn btn--sm" onclick="State.tempUserForm.email=app.suggestEmail(State.tempUserForm.name); el('user-email').value=State.tempUserForm.email">Sugerir</button></div>`, 'span-2')}
       </div>
       <label class="check"><input type="checkbox" ${f.active ? 'checked' : ''} onchange="State.tempUserForm.active=this.checked"><span>Cuenta activa (permitir ingreso)</span></label>
       <h3>Permisos de sistema</h3>
@@ -1142,13 +1180,20 @@ window.app = {
   async saveUser() {
     const f = State.tempUserForm;
     if (!f.name.trim()) { toast('El nombre es obligatorio', 'error'); return false; }
-    if (!State.editingUserId && String(f.password).trim().length < 4) { toast('Asigne una clave de al menos 4 caracteres', 'error'); return false; }
-    const data = { id: State.editingUserId || String(Date.now()), name: f.name.trim(), role: f.role, customRole: f.customRole || '', active: f.active !== false, functions: f.functions, assignedCourses: f.assignedCourses };
-    if (String(f.password).trim()) data.password = String(f.password).trim();
+    const isNew = !State.editingUserId;
+    const pass = String(f.password || '').trim();
+    if (pass && pass.length < 4) { toast('La clave debe tener al menos 4 caracteres', 'error'); return false; }
+    const email = String(f.email || '').trim().toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('El correo no es válido', 'error'); return false; }
+    if (email && State.users.some(u => !sameId(u.id, State.editingUserId) && String(u.email || '').toLowerCase() === email)) { toast('Ese correo ya está asignado a otro funcionario', 'error'); return false; }
+    const data = { id: State.editingUserId || String(Date.now()), name: f.name.trim(), role: f.role, customRole: f.customRole || '', email, active: f.active !== false, functions: f.functions, assignedCourses: f.assignedCourses };
+    if (pass) data.password = pass;
+    else if (isNew) data.password = newId().slice(-8); // clave provisoria: se reemplaza al enviar el aviso de acceso
     await DB.save('users', data);
     if (sameId(data.id, State.currentUser.id)) Object.assign(State.currentUser, data, { password: undefined });
     toast('Funcionario guardado correctamente');
     this.renderAdmin();
+    if (isNew && email) setTimeout(() => this.openNotifyModal(data.id), 80);
   },
   deleteUser(id) {
     if (sameId(id, State.currentUser.id)) return toast('No puede eliminar su propia cuenta', 'error');

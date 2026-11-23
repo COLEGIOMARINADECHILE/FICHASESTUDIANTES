@@ -48,6 +48,7 @@ Object.assign(app, {
           <button type="button" class="seg" id="btn-size-letter" aria-pressed="${ex.size === 'letter'}" onclick="app.setExportSize('letter')">Carta</button>
           <button type="button" class="seg" id="btn-size-legal" aria-pressed="${ex.size === 'legal'}" onclick="app.setExportSize('legal')">Oficio</button></div></div>
         ${ctx === 'student_internal' ? '<label class="check" data-tone="proto"><input type="checkbox" id="export-confidential"><span>Incluir detalles de protocolos e intervenciones confidenciales</span></label>' : ''}
+        ${['student_internal', 'student_plan_final'].includes(ctx) && Object.keys(this.current()?.calificaciones || {}).length ? `<label class="check"><input type="checkbox" id="export-grades" ${ex.includeGrades ? 'checked' : ''}><span>Incluir el registro de notas</span></label>` : ''}
         <label class="check"><input type="checkbox" id="export-sig" checked onchange="el('signature-selector').hidden=!this.checked"><span>Incluir firmas al final</span></label>
         <div id="signature-selector" class="subpanel">
           <h4>${ico('pen-tool')}Firmas del documento</h4>
@@ -276,6 +277,13 @@ Object.assign(app, {
     }
   },
 
+  gradesDocHtml(s) {
+    const recs = Object.values(s?.calificaciones || {}).sort((a, b) => String(b.anio).localeCompare(String(a.anio)));
+    return recs.map(r => `<div class="doc-avoid">${docH(`Registro de notas ${esc(r.anio)}${r.periodo ? ` (${esc(r.periodo)})` : ''}`)}
+      ${docTable(['Asignatura', ...(r.columnas || []).map(esc)], (r.asignaturas || []).map(a => [esc(a.nombre), ...a.valores.map((v, i) => i === a.valores.length - 1 ? `<strong>${esc(v)}</strong>` : esc(v))]), 'Sin asignaturas', 'doc-table--center')}
+      <p class="doc-small"><strong>Promedio general:</strong> ${esc(r.promedioGeneral || '-')}. <strong>Asistencia del informe:</strong> ${esc(r.asistencia?.promedio || '-')}% (${esc(r.asistencia?.inasistencias || '0')} días de inasistencia de ${esc(r.asistencia?.trabajados || '-')}). Fuente: informe de calificaciones cargado el ${fmtDate(r.cargado)}.</p></div>`).join('');
+  },
+
   normativeHtml() {
     return `<div class="doc-normative doc-avoid">
       <h4 class="doc-normative__alert">Medida en caso de incumplimiento:</h4><p>${TXT_INCUMPLIMIENTO}</p>
@@ -301,10 +309,13 @@ Object.assign(app, {
     const ctx = State.export.context;
     const includeSig = opts.includeSig !== undefined ? opts.includeSig : !!el('export-sig')?.checked;
     const includeConfidential = !!el('export-confidential')?.checked;
+    const includeGrades = !!el('export-grades')?.checked;
+    State.export.includeGrades = false;
     const key = ['student_plan_final', 'course_plan_final'].includes(ctx) ? 'plan' : ctx;
     const builder = this.REPORTS[key];
     if (!builder) { toast('No fue posible identificar el tipo de reporte solicitado.', 'error'); return false; }
     const r = builder.call(this, ctx, { includeConfidential });
+    if (includeGrades) r.body += this.gradesDocHtml(this.current());
     const v = State.variables;
     const s = r.student ? this.current() : null;
 

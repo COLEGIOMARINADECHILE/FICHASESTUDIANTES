@@ -16,7 +16,7 @@ const INIT_VARS = {
   professionals: ['Psicólogo/a', 'Trabajador/a Social', 'Orientador/a', 'Inspector/a General', 'Encargado/a Convivencia', 'Docente Jefe', 'Enfermero/a'],
   progressLevels: ['No Iniciado', 'En Proceso', 'Logrado', 'No Logrado', 'Requiere Modificación'],
   roles: ['Docente', 'Asistente de la Educación', 'Directivo', 'Convivencia', 'UTP', 'Administrador', 'Equipo PIE'],
-  functionsList: ['gestionar_usuarios', 'editar_fichas', 'ver_fichas', 'agregar_entrevistas', 'ver_reportes', 'ver_todos_reportes', 'configurar_sistema', 'gestionar_protocolos', 'ver_top_intervenciones', 'ver_resumen_cursos'],
+  functionsList: ['gestionar_usuarios', 'editar_fichas', 'ver_fichas', 'agregar_entrevistas', 'ver_reportes', 'ver_todos_reportes', 'configurar_sistema', 'gestionar_protocolos', 'ver_top_intervenciones', 'ver_resumen_cursos', 'registro_rapido'],
   schoolLogo: 'img/logo-colegio.png',
   slepLogo: 'img/logo-slep.png',
   bgImage: 'img/COLEGIO.jpg',
@@ -37,8 +37,19 @@ const FUNCTION_LABELS = {
   configurar_sistema: 'Carga masiva SIGE y logos',
   gestionar_protocolos: 'Gestión confidencial de protocolos',
   ver_top_intervenciones: 'Ver alertas preventivas',
-  ver_resumen_cursos: 'Ver resumen por cursos'
+  ver_resumen_cursos: 'Ver resumen por cursos',
+  registro_rapido: 'Registro rápido: anotaciones, atrasos e inasistencias (paradocentes; sin ver fichas)'
 };
+
+// Texto de confidencialidad que se envía a cada funcionario (Ley N° 21.719)
+const TXT_CONFIDENCIALIDAD = `**Confidencialidad y protección de datos personales (Ley N° 21.719)**
+La información de este sistema son datos personales de estudiantes y sus familias. Parte de ella son datos sensibles (salud, situación socioemocional, protocolos) y datos de niños, niñas y adolescentes, que la ley protege de manera especial atendiendo a su interés superior. Al usar su cuenta usted se compromete a:
+1. Usar la información solo para la finalidad educativa y de apoyo para la que fue registrada, y solo en lo necesario para su función.
+2. Guardar reserva: no compartir, copiar, fotografiar ni enviar información fuera de los canales institucionales. Este deber se mantiene aun después de terminar su relación con el establecimiento.
+3. No compartir su cuenta ni su clave, y cerrar la sesión en equipos compartidos.
+4. Registrar información objetiva, exacta y actualizada.
+5. Respetar los registros confidenciales: si necesita conocer uno, solicítelo a su autor o a Convivencia Escolar.
+6. Avisar de inmediato a Dirección o a Convivencia Escolar si detecta un acceso indebido o la pérdida de información.`;
 
 const ROLE_TONE = { 'Docente': 'obs', 'Asistente de la Educación': 'warn', 'Directivo': 'plan', 'Convivencia': 'conv', 'UTP': 'conv', 'Administrador': 'proto', 'Equipo PIE': 'pie' };
 
@@ -288,6 +299,13 @@ const Demo = {
       case 'remove': this.db[col] = this.db[col].filter(x => !sameId(x.id, p.id)); return { removed: 1 };
       case 'import': p.docs.forEach(d => this.handle('save', { col, id: d.id, data: d })); return { saved: p.docs.length };
       case 'changePassword': case 'logout': case 'setSecret': return {};
+      case 'notificarAcceso': { const u = this.db.users.find(x => sameId(x.id, p.userId)); u.accesoNotificado = today(); return { enviado: u.email, fecha: u.accesoNotificado, quedan: 99 }; }
+      case 'registrarEvento': {
+        const s = this.db.students.find(x => sameId(x.id, p.studentId));
+        if (p.kind === 'anotacion') this.db.interventions.push({ id: Date.now(), studentId: s.id, studentName: s.name, date: p.date, type: 'Acción Estudiantil (Anotación)', professional: State.currentUser.name, professionalId: State.currentUser.id, background: `Anotación ${String(p.tipo).toLowerCase()}: ${p.detail}`, anotacion: { tipo: p.tipo }, isPrivate: false, sharedWith: [], agreements: [] });
+        else { const f = p.kind === 'atraso' ? 'atrasos' : 'inasistencias'; s[f] = (parseInt(s[f]) || 0) + 1; s.registroAsistencia = [...(s.registroAsistencia || []), { fecha: p.date, tipo: p.kind, detalle: p.detail || '', por: State.currentUser.name }]; }
+        return { ok: true };
+      }
       default: throw new Error('Esta función necesita el servidor de Apps Script configurado.');
     }
   }

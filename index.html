@@ -9,19 +9,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="css/app.css?v=2026-11-23a">
+  <link rel="stylesheet" href="css/app.css?v=2026-11-23b">
 
   <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=2026-11-23a"></script>
-  <script defer src="js/core.js?v=2026-11-23a"></script>
-  <script defer src="js/app.js?v=2026-11-23a"></script>
-  <script defer src="js/plans.js?v=2026-11-23a"></script>
-  <script defer src="js/export.js?v=2026-11-23a"></script>
-  <script defer src="js/imports.js?v=2026-11-23a"></script>
+  <script defer src="js/config.js?v=2026-11-23b"></script>
+  <script defer src="js/core.js?v=2026-11-23b"></script>
+  <script defer src="js/app.js?v=2026-11-23b"></script>
+  <script defer src="js/plans.js?v=2026-11-23b"></script>
+  <script defer src="js/export.js?v=2026-11-23b"></script>
+  <script defer src="js/imports.js?v=2026-11-23b"></script>
+  <script defer src="js/people.js?v=2026-11-23b"></script>
+  <script async src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
   <noscript><p class="banner">Esta aplicación necesita JavaScript activado para funcionar.</p></noscript>
@@ -61,6 +63,10 @@
           <p class="login__lede">¿Con qué perfil trabaja en el colegio?</p>
         </div>
         <p id="login-empty" class="login__empty" hidden></p>
+        <div id="login-google" class="login__google" hidden>
+          <div id="login-google-btn"></div>
+          <p class="login__or"><span>o ingrese con su perfil y clave</span></p>
+        </div>
         <fieldset class="login__fieldset">
           <legend class="sr-only">Perfil</legend>
           <div id="login-roles" class="roles"></div>
@@ -104,6 +110,13 @@
     </aside>
 
     <main id="main" class="main">
+      <!-- REGISTRO RÁPIDO -->
+      <section data-view="quick" class="page" hidden>
+        <header class="page__head"><div><h1>Registro rápido</h1><p class="lede">Anotaciones, atrasos e inasistencias de los estudiantes</p></div></header>
+        <div id="quick-controls" class="grid-2"></div>
+        <div id="quick-list"></div>
+      </section>
+
       <!-- PANEL GENERAL -->
       <section data-view="dashboard" class="page" hidden>
         <header class="page__head">
@@ -167,6 +180,7 @@
           <div class="row-actions">
             <select id="plan-type-select" class="input" style="width:auto" aria-label="Tipo de plan"></select>
             <button type="button" class="btn btn--primary" onclick="app.generateStudentWorkPlan(el('plan-type-select').value)"><i data-lucide="sparkles" class="ico" aria-hidden="true"></i>Crear plan (IA)</button>
+            <button type="button" class="btn" onclick="app.openGradesModal()"><i data-lucide="graduation-cap" class="ico" aria-hidden="true"></i>Ver registro de notas</button>
             <button type="button" class="btn" onclick="app.generateCartaCompromiso()"><i data-lucide="file-warning" class="ico" aria-hidden="true"></i>Carta compromiso de asistencia</button>
             <button type="button" class="btn" onclick="app.openExportModal('student_internal')"><i data-lucide="file-down" class="ico" aria-hidden="true"></i>PDF ficha completa</button>
           </div>
@@ -248,6 +262,7 @@
     <div class="busy__box"><div class="spinner" aria-hidden="true"></div><h3 id="busy-title"></h3><p id="busy-msg" class="muted small"></p></div>
   </div>
   <div id="toast-container" aria-live="polite"></div>
+  <input type="file" id="grades-file-input" accept="application/pdf" multiple hidden onchange="app.handleGradesPdf(event)">
   <input type="file" id="attendance-file-input" accept=".xlsx,.xls" hidden onchange="app.handleAttendanceExcel(event)">
 </body>
 </html>

@@ -22,8 +22,38 @@ Object.assign(app, {
     return `${apellidos} ${resto}`.trim();
   },
 
+  /** Texto de un PDF, línea por línea (agrupa por altura y ordena de izquierda a derecha). */
+  async pdfText(file) {
+    const pdfLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+    if (!pdfLib) throw new Error('La biblioteca PDF.js no está cargada.');
+    pdfLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await pdfLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const items = (await (await pdf.getPage(i)).getTextContent()).items.filter(it => String(it.str).trim() !== '');
+      const rows = [];
+      items.forEach(it => {
+        const y = it.transform[5];
+        const row = rows.find(r => Math.abs(r.y - y) <= 3);
+        if (row) row.items.push(it); else rows.push({ y, items: [it] });
+      });
+      rows.sort((a, b) => b.y - a.y).forEach(r => { text += r.items.sort((a, b) => a.transform[4] - b.transform[4]).map(it => it.str.trim()).join(' ') + '\n'; });
+      text += '\n';
+    }
+    return text;
+  },
+
   // ---------------- INASISTENCIAS MENSUALES (EXCEL) ----------------
-  openAttendanceImport() { const inp = el('attendance-file-input'); inp.value = ''; inp.click(); },
+  openAttendanceImport() {
+    const pick = () => { const inp = el('attendance-file-input'); inp.value = ''; inp.click(); };
+    const course = State.currentView === 'students' ? State.filterCourse : '';
+    if (!course) return pick();
+    ui.modal({
+      title: 'Cargar inasistencias del curso', icon: 'file-spreadsheet', tone: 'obs', size: 'sm', okText: 'Elegir archivo Excel',
+      body: `<p class="modal__msg">Va a cargar las inasistencias del curso</p><p class="course-banner">${esc(course)}</p><p class="modal__msg">Seleccione el informe de inasistencias de <strong>${esc(course)}</strong>. Antes de guardar podrá revisar los datos, y se le avisará si el archivo corresponde a otro curso.</p>`,
+      onOk: () => { pick(); }
+    });
+  },
 
   async handleAttendanceExcel(e) {
     const file = e.target.files[0];
@@ -68,8 +98,8 @@ Object.assign(app, {
         registros.push({ rut, rutOriginal: String(f[colRut]).trim(), nombre, meses, total, studentId: est ? String(est.id) : null });
       }
       if (!registros.length) return toast('No se encontraron estudiantes en el Excel', 'error');
-      State.attendanceImport = { archivo: file.name, cursoExcel, curso, registros, opts: { crear: true, mover: true, retirar: false } };
-      ui.modal({ title: 'Revisar inasistencias del Excel', icon: 'file-spreadsheet', tone: 'obs', size: 'xl', okText: 'Guardar inasistencias', body: '<div id="attendance-import-content"></div>', onOk: () => this.confirmAttendanceImport() });
+      State.attendanceImport = { archivo: file.name, cursoExcel, curso, origen: State.currentView === 'students' ? State.filterCourse : '', registros, opts: { crear: true, mover: true, retirar: false } };
+      ui.modal({ title: `Revisar inasistencias: ${curso || 'curso sin identificar'}`, icon: 'file-spreadsheet', tone: 'obs', size: 'xl', okText: 'Guardar inasistencias', body: '<div id="attendance-import-content"></div>', onOk: () => this.confirmAttendanceImport() });
       this.renderAttendanceImport();
     } catch (err) {
       console.error(err);
@@ -96,7 +126,12 @@ Object.assign(app, {
     const tag = r => r.estado === 'nuevo' ? chip('Nuevo: se agregará', 'warn') : r.estado === 'otroCurso' ? chip(`En ${r.cursoActual || 'otro curso'}`, 'plan') : chip('Registrado', 'conv');
     const opt = (id, k, n, tone, text, help) => `<label class="check check--card" data-tone="${tone}"><input type="checkbox" id="${id}" ${n === 0 ? 'disabled' : imp.opts[k] ? 'checked' : ''} onchange="State.attendanceImport.opts.${k}=this.checked"><span><strong>${text}</strong><span class="cell-sub">${help}</span></span></label>`;
 
+    const excelCourse = ALL_COURSES.find(c => N(c) === N(imp.cursoExcel));
+    const mismatch = imp.origen && excelCourse && N(excelCourse) !== N(imp.origen);
     el('attendance-import-content').innerHTML = `
+      <p class="course-banner">${ico('school')}Curso de destino: ${esc(destino || 'sin elegir')}</p>
+      ${mismatch ? `<p class="login__empty">${ico('alert-triangle')}<span><strong>Atención:</strong> usted abrió la carga desde ${esc(imp.origen)}, pero el archivo dice ${esc(excelCourse)}. Revise que sea el archivo correcto o cambie el curso de destino.</span></p>` : ''}`;
+    el('attendance-import-content').innerHTML += `
       <div class="stats stats--5">
         <div class="stat"><span class="stat__num num">${imp.registros.length}</span><span class="stat__label">En el Excel</span></div>
         <div class="stat" data-tone="conv"><span class="stat__num num">${imp.registros.length - nuevos}</span><span class="stat__label">Registrados</span></div>
@@ -159,22 +194,7 @@ Object.assign(app, {
     if (!file) return;
     const done = ui.busy('Procesando documento', 'Extrayendo estudiantes del PDF...');
     try {
-      const pdfLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
-      if (!pdfLib) throw new Error('La biblioteca PDF.js no está cargada.');
-      pdfLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const pdf = await pdfLib.getDocument({ data: await file.arrayBuffer() }).promise;
-      let text = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const items = (await (await pdf.getPage(i)).getTextContent()).items;
-        items.sort((a, b) => Math.abs(b.transform[5] - a.transform[5]) > 5 ? b.transform[5] - a.transform[5] : a.transform[4] - b.transform[4]);
-        let y = -1, line = '';
-        items.forEach(it => {
-          if (y === -1 || Math.abs(y - it.transform[5]) > 5) { if (line) text += line + '\n'; line = it.str; y = it.transform[5]; }
-          else line += ' ' + it.str;
-        });
-        if (line) text += line + '\n';
-      }
-      await this.processExtractedText(text, course);
+      await this.processExtractedText(await this.pdfText(file), course);
     } catch (err) { console.error(err); toast('Error al leer el PDF. Asegúrese de que es un archivo válido.', 'error'); }
     finally { done(); e.target.value = ''; }
   },
@@ -216,6 +236,128 @@ Object.assign(app, {
     await DB.batch(ops);
     toast(`Operación finalizada. Creados: ${added}, actualizados: ${updated}`);
     this.renderAdmin();
+  },
+
+  // ---------------- NOTAS DESDE PDF ("Informe de Calificaciones", uno o varios estudiantes) ----------------
+  openGradesImport() { const inp = el('grades-file-input'); inp.value = ''; inp.click(); },
+
+  parseGradeReports(text, fileName) {
+    const N = t => this.normalizarTexto(t);
+    const num = '(?:\\d{1,2}[.,]\\d|--|-)';
+    const rowRe = new RegExp(`^(.*?[A-Za-zÁÉÍÓÚÑáéíóúñ)].*?)\\s+((?:${num}\\s+){2,}${num})$`);
+    const blocks = text.split(/(?=Informe de Calificaciones)/i).filter(b => /R\.?\s*U\.?\s*N/i.test(b));
+    return blocks.map(b => {
+      const lines = b.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+      const get = re => { for (const l of lines) { const m = l.match(re); if (m) return m[1].trim(); } return ''; };
+      const nombreRaw = get(/^Estudiante:\s*(.+)$/i);
+      const run = get(/R\.?\s*U\.?\s*N\.?:?\s*([0-9.]{6,12}-?[0-9Kk])/i);
+      const cursoTxt = get(/^Curso:\s*(?:\[\d+\]\s*)?(.+)$/i);
+      const asignaturas = [];
+      lines.forEach(l => {
+        if (/^(Promedio|D[ií]as|Sector|Prom\.|Anual|Obs)/i.test(l)) return;
+        const m = l.match(rowRe);
+        if (m) asignaturas.push({ nombre: m[1].trim(), valores: m[2].trim().split(/\s+/).map(v => v === '-' ? '--' : v) });
+      });
+      const n = asignaturas.reduce((a, x) => Math.max(a, x.valores.length), 0);
+      const columnas = n === 6 ? ['1° sem.', '2° sem.', 'Anual', 'Examen', 'Prueba esp.', 'Final'] : n === 7 ? ['1° trim.', '2° trim.', '3° trim.', 'Anual', 'Examen', 'Prueba esp.', 'Final'] : Array.from({ length: n }, (_, i) => (i === n - 1 ? 'Final' : `N${i + 1}`));
+      const cleanRun = this.limpiarRut(run);
+      const nombre = this.nombreDesdeExcel(nombreRaw);
+      let est = State.rawStudents.find(x => this.limpiarRut(x.rut) === cleanRun || String(x.id).toUpperCase() === cleanRun);
+      if (!est && nombre) est = State.rawStudents.find(x => N(x.name) === N(nombre));
+      return {
+        archivo: fileName, nombre, run, cleanRun, cursoTxt,
+        curso: ALL_COURSES.find(c => N(c) === N(cursoTxt)) || cursoTxt,
+        profesorJefe: get(/^Profesor Jefe:\s*(.+)$/i),
+        periodo: get(/^Tipo de Periodo:\s*(.+)$/i),
+        columnas, asignaturas,
+        promedioGeneral: get(/Promedio General:\s*([\d.,]+)/i),
+        asistencia: { trabajados: get(/D[ií]as Trabajados:\s*(\d+)/i), asistidos: get(/D[ií]as Asistencia:\s*(\d+)/i), inasistencias: get(/D[ií]as Inasistencia:\s*(\d+)/i), promedio: get(/Promedio Asistencia:\s*([\d.,]+)/i) },
+        studentId: est ? String(est.id) : null,
+        crear: true
+      };
+    }).filter(r => r.run || r.nombre);
+  },
+
+  async handleGradesPdf(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const done = ui.busy('Leyendo notas', 'Extrayendo los informes de calificaciones...');
+    try {
+      let reports = [];
+      for (const f of files) reports = reports.concat(this.parseGradeReports(await this.pdfText(f), f.name));
+      if (!reports.length) throw new Error('No se encontraron informes de calificaciones en el archivo.');
+      State.gradesImport = { reports, anio: today().slice(0, 4) };
+      done();
+      ui.modal({ title: `Revisar notas: ${reports.length} estudiante(s)`, icon: 'graduation-cap', tone: 'pie', size: 'xl', okText: 'Guardar notas', body: '<div id="grades-import-content"></div>', onOk: () => this.confirmGrades() });
+      this.renderGradesReview();
+    } catch (err) { console.error(err); done(); toast('No se pudo leer el PDF: ' + err.message, 'error'); }
+  },
+
+  renderGradesReview() {
+    const g = State.gradesImport;
+    const nuevos = g.reports.filter(r => !r.studentId).length;
+    el('grades-import-content').innerHTML = `
+      <div class="stats stats--4">
+        <div class="stat"><span class="stat__num num">${g.reports.length}</span><span class="stat__label">Informes en el PDF</span></div>
+        <div class="stat" data-tone="conv"><span class="stat__num num">${g.reports.length - nuevos}</span><span class="stat__label">Estudiantes registrados</span></div>
+        <div class="stat" data-tone="warn"><span class="stat__num num">${nuevos}</span><span class="stat__label">No están en el sistema</span></div>
+        <div class="stat" data-tone="pie"><span class="stat__num num">${g.reports.reduce((a, r) => a + r.asignaturas.length, 0)}</span><span class="stat__label">Asignaturas leídas</span></div>
+      </div>
+      ${fieldHtml('Año escolar de estas notas', `<input type="number" class="input input--num num" min="2000" max="2100" value="${esc(g.anio)}" onchange="State.gradesImport.anio=this.value">`, 'field--inline')}
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Estudiante</th><th>Curso</th><th class="t-num">Asignaturas</th><th class="t-num">Promedio general</th><th class="t-num">Asistencia</th><th>Estado</th><th class="t-actions">Detalle</th></tr></thead>
+        <tbody>${g.reports.map((r, i) => `<tr>
+          <td><span class="cell-title">${esc(r.nombre || 'Sin nombre')}</span><span class="cell-sub num">${esc(r.run)}</span></td>
+          <td>${esc(r.curso)}</td><td class="t-num num">${r.asignaturas.length}</td>
+          <td class="t-num"><strong class="num">${esc(r.promedioGeneral || '-')}</strong></td>
+          <td class="t-num num">${r.asistencia.promedio ? esc(r.asistencia.promedio) + '%' : '-'}</td>
+          <td>${r.studentId ? chip('Registrado', 'conv') : chip('Nuevo: no está en el sistema', 'warn')}</td>
+          <td class="t-actions"><button type="button" class="btn btn--sm btn--ghost" onclick="el('gr-${i}').hidden=!el('gr-${i}').hidden">Ver notas</button></td></tr>
+          <tr id="gr-${i}" hidden><td colspan="7">${this.gradesTable(r)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <p class="muted small">Si un estudiante ya tiene notas de ese año, se reemplazan por las de este archivo.</p>`;
+    icons();
+  },
+
+  confirmGrades() {
+    const g = State.gradesImport;
+    const nuevos = g.reports.filter(r => !r.studentId);
+    if (!/^\d{4}$/.test(String(g.anio))) { toast('Indique el año escolar (4 dígitos)', 'error'); return false; }
+    if (!nuevos.length) return this.saveGrades(false);
+    // Aviso obligatorio antes de crear estudiantes nuevos
+    setTimeout(() => ui.modal({
+      title: `Se ${nuevos.length === 1 ? 'creará 1 estudiante nuevo' : `crearán ${nuevos.length} estudiantes nuevos`}`, icon: 'user-plus', tone: 'warn', size: 'md', okText: 'Sí, crear y guardar', cancelText: 'Cancelar todo',
+      body: `<p class="modal__msg">Estos estudiantes del PDF no están en el sistema. ¿Desea crearlos con su RUN, nombre y curso, y guardar sus notas?</p>
+        <ul class="ruled">${nuevos.map(r => `<li><span><strong>${esc(r.nombre)}</strong> <span class="muted num">${esc(r.run)}</span></span><span>${esc(r.curso)}</span></li>`).join('')}</ul>
+        <button type="button" class="btn" onclick="ui.close(); app.saveGrades(false)">No, guardar solo los registrados</button>`,
+      onOk: () => this.saveGrades(true)
+    }), 60);
+  },
+
+  async saveGrades(createNew) {
+    const g = State.gradesImport;
+    const anio = String(g.anio);
+    const done = ui.busy('Guardando notas', '');
+    try {
+      const ops = [];
+      let actualizados = 0, creados = 0, omitidos = 0;
+      g.reports.forEach(r => {
+        const rec = { anio, periodo: r.periodo, curso: r.cursoTxt, profesorJefe: r.profesorJefe, columnas: r.columnas, asignaturas: r.asignaturas, promedioGeneral: r.promedioGeneral, asistencia: r.asistencia, archivo: r.archivo, cargado: today(), cargadoPor: State.currentUser.name };
+        if (r.studentId) {
+          const raw = State.rawStudents.find(x => sameId(x.id, r.studentId));
+          ops.push({ col: 'students', id: r.studentId, data: { calificaciones: { ...(raw?.calificaciones || {}), [anio]: rec } }, merge: true });
+          actualizados++;
+        } else if (createNew && r.cleanRun) {
+          ops.push({ col: 'students', id: r.cleanRun, data: { id: r.cleanRun, rut: r.run, name: r.nombre, curso: r.curso, courseId: r.curso, status: 'active', fechaIngreso: today(), calificaciones: { [anio]: rec } } });
+          creados++;
+        } else omitidos++;
+      });
+      await DB.batch(ops);
+      toast(`Notas guardadas. Actualizados: ${actualizados}${creados ? `, estudiantes creados: ${creados}` : ''}${omitidos ? `, omitidos: ${omitidos}` : ''}`);
+      State.gradesImport = null;
+      this.render();
+    } catch (e) { toast('Error al guardar las notas: ' + e.message, 'error'); }
+    finally { done(); }
   },
 
   // ---------------- TRASPASO DE DATOS CON ARCHIVO JSON ----------------

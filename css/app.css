@@ -636,6 +636,33 @@ html.is-exporting, html.is-exporting body { background: var(--doc-paper) !import
   .login__areas, .login__slep { display: none; }
 }
 
+/* ============ MENÚ LATERAL: el bloque del usuario siempre visible ============ */
+@media (min-width: 60rem) {
+  .side { height: 100vh; height: 100dvh; overflow: hidden; }
+  .side__body { min-height: 0; overflow: hidden; }
+  .nav { overflow-y: auto; min-height: 0; flex: 1 1 auto; align-content: start; }
+  .side__user { flex: none; margin-top: 0; }
+}
+.side__user .btn { min-height: 2.25rem; }
+.side__slep .slep-logo { height: 1.75rem; }
+
+/* ============ NUEVOS ELEMENTOS ============ */
+.input--email { min-width: 15rem; font-size: var(--text-sm); min-height: 2.25rem; }
+.access { display: grid; gap: var(--space-xs); padding: var(--space-md); border-radius: var(--radius-card); background: var(--color-paper-2); box-shadow: 0 0 0 1px var(--color-rule); }
+.access .row-field { max-width: 36rem; }
+.chip--removable { padding-right: 0.15rem; }
+.chip--removable button { display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem; padding: 0; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
+.chip--removable button:hover { background: color-mix(in oklab, currentColor 15%, transparent); }
+.chip--removable button:focus-visible { outline: 2px solid var(--color-focus); }
+.course-banner { display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-card); background: var(--color-shell); color: var(--color-shell-ink); font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg); }
+.course-banner .ico { color: var(--color-accent); }
+.login__google { display: grid; justify-items: center; gap: var(--space-sm); }
+.login__or { display: flex; align-items: center; gap: var(--space-sm); width: 100%; color: var(--color-muted); font-size: var(--text-sm); }
+.login__or::before, .login__or::after { content: ""; flex: 1; height: 1px; background: var(--color-rule); }
+.grades td[data-final] { font-weight: 600; color: var(--color-heading); }
+.grades td[data-low="true"] { color: var(--tone-proto-ink); font-weight: 600; }
+.grades-year { display: grid; gap: var(--space-sm); padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-rule); }
+
 /* ============ COLOR ESCOLAR ============ */
 h1, h2 { color: var(--color-heading); }
 .panel__head h2 .ico, .cycle__title .ico { color: var(--color-shell); }
