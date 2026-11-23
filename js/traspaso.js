@@ -76,7 +76,8 @@ Object.assign(app, {
       if (p && p.bajo >= 2) motivos.push(`${p.bajo} asignaturas bajo 4,0`);
       else if (p && p.bajo === 1 && p.pg < 4.5) motivos.push('1 asignatura bajo 4,0 y promedio bajo 4,5');
       if (s.asistencia.real < 85) motivos.push(`asistencia ${s.asistencia.real} %`);
-      if (this.isRep(s)) motivos.push('tiene plan por riesgo de repitencia');
+      if (s.riesgoRepitencia?.activo) motivos.push('marcado en riesgo de repitencia en su ficha');
+      else if (this.isRep(s)) motivos.push('tiene plan por riesgo de repitencia');
       if (motivos.length) riesgo.push({ s, motivos });
     });
 

@@ -515,8 +515,8 @@ window.app = {
     const html = Object.entries(CYCLES).map(([cycle, data]) => {
       const cards = data.courses.filter(c => open || ac.includes(c)).map(c => {
         const enCurso = all.filter(s => s.curso === c && s.status !== 'blocked');
-        const n = enCurso.length, np = enCurso.filter(s => this.isPie(s)).length;
-        return `<button type="button" class="course" data-tone="${data.tone}" onclick="app.openCourse(${jsq(c)})"><span class="course__name">${esc(c)}</span><span class="course__count"><span class="num">${n}</span> estudiantes</span>${np ? `<span class="pie-badge pie-badge--sm">${ico('puzzle')}${np} PIE</span>` : ''}</button>`;
+        const n = enCurso.length, np = enCurso.filter(s => this.isPie(s)).length, nr = enCurso.filter(s => this.isRep(s)).length;
+        return `<button type="button" class="course" data-tone="${data.tone}" onclick="app.openCourse(${jsq(c)})"><span class="course__name">${esc(c)}</span><span class="course__count"><span class="num">${n}</span> estudiantes</span>${np || nr ? `<span class="course__badges">${np ? `<span class="pie-badge pie-badge--sm">${ico('puzzle')}${np} PIE</span>` : ''}${nr ? `<span class="pie-badge pie-badge--sm pie-badge--rep">${ico('alert-triangle')}${nr} riesgo rep.</span>` : ''}</span>` : ''}</button>`;
       }).join('');
       return cards ? `<section class="cycle"><h2 class="cycle__title">${ico(data.icon)}${esc(cycle)}</h2><div class="course-grid">${cards}</div></section>` : '';
     }).join('');
@@ -526,6 +526,7 @@ window.app = {
   setFilter(c) { State.filterCourse = c; this.renderStudents(); icons(); },
   toggleShowWithdrawn(v) { State.showWithdrawn = v; this.renderStudents(); icons(); },
   toggleOnlyPie(v) { State.onlyPie = v; this.renderStudents(); icons(); },
+  toggleOnlyRep(v) { State.onlyRep = v; this.renderStudents(); icons(); },
   async updateProfJefe(course, name) {
     try {
       const dbc = State.rawCoursesDB.find(c => sameId(c.id, course) || c.name === course);
@@ -539,6 +540,7 @@ window.app = {
     const all = this.getStudents();
     let f = all.filter(s => (!course || s.curso === course) && (State.showWithdrawn || s.status !== 'blocked'));
     if (State.onlyPie) f = f.filter(s => this.isPie(s));
+    if (State.onlyRep) f = f.filter(s => this.isRep(s));
     const q = (el('student-search').value || '').toLowerCase();
     if (q) f = f.filter(s => s.name.toLowerCase().includes(q) || s.rut.includes(q));
     f.sort((a, b) => a.name.localeCompare(b.name));
@@ -568,6 +570,7 @@ window.app = {
         </div>`}
         <label class="check"><input type="checkbox" ${State.showWithdrawn ? 'checked' : ''} onchange="app.toggleShowWithdrawn(this.checked)"><span>Ver retirados</span></label>
         <label class="check"><input type="checkbox" ${State.onlyPie ? 'checked' : ''} onchange="app.toggleOnlyPie(this.checked)"><span>Solo estudiantes PIE (${all.filter(s => (!course || s.curso === course) && s.status !== 'blocked' && this.isPie(s)).length})</span></label>
+        <label class="check"><input type="checkbox" ${State.onlyRep ? 'checked' : ''} onchange="app.toggleOnlyRep(this.checked)"><span>Solo en riesgo de repitencia (${all.filter(s => (!course || s.curso === course) && s.status !== 'blocked' && this.isRep(s)).length})</span></label>
       </div>`;
 
     // Panorama del curso
@@ -692,7 +695,8 @@ window.app = {
         <span class="avatar avatar--lg" aria-hidden="true">${esc(s.name.charAt(0))}</span>
         <div class="entry__id">
           <h1 class="entry__name">${esc(s.name)} ${this.areaBadges(s)}</h1>
-          <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}</div>
+          <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}${this.repToggleHtml(s)}</div>
+          ${s.riesgoRepitencia?.activo && s.riesgoRepitencia.motivo ? `<p class="entry__note">${ico('alert-triangle')}Riesgo de repitencia: ${esc(s.riesgoRepitencia.motivo)} <span class="muted small">(${esc(s.riesgoRepitencia.por || '')}, ${fmtDate(s.riesgoRepitencia.fecha)})</span></p>` : ''}
         </div>
         <div class="chips chips--end">${this.recordChips([s.id], this.countRecords(s))}</div>
       </div>

@@ -53,8 +53,53 @@ Object.assign(app, {
     this._areaIdx[area] = { key, idx };
     return idx;
   },
-  isRep(s) { const p = this.areaIndex('Repitencia').get(String(s.id)); return !!(p && (p.plans || p.docs)); },
-  repBadge(s) { return this.isRep(s) ? `<span class="pie-badge pie-badge--rep" title="Tiene plan por riesgo de repitencia">${ico('alert-triangle')}Riesgo rep.</span>` : ''; },
+  /** ¿Está en riesgo de repitencia? Por marca manual en la ficha o por tener plan/documentos de esa área. */
+  isRep(s) {
+    if (s.riesgoRepitencia?.activo) return true;
+    const p = this.areaIndex('Repitencia').get(String(s.id));
+    return !!(p && (p.plans || p.docs));
+  },
+  repBadge(s) {
+    if (!this.isRep(s)) return '';
+    const r = s.riesgoRepitencia;
+    const title = r?.activo ? `Marcado por ${r.por || ''} el ${fmtDate(r.fecha)}${r.motivo ? ': ' + r.motivo : ''}` : 'Tiene plan por riesgo de repitencia';
+    return `<span class="pie-badge pie-badge--rep" title="${esc(title)}">${ico('alert-triangle')}Riesgo de repitencia</span>`;
+  },
+  canMarkRep() { return hasAccess('editar_fichas') || hasAccess('gestionar_usuarios'); },
+  /** Botón de la ficha para marcar o quitar la marca manual de riesgo de repitencia. */
+  repToggleHtml(s) {
+    if (!this.canMarkRep()) return '';
+    const r = s.riesgoRepitencia;
+    return r?.activo
+      ? `<button type="button" class="btn btn--sm" onclick="app.toggleRep(${jsq(s.id)}, false)">${ico('x')}Quitar marca de riesgo de repitencia</button>`
+      : `<button type="button" class="btn btn--sm" onclick="app.toggleRep(${jsq(s.id)}, true)">${ico('alert-triangle')}Marcar en riesgo de repitencia</button>`;
+  },
+  toggleRep(id, activo) {
+    const s = this.getStudent(id);
+    if (!s) return;
+    const guardar = async motivo => {
+      const data = activo
+        ? { activo: true, motivo: motivo || '', fecha: today(), por: State.currentUser.name }
+        : { ...(s.riesgoRepitencia || {}), activo: false, quitadoPor: State.currentUser.name, fechaQuitado: today() };
+      await DB.save('students', { id: s.id, riesgoRepitencia: data }, true);
+      State.areaVer = (State.areaVer || 0) + 1;
+      toast(activo ? 'Estudiante marcado en riesgo de repitencia' : 'Se quitó la marca de riesgo de repitencia');
+      this.render();
+    };
+    if (activo) {
+      ui.modal({
+        title: 'Marcar en riesgo de repitencia', icon: 'alert-triangle', tone: 'warn', size: 'md', okText: 'Marcar',
+        body: `<p class="modal__msg"><strong>${esc(s.name)}</strong> quedará identificado(a) en su ficha, en las listas del curso y en "Programa PIE y riesgo de repitencia".</p>
+          ${fieldHtml('Motivo (opcional)', '<textarea id="rep-motivo" class="input" rows="3" placeholder="Ej: promedio bajo 4,0 en Lenguaje y Matemática; asistencia 82 %"></textarea>')}`,
+        onOk: () => guardar(el('rep-motivo').value.trim())
+      });
+    } else {
+      const porPlan = (() => { const p = this.areaIndex('Repitencia').get(String(s.id)); return !!(p && (p.plans || p.docs)); })();
+      ui.confirm({ title: 'Quitar marca de riesgo de repitencia', icon: 'x', tone: 'warn', okText: 'Quitar marca',
+        msg: `¿Quitar la marca de <strong>${esc(s.name)}</strong>?${porPlan ? ' Seguirá apareciendo en riesgo porque tiene un plan de acompañamiento; para quitarlo, mueva ese plan a PIE o elimínelo.' : ''}`,
+        action: () => guardar('') });
+    }
+  },
   areaBadges(s) { return this.pieBadge(s) + this.repBadge(s); },
 
   /** Pestaña de la ficha: planes y documentos de un área. */
