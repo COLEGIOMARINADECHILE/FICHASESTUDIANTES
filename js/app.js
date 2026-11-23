@@ -78,8 +78,9 @@ window.app = {
     const roleIcon = { 'Docente': 'book-open', 'Asistente de la Educación': 'hand-helping', 'Directivo': 'landmark', 'Convivencia': 'heart-handshake', 'UTP': 'graduation-cap', 'Administrador': 'shield-check', 'Equipo PIE': 'puzzle' };
     el('login-roles').innerHTML = roles.map(r => {
       const n = users.filter(u => u.role === r).length;
-      return `<button type="button" class="role" data-tone="${ROLE_TONE[r] || 'neutral'}" aria-pressed="${sel === r}" onclick="app.selectRole(${jsq(r)})">${ico(roleIcon[r] || 'user')}<span class="role__name">${esc(r)}</span><span class="role__count num">${n}</span></button>`;
+      return `<button type="button" class="role" data-tone="${ROLE_TONE[r] || 'neutral'}" aria-pressed="${sel === r}" onclick="app.selectRole(${jsq(r)})"><span class="role__icon">${ico(roleIcon[r] || 'user')}</span><span class="role__text"><span class="role__name">${esc(r)}</span><span class="role__count">${n === 1 ? '1 persona' : `${n} personas`}</span></span></button>`;
     }).join('');
+    el('login-steps').hidden = !sel;
     const vacio = !users.length && !State.demo;
     el('login-empty').hidden = !vacio;
     if (vacio) el('login-empty').innerHTML = `${ico('alert-triangle')}<span><strong>Aún no hay funcionarios registrados.</strong> En el editor de Apps Script ejecute la función <span class="num">restablecerAdmin</span> y lea la clave en el registro de ejecución.</span>`;
@@ -998,7 +999,7 @@ window.app = {
   setAdminTab(t) { State.adminTab = t; this.renderAdmin(); icons(); },
   renderAdmin() {
     const tabs = [['users', 'users', 'Funcionarios'], ['students', 'file-check', 'Carga masiva'], ['variables', 'list', 'Variables'], ['logo', 'image', 'Nombre, logos e IA'], ['knowledge', 'library-big', 'Normativas IA']];
-    if (hasAccess('gestionar_usuarios')) tabs.push(['migration', 'database', 'Migración de datos']);
+    if (hasAccess('gestionar_usuarios')) tabs.push(['migration', 'database', 'Traspasar datos']);
     const t = State.adminTab;
     el('admin-tabs').innerHTML = tabs.map(([id, icon, label]) => `<button type="button" role="tab" class="tab" aria-selected="${t === id}" onclick="app.setAdminTab('${id}')">${ico(icon)}${label}</button>`).join('');
     el('admin-content').innerHTML = this['admin_' + t]();

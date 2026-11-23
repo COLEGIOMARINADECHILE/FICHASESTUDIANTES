@@ -9,19 +9,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/app.css?v=2026-11-23a">
 
   <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script defer src="js/config.js"></script>
-  <script defer src="js/core.js"></script>
-  <script defer src="js/app.js"></script>
-  <script defer src="js/plans.js"></script>
-  <script defer src="js/export.js"></script>
-  <script defer src="js/imports.js"></script>
+  <script defer src="js/config.js?v=2026-11-23a"></script>
+  <script defer src="js/core.js?v=2026-11-23a"></script>
+  <script defer src="js/app.js?v=2026-11-23a"></script>
+  <script defer src="js/plans.js?v=2026-11-23a"></script>
+  <script defer src="js/export.js?v=2026-11-23a"></script>
+  <script defer src="js/imports.js?v=2026-11-23a"></script>
 </head>
 <body>
   <noscript><p class="banner">Esta aplicación necesita JavaScript activado para funcionar.</p></noscript>
@@ -57,24 +57,26 @@
     <div class="login__panel">
       <form id="login-form" class="login__form" onsubmit="app.handleLogin(event)">
         <div>
-          <h2 class="login__h">Ingresar</h2>
-          <p class="login__lede">Elija su perfil, su nombre y escriba su clave.</p>
+          <h2 class="login__h">Bienvenido</h2>
+          <p class="login__lede">¿Con qué perfil trabaja en el colegio?</p>
         </div>
         <p id="login-empty" class="login__empty" hidden></p>
-        <fieldset class="field" style="border:0;padding:0;margin:0">
-          <legend class="field__label">1. Perfil</legend>
+        <fieldset class="login__fieldset">
+          <legend class="sr-only">Perfil</legend>
           <div id="login-roles" class="roles"></div>
         </fieldset>
-        <label class="field"><span class="field__label">2. Nombre</span>
-          <select id="login-user" class="input" onchange="app.checkLogin()" disabled><option value="">Cargando...</option></select>
-        </label>
-        <label class="field"><span class="field__label">3. Contraseña</span>
-          <span class="pass">
-            <input type="password" id="login-password" class="input" autocomplete="current-password" oninput="app.checkLogin()" disabled required>
-            <button type="button" class="icon-btn" aria-label="Mostrar clave" onclick="app.togglePassword(this)"><i data-lucide="eye" class="ico" aria-hidden="true"></i></button>
-          </span>
-        </label>
-        <button type="submit" id="login-btn" class="btn btn--primary btn--lg" disabled>Entrar al sistema</button>
+        <div id="login-steps" class="login__steps" hidden>
+          <label class="field"><span class="field__label">Su nombre</span>
+            <select id="login-user" class="input input--lg" onchange="app.checkLogin()" disabled><option value="">Cargando...</option></select>
+          </label>
+          <label class="field"><span class="field__label">Contraseña</span>
+            <span class="pass">
+              <input type="password" id="login-password" class="input input--lg" autocomplete="current-password" oninput="app.checkLogin()" disabled required>
+              <button type="button" class="icon-btn" aria-label="Mostrar clave" onclick="app.togglePassword(this)"><i data-lucide="eye" class="ico" aria-hidden="true"></i></button>
+            </span>
+          </label>
+          <button type="submit" id="login-btn" class="btn btn--primary btn--lg" disabled>Entrar al sistema<i data-lucide="arrow-right" class="ico" aria-hidden="true"></i></button>
+        </div>
       </form>
     </div>
   </main>

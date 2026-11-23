@@ -218,52 +218,62 @@ Object.assign(app, {
     this.renderAdmin();
   },
 
-  // ---------------- MIGRACIÓN DESDE FIREBASE ----------------
+  // ---------------- TRASPASO DE DATOS CON ARCHIVO JSON ----------------
+  COL_LABELS: { variables: 'Configuración', users: 'Funcionarios', courses: 'Cursos', students: 'Estudiantes', interventions: 'Intervenciones y protocolos', observations: 'Observaciones docentes', nursings: 'Enfermería', reports: 'Reportes PIE', knowledgeDocs: 'Normativas IA', coursePlans: 'Planes de curso', studentPlans: 'Planes individuales', evidences: 'Respaldos' },
   migrationHtml() {
     const m = State.migration || {};
+    const cols = Object.keys(this.COL_LABELS);
     return `<section class="panel panel--narrow">
-      <div class="panel__head"><h2>${ico('database')}Traspasar datos desde Firebase</h2></div>
+      <div class="panel__head"><h2>${ico('database')}Traspasar datos</h2></div>
       <ol class="steps">
-        <li>Abra el archivo antiguo de la página y copie el bloque <span class="num">fbConf = { ... }</span> (apiKey, projectId, etc.).</li>
-        <li>Péguelo abajo y presione <strong>Leer datos de Firebase</strong>. Nada se modifica en Firebase.</li>
-        <li>Revise las cantidades y presione <strong>Copiar a Google Sheets</strong>. Las claves antiguas se cifran al copiarlas y la API Key de IA pasa al servidor.</li>
-        <li>Se puede repetir sin duplicar: los registros con el mismo identificador se reemplazan.</li>
+        <li>En su computador, abra con doble clic el archivo <strong>herramientas/exportar-firebase.html</strong> y presione <strong>Descargar respaldo</strong>. Se descarga un archivo <span class="num">.json</span>.</li>
+        <li>Súbalo aquí abajo. Antes de copiar nada verá cuántos registros trae.</li>
+        <li>Presione <strong>Copiar al sistema</strong>. Cada funcionario conserva su clave de siempre (se guarda cifrada).</li>
       </ol>
-      ${fieldHtml('Configuración de Firebase', `<textarea id="fb-config" class="input num" rows="7" placeholder='apiKey: "...", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..."'>${esc(m.config || '')}</textarea>`)}
-      <div class="form-foot"><span></span><div class="row-actions">
-        <button class="btn" onclick="app.readFirebase()">${ico('download-cloud')}Leer datos de Firebase</button>
-        <button class="btn btn--primary" ${m.data ? '' : 'disabled'} onclick="app.copyToSheets()">${ico('upload-cloud')}Copiar a Google Sheets</button></div></div>
-      ${m.data ? `<div class="table-wrap"><table class="table"><thead><tr><th>Colección</th><th class="t-num">Registros leídos</th><th class="t-num">Copiados</th></tr></thead><tbody>
-        ${Object.keys(STORE).concat('variables').map(c => `<tr><td>${c}</td><td class="t-num num">${(m.data[c] || []).length}</td><td class="t-num num">${(m.done || {})[c] ?? '-'}</td></tr>`).join('')}</tbody></table></div>` : ''}
-      <p class="note">${ico('shield-alert')}Cuando termine, en la consola de Firebase cierre las reglas de Firestore (deny all) o elimine el proyecto, porque la página antigua dejaba la base abierta.</p>
+      <label class="dropzone">
+        <input type="file" accept=".json,application/json" onchange="app.readJsonBackup(event)">
+        ${ico('file-up')}<span><strong>${m.fileName ? esc(m.fileName) : 'Elegir archivo de respaldo'}</strong><span class="cell-sub">${m.fileName ? 'Puede elegir otro si se equivocó' : 'respaldo-firebase-....json'}</span></span>
+      </label>
+      ${m.data ? `<div class="table-wrap"><table class="table"><thead><tr><th>Datos</th><th class="t-num">En el archivo</th><th class="t-num">Copiados</th></tr></thead><tbody>
+        ${cols.map(c => `<tr><td>${this.COL_LABELS[c]}</td><td class="t-num num">${(m.data[c] || []).length}</td><td class="t-num num">${(m.done || {})[c] ?? '-'}</td></tr>`).join('')}</tbody></table></div>
+        <div class="form-foot"><span class="muted small">Se puede repetir sin duplicar: los registros con el mismo identificador se reemplazan.</span><button class="btn btn--primary btn--lg" onclick="app.copyToSheets()">${ico('upload-cloud')}Copiar al sistema</button></div>` : ''}
+      <div class="option-block">
+        <h3>${ico('download')}Respaldo del sistema nuevo</h3>
+        <p class="muted small">Descarga en un archivo todos los datos que usted puede ver. Guárdelo en un lugar seguro: contiene información de estudiantes.</p>
+        <button class="btn" onclick="app.downloadBackup()">${ico('download')}Descargar respaldo JSON</button>
+      </div>
+      <p class="note">${ico('shield-alert')}Cuando termine el traspaso, en la consola de Firebase cierre las reglas de Firestore o elimine el proyecto, porque la página antigua dejaba la base abierta.</p>
     </section>`;
   },
-  parseFirebaseConfig(txt) {
-    const conf = {};
-    ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'].forEach(k => {
-      const m = String(txt).match(new RegExp(`["']?${k}["']?\\s*:\\s*["']([^"']+)["']`));
-      if (m) conf[k] = m[1];
-    });
-    if (!conf.apiKey || !conf.projectId) throw new Error('No se encontraron apiKey y projectId en la configuración pegada.');
-    return conf;
-  },
-  async readFirebase() {
-    const config = el('fb-config').value;
-    const done = ui.busy('Leyendo Firebase', 'Descargando todas las colecciones...');
+  async readJsonBackup(e) {
+    const file = e.target.files[0];
+    if (!file) return;
     try {
-      const conf = this.parseFirebaseConfig(config);
-      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js');
-      const { getFirestore, collection, getDocs } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
-      const db = getFirestore(initializeApp(conf, 'migracion-' + Date.now()));
+      const raw = JSON.parse(await file.text());
+      // Acepta el archivo de la herramienta ({colecciones}), un respaldo de este sistema ({collections}) o un objeto simple por colección
+      let src = raw.colecciones || raw.collections || raw;
       const data = {};
-      for (const c of Object.keys(STORE).concat('variables')) {
-        const snap = await getDocs(collection(db, c));
-        data[c] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-      }
-      State.migration = { config, data, done: {} };
-      toast('Datos leídos. Revise las cantidades y copie a Google Sheets.');
-    } catch (e) { console.error(e); toast('No se pudo leer Firebase: ' + e.message, 'error'); }
-    finally { done(); this.renderAdmin(); }
+      Object.keys(this.COL_LABELS).forEach(c => {
+        let v = src[c];
+        if (v && !Array.isArray(v)) v = c === 'variables' ? [v] : Object.entries(v).map(([id, d]) => ({ ...d, id: d.id ?? id }));
+        data[c] = Array.isArray(v) ? v : [];
+      });
+      const total = Object.values(data).reduce((a, v) => a + v.length, 0);
+      if (!total) throw new Error('El archivo no tiene datos reconocibles.');
+      State.migration = { fileName: file.name, data, done: {} };
+      toast(`Archivo leído: ${total} registros. Revise las cantidades y presione Copiar al sistema.`);
+    } catch (err) { console.error(err); toast('No se pudo leer el archivo: ' + err.message, 'error'); }
+    finally { this.renderAdmin(); }
+  },
+  downloadBackup() {
+    const colecciones = { variables: [State.variables] };
+    Object.entries(STORE).forEach(([c, k]) => { colecciones[c] = State[k]; });
+    const blob = new Blob([JSON.stringify({ origen: 'trayectoria-escolar', exportado: new Date().toISOString(), colecciones })], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `respaldo-trayectoria-${today()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('Respaldo descargado');
   },
   async copyToSheets() {
     const m = State.migration;
@@ -284,7 +294,8 @@ Object.assign(app, {
         m.done[col] = n;
       }
       await DB.load();
-      toast('Migración completada');
+      State.loginOptions = await API.call('bootstrap');
+      toast('Traspaso completado. Los funcionarios ya pueden ingresar con su clave de siempre.');
     } catch (e) { console.error(e); toast('La migración se detuvo: ' + e.message, 'error'); }
     finally { done(); this.renderAdmin(); }
   }
