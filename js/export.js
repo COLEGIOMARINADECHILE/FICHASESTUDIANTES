@@ -229,19 +229,19 @@ Object.assign(app, {
       return {
         filename: `Alertas_Preventivas${course ? '_' + course.replace(/\s+/g, '_') : ''}.pdf`, title: 'REPORTE DE ALERTAS PREVENTIVAS', wide: true,
         body: `<p><strong>Alcance:</strong> ${esc(course || 'Todos los cursos del establecimiento')}. <strong>Fecha de emisión:</strong> ${fmtDate(today())}. <strong>Estudiantes con registros:</strong> ${rows.length}.</p>
-          ${docTable(['N°', 'Estudiante', 'Curso', 'Asist.', 'Prot.', 'Conv/PIE', 'Obs.', 'Enf.', 'Total'], rows.map((r, i) => [i + 1, `<strong>${esc(app.formatStudentName(r.name))}</strong>`, esc(r.curso), `${r.asistencia.real}%`, r.proto, r.convPie, r.obs, r.enf, `<strong>${r.total}</strong>`]), 'No hay alertas registradas con este criterio.', 'doc-table--center')}
+          ${docTable(['N°', 'Estudiante', 'Curso', 'Asist.', 'Prot.', 'Conv.', 'PIE', 'Obs.', 'Enf.', 'Total'], rows.map((r, i) => [i + 1, `<strong>${esc(app.formatStudentName(r.name))}</strong>`, esc(r.curso), `${r.asistencia.real}%`, r.proto, r.conv, r.pie, r.obs, r.enf, `<strong>${r.total}</strong>`]), 'No hay alertas registradas con este criterio.', 'doc-table--center')}
           <p class="doc-small">Este reporte consolida la cantidad de registros por estudiante (protocolos, intervenciones de convivencia o PIE, observaciones docentes y atenciones de enfermería). No incluye el detalle de los registros confidenciales.</p>`
       };
     },
     course_summary_report() {
       const rows = app.courseSummaryRows();
-      const keys = ['matricula', 'proto', 'convPie', 'obs', 'enf', 'planesIndiv', 'planesCurso', 'total'];
+      const keys = ['matricula', 'proto', 'conv', 'pie', 'obs', 'enf', 'planesIndiv', 'planesCurso', 'total'];
       const tot = keys.map(k => rows.reduce((a, r) => a + r[k], 0));
       const body = rows.map(r => [`<strong>${esc(r.curso)}</strong>`, ...keys.map(k => r[k])]);
       if (rows.length) body.push(['<strong>TOTALES</strong>', ...tot.map(v => `<strong>${v}</strong>`)]);
       return {
         filename: 'Resumen_Por_Cursos.pdf', title: 'RESUMEN CONSOLIDADO POR CURSOS', wide: true,
-        body: `<p><strong>Fecha de emisión:</strong> ${fmtDate(today())}</p>${docTable(['Curso', 'Matrícula', 'Protocolos', 'Conv/PIE', 'Obs.', 'Enf.', 'Planes ind.', 'Planes curso', 'Total'], body, 'No hay datos disponibles.', 'doc-table--center')}`
+        body: `<p><strong>Fecha de emisión:</strong> ${fmtDate(today())}</p>${docTable(['Curso', 'Matrícula', 'Protocolos', 'Conv.', 'PIE', 'Obs.', 'Enf.', 'Planes ind.', 'Planes curso', 'Total'], body, 'No hay datos disponibles.', 'doc-table--center')}`
       };
     },
     global_course_plans_report() {
@@ -261,7 +261,7 @@ Object.assign(app, {
       return {
         filename: `Reporte_Curso_${course.replace(/\s+/g, '_')}.pdf`, title: 'REPORTE GENERAL DEL CURSO', wide: true,
         body: `<p><strong>Curso:</strong> ${esc(course)}. <strong>Profesor(a) jefe:</strong> ${esc(app.profJefeOf(State.filterCourse) || 'No registrado')}. <strong>Matrícula:</strong> ${studs.length}. <strong>Emisión:</strong> ${fmtDate(today())}.</p>
-          ${docTable(['N°', 'Estudiante', 'Asist.', 'Inasist.', 'Atrasos', 'Prot.', 'Conv/PIE', 'Obs.', 'Enf.', 'Planes'], studs.map((st, i) => { const c = app.countRecords(st); return [i + 1, `<strong>${esc(app.formatStudentName(st.name))}</strong>`, st.asistencia.alerta ? `<strong class="doc-alert">${st.asistencia.real}%</strong>` : `${st.asistencia.real}%`, st.asistencia.inasistencias, st.asistencia.atrasos, c.proto, c.convPie, c.obs, c.enf, State.studentPlans.filter(p => sameId(p.studentId, st.id)).length]; }), 'No hay estudiantes registrados en este curso.', 'doc-table--center')}`
+          ${docTable(['N°', 'Estudiante', 'Asist.', 'Inasist.', 'Atrasos', 'Prot.', 'Conv.', 'PIE', 'Obs.', 'Enf.', 'Planes'], studs.map((st, i) => { const c = app.countRecords(st); return [i + 1, `<strong>${esc(app.formatStudentName(st.name))}</strong>`, st.asistencia.alerta ? `<strong class="doc-alert">${st.asistencia.real}%</strong>` : `${st.asistencia.real}%`, st.asistencia.inasistencias, st.asistencia.atrasos, c.proto, c.conv, c.pie, c.obs, c.enf, State.studentPlans.filter(p => sameId(p.studentId, st.id)).length]; }), 'No hay estudiantes registrados en este curso.', 'doc-table--center')}`
       };
     },
     course_active_plans() {

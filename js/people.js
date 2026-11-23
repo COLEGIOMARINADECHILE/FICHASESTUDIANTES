@@ -7,6 +7,12 @@
 Object.assign(app, {
   domain() { return State.loginOptions?.dominio || 'andaliensur.cl'; },
   pageUrl() { return location.origin + location.pathname.replace(/index\.html$/, ''); },
+  /** Datos para el diseño del correo: dirección de la página y logos (direcciones completas). */
+  mailExtras() {
+    const abs = src => !src ? '' : String(src).startsWith('data:') ? src : new URL(src, location.href).href;
+    const b = this.brand();
+    return { pageUrl: this.pageUrl(), appName: b.name, logoUrl: abs(b.school), slepUrl: abs(b.slep) };
+  },
 
   // ---------------- CORREOS INSTITUCIONALES ----------------
   /** "Juan Andrés Pérez Soto" → juan.perez@andaliensur.cl ; "PÉREZ SOTO, JUAN" → juan.perez@... */
@@ -33,7 +39,7 @@ Object.assign(app, {
     catch (e) { toast(e.message, 'error'); }
   },
   suggestAllEmails() {
-    const list = State.users.filter(u => !u.email);
+    const list = State.users.filter(u => !u.email && !u.eliminado);
     ui.modal({
       title: 'Sugerir correos institucionales', icon: 'at-sign', size: 'lg', okText: 'Guardar correos',
       body: `<p class="modal__msg">Se propone <span class="num">nombre.apellido@${this.domain()}</span> a partir del nombre. Revise y corrija antes de guardar; deje vacío el que no corresponda.</p>
@@ -80,11 +86,11 @@ Su perfil: ${u.customRole || u.role}. ${cursos}
 
 ${TXT_CONFIDENCIALIDAD}
 
-Ante cualquier duda, responda este correo.
+Ante cualquier duda, escriba a datos@andaliensur.cl.
 
 Saludos cordiales,
-${State.currentUser.name}
-${State.currentUser.customRole || ''}`.trim();
+Equipo de Gestión
+${b.tagline}`.trim();
   },
   openNotifyModal(id) {
     const u = State.users.find(x => sameId(x.id, id));
@@ -94,7 +100,7 @@ ${State.currentUser.customRole || ''}`.trim();
     ui.modal({
       title: `Aviso de acceso a ${u.name}`, icon: 'send', size: 'lg', okText: 'Enviar correo',
       body: `<div class="stack">
-        <p class="modal__msg">Se enviará a <strong>${esc(u.email)}</strong> desde la cuenta de Google dueña del Apps Script. Puede editar el texto.</p>
+        <p class="modal__msg">Se enviará a <strong>${esc(u.email)}</strong> con remitente <strong>Equipo de Gestión</strong>. Las respuestas llegan a <strong>datos@andaliensur.cl</strong>. Puede editar el texto.</p>
         <label class="check"><input type="checkbox" id="notify-pass" ${google ? '' : 'checked'} onchange="el('notify-text').value = app.accessMessage(State.users.find(x => sameId(x.id, ${jsq(u.id)})), this.checked)"><span>Incluir una clave temporal nueva (reemplaza la actual; se genera al enviar)</span></label>
         ${fieldHtml('Asunto', `<input id="notify-subject" class="input" value="Su cuenta en ${esc(this.brand().name)}">`)}
         ${fieldHtml('Mensaje', `<textarea id="notify-text" class="input" rows="16">${esc(this.accessMessage(u, !google))}</textarea>`)}
@@ -102,7 +108,7 @@ ${State.currentUser.customRole || ''}`.trim();
       onOk: async () => {
         const mensaje = el('notify-text').value;
         if (el('notify-pass').checked && !mensaje.includes('{CLAVE}')) { toast('El mensaje debe contener {CLAVE} donde irá la clave temporal', 'error'); return false; }
-        const out = await API.call('notificarAcceso', { userId: u.id, asunto: el('notify-subject').value, mensaje, remitente: this.brand().tagline });
+        const out = await API.call('notificarAcceso', { userId: u.id, asunto: el('notify-subject').value, mensaje, tagline: this.brand().tagline, ...this.mailExtras() });
         u.accesoNotificado = out.fecha;
         toast(`Aviso enviado a ${out.enviado}`);
         if (State.currentView === 'admin') this.renderAdmin();
@@ -122,7 +128,7 @@ ${State.currentUser.customRole || ''}`.trim();
         try {
           for (const u of list) {
             el('busy-msg').textContent = `${ok + 1} de ${list.length}: ${u.name}`;
-            const out = await API.call('notificarAcceso', { userId: u.id, asunto: `Su cuenta en ${this.brand().name}`, mensaje: this.accessMessage(u, !google), remitente: this.brand().tagline });
+            const out = await API.call('notificarAcceso', { userId: u.id, asunto: `Su cuenta en ${this.brand().name}`, mensaje: this.accessMessage(u, !google), tagline: this.brand().tagline, ...this.mailExtras() });
             u.accesoNotificado = out.fecha;
             ok++;
           }
@@ -136,8 +142,8 @@ ${State.currentUser.customRole || ''}`.trim();
 
   // ---------------- ACCESO DE DOCENTES A UN CURSO ----------------
   courseAccessHtml(course) {
-    const withAccess = State.users.filter(u => (u.assignedCourses || []).includes(course));
-    const others = State.users.filter(u => !(u.assignedCourses || []).includes(course) && !(u.functions || []).includes('acceso_total')).sort((a, b) => a.name.localeCompare(b.name));
+    const withAccess = State.users.filter(u => !u.eliminado && (u.assignedCourses || []).includes(course));
+    const others = State.users.filter(u => !u.eliminado && u.active !== false && !(u.assignedCourses || []).includes(course) && !(u.functions || []).includes('acceso_total')).sort((a, b) => a.name.localeCompare(b.name));
     return `<div class="access">
       <span class="field__label">Funcionarios con acceso a este curso</span>
       <div class="chips">${withAccess.map(u => `<span class="chip chip--removable" data-tone="${ROLE_TONE[u.role] || 'neutral'}">${esc(u.name)}<button type="button" aria-label="Quitar acceso a ${esc(u.name)}" onclick="app.setCourseAccess(${jsq(u.id)}, ${jsq(course)}, false)">${ico('x')}</button></span>`).join('') || '<span class="muted small">Nadie asignado específicamente.</span>'}</div>
@@ -157,12 +163,61 @@ ${State.currentUser.customRole || ''}`.trim();
     } catch (e) { toast(e.message, 'error'); }
   },
 
+  // ---------------- REGISTROS POR CATEGORÍA (contadores clicables) ----------------
+  RECORD_CATS: { proto: ['Protocolos', 'alert-octagon'], conv: ['Intervenciones de Convivencia', 'heart-handshake'], pie: ['Intervenciones PIE', 'puzzle'], obs: ['Observaciones docentes', 'eye'], enf: ['Atenciones de enfermería', 'heart-pulse'] },
+  /** Convivencia o PIE según el perfil de quien registró; los protocolos van aparte. */
+  recordCategory(h) {
+    if (h.type === PROTOCOLO) return 'proto';
+    const u = State.users.find(x => sameId(x.id, h.professionalId));
+    return u && u.role === 'Equipo PIE' ? 'pie' : 'conv';
+  },
+  /** Etiquetas con número que abren el detalle. ids: estudiantes; c: conteos de countRecords. */
+  recordChips(ids, c) {
+    const label = { proto: 'Prot.', conv: 'Conv.', pie: 'PIE', obs: 'Obs.', enf: 'Enf.' };
+    return Object.keys(label).filter(k => c[k]).map(k => `<button type="button" class="chip chip--btn" data-tone="${k}" title="Ver ${this.RECORD_CATS[k][0].toLowerCase()}" onclick="app.openRecords(${jsq(k)}, ${jsq(ids.join('|'))})">${label[k]}: ${c[k]}</button>`).join('');
+  },
+  openCourseRecords(cat, course) {
+    const ids = this.getStudents().filter(s => s.curso === course && s.status !== 'blocked').map(s => s.id);
+    this.openRecords(cat, ids.join('|'), course);
+  },
+  openRecords(cat, idList, title = '') {
+    const students = String(idList).split('|').map(id => this.getStudent(id)).filter(Boolean);
+    const items = [];
+    students.forEach(s => {
+      if (['proto', 'conv', 'pie'].includes(cat)) s.history.filter(h => !this.isCarta(h) && this.recordCategory(h) === cat).forEach(h => items.push({ s, h, kind: 'int' }));
+      if (cat === 'obs') s.observations.forEach(h => items.push({ s, h, kind: 'obs' }));
+      if (cat === 'enf') s.nursing.forEach(h => items.push({ s, h, kind: 'enf' }));
+    });
+    items.sort((a, b) => new Date(b.h.date) - new Date(a.h.date));
+    const [nombre, icon] = this.RECORD_CATS[cat];
+    const varios = students.length > 1;
+    const body = items.map(({ s, h, kind }) => {
+      const quien = varios ? `<span class="cell-sub">${esc(s.name)}</span>` : '';
+      if (kind === 'int' && !this.canSeeConfidential(h)) return `
+        <article class="record" data-tone="neutral">
+          <header class="record__head"><span class="record__icon">${ico('lock')}</span><div><span class="record__date num">${fmtDate(h.date)}</span><h3>${esc(h.type)}</h3>${quien}</div></header>
+          <p class="muted">Existe una intervención registrada, pero es confidencial. Puede solicitar la información a quien la registró.</p>
+          <footer class="record__foot"><span>${ico('user')}Registrado por ${esc(h.professional)}</span><button class="btn btn--sm" onclick="app.requestRecord(${jsq(h.id)})">${ico('mail')}Solicitar información</button></footer>
+        </article>`;
+      const detalle = kind === 'obs' ? esc(h.content) : kind === 'enf' ? `Motivo: ${esc(h.reason)}\nIntervención: ${esc(h.intervention)}${h.observation ? `\nObservación: ${esc(h.observation)}` : ''}` : esc(h.background || '');
+      const prot = h.protocol ? `<p class="small"><strong>Protocolo:</strong> ${esc(h.protocol.type)}. <strong>Estado:</strong> ${esc(h.protocol.status || 'En Proceso')}.</p>` : '';
+      return `<article class="record" data-tone="${cat}">
+        <header class="record__head"><span class="record__icon">${ico(icon)}</span><div><span class="record__date num">${fmtDate(h.date)}</span><h3>${esc(kind === 'int' ? h.type : nombre.replace(/s$/, ''))}</h3>${quien}</div>
+          ${varios && hasAccess('ver_fichas') ? `<button class="btn btn--sm btn--ghost" onclick="ui.close(); app.openStudent(${jsq(s.id)})">Ver ficha</button>` : ''}</header>
+        ${prot}<p class="prewrap">${detalle}</p>
+        ${(h.agreements || []).length ? `<p class="small"><strong>Acuerdos:</strong> ${h.agreements.map(a => esc(a.text)).join('; ')}</p>` : ''}
+        <footer class="record__foot"><span>${ico('user')}${esc(h.professional || '')}</span></footer>
+      </article>`;
+    }).join('');
+    ui.modal({ title: `${nombre}${title ? `: ${title}` : students.length === 1 ? ` de ${students[0].name}` : ''}`, icon, tone: cat, size: 'lg', cancelText: 'Cerrar', hideOk: true, body: `<p class="muted small">${items.length} registro(s), del más reciente al más antiguo.</p><div class="stack">${body || empty(icon, 'No hay registros en esta categoría.')}</div>` });
+  },
+
   // ---------------- SOLICITAR INFORMACIÓN CONFIDENCIAL ----------------
   requestRecord(id) {
     const r = State.rawInterventions.find(x => sameId(x.id, id));
     if (!r) return;
     const author = State.users.find(u => sameId(u.id, r.professionalId));
-    const s = this.current();
+    const s = this.getStudent(r.studentId) || this.current();
     if (!author?.email) return toast('El autor no tiene correo registrado. Solicite la información a Convivencia Escolar.', 'error');
     const subject = `Solicitud de información confidencial: ${s?.name || ''}`;
     const body = `Estimado(a) ${author.name}:\n\nSolicito acceso o un reporte del registro "${r.type}" del ${fmtDate(r.date)} sobre el estudiante ${s?.name || ''} (${s?.curso || ''}), para fines de acompañamiento en mi rol de ${State.currentUser.customRole || State.currentUser.role}.\n\nMe comprometo a resguardar la confidencialidad de la información conforme a la Ley N° 21.719.\n\nSaludos,\n${State.currentUser.name}`;

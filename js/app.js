@@ -80,8 +80,15 @@ window.app = {
       const n = users.filter(u => u.role === r).length;
       return `<button type="button" class="role" data-tone="${ROLE_TONE[r] || 'neutral'}" aria-pressed="${sel === r}" onclick="app.selectRole(${jsq(r)})"><span class="role__icon">${ico(roleIcon[r] || 'user')}</span><span class="role__text"><span class="role__name">${esc(r)}</span><span class="role__count">${n === 1 ? '1 persona' : `${n} personas`}</span></span></button>`;
     }).join('');
-    el('login-steps').hidden = !sel;
-    const vacio = !users.length && !State.demo;
+    // Ingreso solo con Google: se ocultan los perfiles y la clave
+    const solo = !!State.loginOptions?.soloGoogle && !State.demo;
+    const form = el('login-form');
+    form.querySelector('.login__fieldset').hidden = solo;
+    form.querySelector('.login__or').hidden = solo;
+    form.querySelector('.login__lede').textContent = solo ? `Ingrese con su cuenta institucional @${State.loginOptions.dominio || 'andaliensur.cl'}.` : '¿Con qué perfil trabaja en el colegio?';
+    form.classList.toggle('is-google-only', solo);
+    el('login-steps').hidden = !sel || solo;
+    const vacio = !users.length && !State.demo && !solo;
     el('login-empty').hidden = !vacio;
     if (vacio) el('login-empty').innerHTML = `${ico('alert-triangle')}<span><strong>Aún no hay funcionarios registrados.</strong> En el editor de Apps Script ejecute la función <span class="num">restablecerAdmin</span> y lea la clave en el registro de ejecución.</span>`;
     const list = users.filter(u => u.role === sel);
@@ -89,7 +96,7 @@ window.app = {
     el('login-user').disabled = !sel;
     this.checkLogin();
     this.renderGoogleLogin();
-    if (!window.google?.accounts?.id && State.loginOptions?.googleClientId) setTimeout(() => this.renderGoogleLogin(), 1200);
+    if (!window.google?.accounts?.id && !this._gsiWait) { this._gsiWait = true; let n = 0; const t = setInterval(() => { if (window.google?.accounts?.id || ++n > 30) { clearInterval(t); this.renderGoogleLogin(); } }, 500); }
   },
   selectRole(r) {
     State.loginRole = r;
@@ -120,7 +127,10 @@ window.app = {
       el('login-password').value = '';
       if (r.master) toast('Ingreso con clave maestra');
       await this.startSession(r);
-    } catch (err) { toast(err.message, 'error'); }
+    } catch (err) {
+      if (err.code === 'NO_AUTORIZADO') this.showUnauthorized(err.message, { name: el('login-user').selectedOptions[0]?.textContent || '' });
+      else toast(err.message, 'error');
+    }
     finally { btn.classList.remove('is-loading'); this.checkLogin(); }
   },
   async startSession(r) {
@@ -128,26 +138,91 @@ window.app = {
     State.currentUser = r.user;
     await DB.load();
     State.currentView = this.isQuickOnly() ? 'quick' : 'dashboard';
+    State.welcome = true;
     this.render();
   },
+  /** Resumen legible de lo que el perfil permite hacer. */
+  permissionSummary(u) {
+    const fn = u.functions || [];
+    if (fn.includes('acceso_total')) return ['Acceso total al sistema'];
+    const corto = { ver_fichas: 'ver fichas de estudiantes', agregar_entrevistas: 'registrar intervenciones y observaciones', editar_fichas: 'editar y actualizar fichas', gestionar_protocolos: 'gestionar protocolos confidenciales', registro_rapido: 'registrar anotaciones, atrasos e inasistencias', ver_reportes: 'imprimir su reporte de gestión', ver_todos_reportes: 'imprimir reportes de todos', gestionar_usuarios: 'gestionar funcionarios y alumnos', configurar_sistema: 'configurar el sistema', ver_top_intervenciones: 'ver alertas preventivas', ver_resumen_cursos: 'ver resumen por cursos', ver_bitacora: 'ver la bitácora' };
+    return fn.map(f => corto[f]).filter(Boolean);
+  },
+  renderSessionBanner() {
+    const box = el('session-banner');
+    const u = State.currentUser;
+    if (!State.welcome || !u) { box.hidden = true; return; }
+    const cursos = (u.assignedCourses || []).length ? u.assignedCourses.join(', ') : 'Todos los cursos';
+    const puede = this.permissionSummary(u);
+    const hora = new Date().getHours();
+    const saludo = hora < 12 ? 'Buenos días' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
+    box.hidden = false;
+    box.innerHTML = `
+      <span class="avatar avatar--lg" aria-hidden="true">${esc((u.name || '?').charAt(0))}</span>
+      <div class="session-banner__text">
+        <p class="session-banner__hello">${saludo}, <strong>${esc(u.name)}</strong></p>
+        <div class="chips">
+          ${chip(`Perfil: ${u.role}`, ROLE_TONE[u.role] || 'neutral', 'id-card')}
+          ${u.customRole ? chip(u.customRole, 'neutral', 'briefcase') : ''}
+          ${chip(cursos, 'obs', 'school')}
+          ${u.email ? chip(u.email, 'neutral', 'mail') : ''}
+        </div>
+        ${puede.length ? `<p class="session-banner__can">Con este perfil puede: ${esc(puede.join(', '))}.</p>` : ''}
+      </div>
+      <button type="button" class="icon-btn" aria-label="Cerrar bienvenida" onclick="State.welcome=false; app.renderSessionBanner()">${ico('x')}</button>`;
+    icons();
+  },
+
   /** Paradocente: solo registra anotaciones, atrasos e inasistencias; no ve fichas. */
   isQuickOnly() { return hasAccess('registro_rapido') && !hasAccess('ver_fichas') && !hasAccess('editar_fichas') && !hasAccess('agregar_entrevistas'); },
 
   // Ingreso con cuenta institucional de Google (se activa cuando el servidor tiene GOOGLE_CLIENT_ID)
   renderGoogleLogin() {
-    const id = State.loginOptions?.googleClientId;
+    const id = State.loginOptions?.googleClientId || window.APP_CONFIG?.GOOGLE_CLIENT_ID;
     const box = el('login-google');
-    box.hidden = !id;
-    if (!id || !window.google?.accounts?.id || box.dataset.ready === id) return;
-    google.accounts.id.initialize({ client_id: id, hd: State.loginOptions.dominio, callback: res => this.handleGoogle(res) });
-    google.accounts.id.renderButton(el('login-google-btn'), { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width: 320, locale: 'es' });
+    box.hidden = !id || State.demo;
+    if (box.hidden || box.dataset.ready === id) return;
+    if (!window.google?.accounts?.id) {
+      // Mientras carga el servicio de Google se muestra un botón de espera, para que la opción siempre se vea
+      if (!el('login-google-btn').children.length) el('login-google-btn').innerHTML = `<button type="button" class="btn btn--lg google-wait" disabled>${ico('loader')}Cargando acceso con Google...</button>`;
+      return;
+    }
+    el('login-google-btn').innerHTML = '';
+    google.accounts.id.initialize({ client_id: id, hd: State.loginOptions?.dominio || 'andaliensur.cl', callback: res => this.handleGoogle(res) });
+    google.accounts.id.renderButton(el('login-google-btn'), { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill', width: 320, locale: 'es', logo_alignment: 'left' });
     box.dataset.ready = id;
   },
   async handleGoogle(res) {
     const done = ui.busy('Ingresando', 'Verificando su cuenta institucional...');
     try { await this.startSession(await API.call('loginGoogle', { credential: res.credential })); }
-    catch (err) { toast(err.message, 'error'); }
+    catch (err) {
+      done();
+      if (err.code === 'NO_AUTORIZADO') this.showUnauthorized(err.message, this.googleProfile(res.credential));
+      else toast(err.message, 'error');
+    }
     finally { done(); }
+  },
+  /** Nombre y correo de la cuenta de Google (solo para completar la solicitud de acceso). */
+  googleProfile(credential) {
+    try {
+      const p = JSON.parse(decodeURIComponent(escape(atob(String(credential).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))));
+      return { email: p.email || '', name: p.name || '' };
+    } catch (e) { return { email: '', name: '' }; }
+  },
+  /** Ventana para quien no tiene perfil o no está autorizado: invita a pedir acceso a datos@andaliensur.cl. */
+  showUnauthorized(motivo, who = {}) {
+    const contacto = 'datos@andaliensur.cl';
+    const asunto = `Solicitud de acceso a ${this.brand().name}`;
+    const cuerpo = `Estimado Equipo de Gestión:\n\nSolicito acceso al sistema ${this.brand().name} del ${this.brand().tagline}.\n\nNombre: ${who.name || ''}\nCorreo institucional: ${who.email || ''}\nCargo: \nCursos con los que trabajo: \n\nSaludos cordiales.`;
+    ui.modal({
+      title: 'Acceso no autorizado', icon: 'shield-alert', tone: 'warn', size: 'md', okText: 'Enviar solicitud por correo', cancelText: 'Cerrar',
+      body: `<div class="stack">
+        <p class="modal__msg"><strong>${esc(motivo)}</strong></p>
+        <p class="modal__msg">Para usar ${esc(this.brand().name)} su cuenta debe tener un perfil creado y autorizado por el Equipo de Gestión del colegio.</p>
+        <div class="access-request">${ico('mail')}<span>Envíe una solicitud a <strong>${contacto}</strong> indicando su nombre, cargo y cursos con los que trabaja.</span></div>
+      </div>`,
+      onOk: () => { location.href = `mailto:${contacto}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`; }
+    });
   },
   logout() {
     API.call('logout').catch(() => {});
@@ -183,13 +258,16 @@ window.app = {
     document.querySelectorAll('[data-view]').forEach(v => { v.hidden = v.dataset.view !== view; });
     const u = State.currentUser;
     el('user-name').textContent = u.name;
-    el('user-role').textContent = u.customRole || u.role;
+    el('user-role').innerHTML = `<span class="role-pill">${esc(u.role)}</span>${u.customRole && u.customRole !== u.role ? ` ${esc(u.customRole)}` : ''}`;
+    el('user-role').title = [u.role, u.customRole].filter(Boolean).join(', ');
+    this.renderSessionBanner();
     el('user-avatar').textContent = (u.name || '?').charAt(0);
     this.renderNav();
     this[this.RENDERERS[view]]();
     icons();
   },
   navigate(v) {
+    State.welcome = false; // la bienvenida se muestra solo en la primera pantalla después de ingresar
     State.currentView = v;
     document.body.classList.remove('nav-open');
     this.render();
@@ -257,10 +335,12 @@ window.app = {
   current() { return this.getStudent(State.selectedStudentId); },
   /** Conteo único de registros por estudiante (antes se repetía en 6 lugares). */
   countRecords(s) {
-    let proto = 0, convPie = 0;
-    s.history.forEach(h => { if (h.type === PROTOCOLO) proto++; else convPie++; });
+    const n = { proto: 0, conv: 0, pie: 0 };
+    s.history.forEach(h => { n[this.recordCategory(h)]++; });
+    const { proto, conv, pie } = n;
+    const convPie = conv + pie;
     const obs = s.observations.length, enf = s.nursing.length;
-    return { proto, convPie, obs, enf, total: proto + convPie + obs + enf };
+    return { proto, conv, pie, convPie, obs, enf, total: proto + convPie + obs + enf };
   },
   formatStudentName(fullName) {
     if (!fullName || fullName.includes(',')) return fullName;
@@ -275,23 +355,23 @@ window.app = {
   renderDashboard() {
     el('dash-school-days').value = State.variables.diasTotalesClases || 180;
     const studs = this.getStudents().filter(s => State.showWithdrawn || s.status !== 'blocked');
-    const tot = { convPie: 0, proto: 0, obs: 0, enf: 0 };
+    const tot = { conv: 0, pie: 0, proto: 0, obs: 0, enf: 0 };
     const cy = Object.fromEntries(Object.keys(CYCLES).map(k => [k, 0]));
     cy['Otros / Sin Ciclo'] = 0;
     const byCourse = {};
     studs.forEach(s => {
       const c = this.countRecords(s);
-      ['convPie', 'proto', 'obs', 'enf'].forEach(k => { tot[k] += c[k]; });
+      ['conv', 'pie', 'proto', 'obs', 'enf'].forEach(k => { tot[k] += c[k]; });
       const cycle = Object.keys(CYCLES).find(k => CYCLES[k].courses.includes(s.curso));
       if (cycle) cy[cycle] += c.total; else cy['Otros / Sin Ciclo'] += c.total;
       if (c.total > 0) {
-        const b = byCourse[s.curso] = byCourse[s.curso] || { convPie: 0, proto: 0, obs: 0, enf: 0, total: 0 };
-        ['convPie', 'proto', 'obs', 'enf', 'total'].forEach(k => { b[k] += c[k]; });
+        const b = byCourse[s.curso] = byCourse[s.curso] || { conv: 0, pie: 0, proto: 0, obs: 0, enf: 0, total: 0 };
+        ['conv', 'pie', 'proto', 'obs', 'enf', 'total'].forEach(k => { b[k] += c[k]; });
       }
     });
     if (!cy['Otros / Sin Ciclo']) delete cy['Otros / Sin Ciclo'];
 
-    const stats = [['Estudiantes', studs.length], ['Conv. / PIE', tot.convPie, 'pie'], ['Protocolos', tot.proto, 'proto'], ['Obs. docentes', tot.obs, 'obs'], ['Planes', State.coursePlans.length + State.studentPlans.length, 'plan'], ['Enfermería', tot.enf, 'enf']];
+    const stats = [['Estudiantes', studs.length], ['Convivencia', tot.conv, 'conv'], ['PIE', tot.pie, 'pie'], ['Protocolos', tot.proto, 'proto'], ['Obs. docentes', tot.obs, 'obs'], ['Planes', State.coursePlans.length + State.studentPlans.length, 'plan'], ['Enfermería', tot.enf, 'enf']];
     el('dashboard-stats').innerHTML = stats.map(([l, n, t]) => `<div class="stat" ${t ? `data-tone="${t}"` : ''}><span class="stat__num num">${n}</span><span class="stat__label">${l}</span></div>`).join('');
 
     if (this.pieC) this.pieC.destroy();
@@ -309,7 +389,7 @@ window.app = {
     const ds = (label, key, t) => ({ label, data: top.map(c => c[1][key]), backgroundColor: tone(t), stack: 's', borderRadius: 3 });
     this.barC = new Chart(el('chart-courses'), {
       type: 'bar',
-      data: { labels: top.map(c => c[0]), datasets: [ds('Protocolos', 'proto', 'proto'), ds('Conv. / PIE', 'convPie', 'pie'), ds('Observaciones', 'obs', 'obs'), ds('Enfermería', 'enf', 'enf')] },
+      data: { labels: top.map(c => c[0]), datasets: [ds('Protocolos', 'proto', 'proto'), ds('Convivencia', 'conv', 'conv'), ds('PIE', 'pie', 'pie'), ds('Observaciones', 'obs', 'obs'), ds('Enfermería', 'enf', 'enf')] },
       options: {
         maintainAspectRatio: false,
         scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { precision: 0 }, grid: { color: cssVar('--color-rule') } } },
@@ -385,24 +465,16 @@ window.app = {
 
     // Panorama del curso
     if (course && f.length) {
-      let pie = 0, conv = 0, obs = 0, proto = 0;
-      f.forEach(st => {
-        st.history.forEach(h => {
-          if (h.type === PROTOCOLO) proto++;
-          else if (State.users.find(u => sameId(u.id, h.professionalId))?.role === 'Equipo PIE') pie++;
-          else conv++;
-        });
-        obs += st.observations.length;
-      });
+      const t = { proto: 0, conv: 0, pie: 0, obs: 0, enf: 0 };
+      f.forEach(st => { const c = this.countRecords(st); Object.keys(t).forEach(k => { t[k] += c[k]; }); });
+      const stat = (k, label) => `<button type="button" class="stat stat--btn" data-tone="${k}" ${t[k] ? '' : 'disabled'} onclick="app.openCourseRecords(${jsq(k)}, ${jsq(course)})"><span class="stat__num num">${t[k]}</span><span class="stat__label">${label}</span></button>`;
       el('course-panorama').innerHTML = `
         <section class="panel panorama">
           <div class="panel__head"><h2>Panorama de ${esc(course)}</h2><button class="btn btn--primary" onclick="app.createNewCoursePlan()">${ico('sparkles')}Nuevo plan de curso</button></div>
-          <div class="stats stats--4">
-            <div class="stat" data-tone="proto"><span class="stat__num num">${proto}</span><span class="stat__label">Protocolos</span></div>
-            <div class="stat" data-tone="pie"><span class="stat__num num">${pie}</span><span class="stat__label">Intervenciones PIE</span></div>
-            <div class="stat" data-tone="conv"><span class="stat__num num">${conv}</span><span class="stat__label">Convivencia</span></div>
-            <div class="stat" data-tone="obs"><span class="stat__num num">${obs}</span><span class="stat__label">Obs. docentes</span></div>
+          <div class="stats stats--5">
+            ${stat('proto', 'Protocolos')}${stat('conv', 'Convivencia')}${stat('pie', 'Intervenciones PIE')}${stat('obs', 'Obs. docentes')}${stat('enf', 'Enfermería')}
           </div>
+          <p class="note">${ico('mouse-pointer-click')}Pinche un número para ver los registros. Los confidenciales solo indican que existen.</p>
           <p class="note">${ico('info')}Las observaciones docentes y los registros de los estudiantes se analizan en conjunto al crear un plan de curso con IA.</p>
         </section>`;
     } else el('course-panorama').innerHTML = '';
@@ -505,16 +577,6 @@ window.app = {
     el('input-atrasos').value = s.asistencia.atrasos;
     el('input-just-tipo').innerHTML = `<option value="">Ninguno</option>${options(JUSTIFICATIVO_TYPES)}`;
 
-    const counts = {};
-    s.history.forEach(h => {
-      const u = State.users.find(x => sameId(x.id, h.professionalId));
-      let r = u ? (u.role === 'Equipo PIE' ? 'PIE' : (u.role === 'Convivencia' ? 'Conv' : 'Docente')) : 'Docente';
-      if (h.type === PROTOCOLO) r = 'Prot';
-      counts[r] = (counts[r] || 0) + 1;
-    });
-    if (s.nursing.length) counts.Enf = s.nursing.length;
-    if (s.observations.length) counts.Obs = s.observations.length;
-    const roleTone = { PIE: 'pie', Conv: 'conv', Prot: 'proto', Enf: 'enf', Obs: 'obs', Docente: 'neutral' };
 
     const just = (s.justificativos || []).map((j, i) => `<li class="just">${chip(`${fmtDate(j.fecha)}: ${j.tipo} (${j.dias} días)`, 'conv')}<button type="button" class="icon-btn icon-btn--sm icon-btn--danger" aria-label="Eliminar justificativo" title="Eliminar justificativo" onclick="app.deleteJustificativo(${jsq(s.id)}, ${i})">${ico('x')}</button></li>`).join('');
 
@@ -525,7 +587,7 @@ window.app = {
           <h1 class="entry__name">${esc(s.name)}</h1>
           <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}</div>
         </div>
-        <div class="chips chips--end">${Object.entries(counts).map(([r, n]) => chip(`${r}: ${n}`, roleTone[r])).join('')}</div>
+        <div class="chips chips--end">${this.recordChips([s.id], this.countRecords(s))}</div>
       </div>
       <div class="entry__cells">
         <div class="cell"><span class="cell__label">Asistencia real</span><span class="cell__num num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></div>
@@ -628,7 +690,11 @@ window.app = {
     const canEdit = hasAccess('editar_fichas');
     const canAdd = hasAccess('agregar_entrevistas');
     const formOpen = State.editing.intervention !== null;
-    const list = s.history.filter(h => !this.isCarta(h)).map(r => {
+    const todas = s.history.filter(h => !this.isCarta(h));
+    const filtro = State.intFilter || '';
+    const cuenta = k => todas.filter(h => this.recordCategory(h) === k).length;
+    const filtros = `<div class="segs" role="group" aria-label="Filtrar intervenciones">${[['', `Todas (${todas.length})`], ['conv', `Convivencia (${cuenta('conv')})`], ['pie', `PIE (${cuenta('pie')})`], ['proto', `Protocolos (${cuenta('proto')})`]].map(([k, l]) => `<button type="button" class="seg" aria-pressed="${filtro === k}" onclick="State.intFilter=${jsq(k)}; app.renderInterventions()">${l}</button>`).join('')}</div>`;
+    const list = todas.filter(h => !filtro || this.recordCategory(h) === filtro).map(r => {
       if (!this.canSeeConfidential(r)) return `
         <article class="record" data-tone="neutral">
           <header class="record__head"><span class="record__icon">${ico('lock')}</span><div><span class="record__date num">${fmtDate(r.date)}</span><h3>${esc(r.type)}</h3></div></header>
@@ -671,6 +737,7 @@ window.app = {
 
     this.panel(`
       ${this.panelHead('Intervenciones y protocolos', 'clipboard-list', canAdd && !formOpen ? `<button class="btn btn--primary" onclick="app.openInterventionForm()">${ico('plus')}Nueva intervención</button>` : '')}
+      ${formOpen ? '' : filtros}
       ${formOpen ? this.interventionFormHtml() : ''}
       <div class="stack">${list || empty('clipboard-list', 'No hay intervenciones registradas.')}</div>`);
     if (formOpen) { this.renderAgreementsForm(); this.handleIntTypeChange(); }
@@ -692,7 +759,7 @@ window.app = {
     const types = State.variables.interviewTypes.filter(t => t !== PROTOCOLO || hasAccess('gestionar_protocolos'));
     let prof = State.variables.professionals.find(x => (r.professional || '').includes(x));
     if (!r.id && State.currentUser.customRole) prof = State.variables.professionals.find(x => x.toLowerCase().includes(State.currentUser.customRole.toLowerCase().split(' ')[0]));
-    const others = State.users.filter(u => !sameId(u.id, State.currentUser.id)).map(u => [u.id, `${u.name} (${u.role})`]);
+    const others = State.users.filter(u => !sameId(u.id, State.currentUser.id) && !u.eliminado && u.active !== false).map(u => [u.id, `${u.name} (${u.role})`]);
     const med = p.medidas || '';
     const form = (med.match(/Formativas:\s*(.*?)(?=\nDisciplinarias:|$)/s) || [])[1] || '';
     const disc = (med.match(/Disciplinarias:\s*(.*)/s) || [])[1] || '';
@@ -1001,7 +1068,7 @@ window.app = {
         <td><span class="cell-title">${esc(s.name)}</span><span class="cell-sub num">${esc(s.rut)}</span></td>
         <td>${esc(s.curso)}</td>
         <td class="t-num"><span class="figure num" data-level="${s.total > 5 ? 'high' : s.total > 2 ? 'mid' : 'low'}">${s.total}</span></td>
-        <td><span class="chips">${s.proto ? chip(`Prot.: ${s.proto}`, 'proto') : ''}${s.convPie ? chip(`Conv.: ${s.convPie}`, 'pie') : ''}${s.obs ? chip(`Obs.: ${s.obs}`, 'obs') : ''}${s.enf ? chip(`Enf.: ${s.enf}`, 'enf') : ''}</span></td>
+        <td><span class="chips">${this.recordChips([s.id], s)}</span></td>
         <td class="t-actions">${canOpen ? `<button class="btn btn--sm" onclick="app.openStudent(${jsq(s.id)})">Ver ficha</button>` : chip('Restringido', 'neutral', 'lock')}</td>
       </tr>`).join('') : `<tr><td colspan="5">${empty('shield-check', 'No hay registros ni alertas con este criterio.')}</td></tr>`;
   },
@@ -1009,8 +1076,8 @@ window.app = {
   courseSummaryRows() {
     const studs = this.getStudents().filter(s => s.status !== 'blocked');
     return ALL_COURSES.map(c => {
-      const t = { curso: c, matricula: 0, proto: 0, convPie: 0, obs: 0, enf: 0, total: 0 };
-      studs.filter(s => s.curso === c).forEach(s => { t.matricula++; const r = this.countRecords(s); ['proto', 'convPie', 'obs', 'enf', 'total'].forEach(k => { t[k] += r[k]; }); });
+      const t = { curso: c, matricula: 0, proto: 0, conv: 0, pie: 0, obs: 0, enf: 0, total: 0 };
+      studs.filter(s => s.curso === c).forEach(s => { t.matricula++; const r = this.countRecords(s); ['proto', 'conv', 'pie', 'obs', 'enf', 'total'].forEach(k => { t[k] += r[k]; }); });
       t.planesCurso = State.coursePlans.filter(p => p.course === c).length;
       t.planesIndiv = State.studentPlans.filter(p => p.course === c).length;
       return t;
@@ -1020,7 +1087,7 @@ window.app = {
     const rows = this.courseSummaryRows();
     const n = (v, tone) => `<span class="figure num" ${v ? `data-tone="${tone}"` : 'data-zero'}>${v}</span>`;
     el('course-summary-table-body').innerHTML = rows.length ? rows.map(r => `
-      <tr><td class="cell-title">${esc(r.curso)}</td><td class="t-num num">${r.matricula}</td><td class="t-num">${n(r.proto, 'proto')}</td><td class="t-num">${n(r.convPie, 'pie')}</td><td class="t-num">${n(r.obs, 'obs')}</td><td class="t-num">${n(r.enf, 'enf')}</td><td class="t-num">${n(r.planesIndiv, 'plan')}</td><td class="t-num">${n(r.planesCurso, 'pie')}</td><td class="t-num"><strong class="num">${r.total}</strong></td></tr>`).join('')
+      <tr><td class="cell-title">${esc(r.curso)}</td><td class="t-num num">${r.matricula}</td><td class="t-num">${n(r.proto, 'proto')}</td><td class="t-num">${n(r.conv, 'conv')}</td><td class="t-num">${n(r.pie, 'pie')}</td><td class="t-num">${n(r.obs, 'obs')}</td><td class="t-num">${n(r.enf, 'enf')}</td><td class="t-num">${n(r.planesIndiv, 'plan')}</td><td class="t-num">${n(r.planesCurso, 'pie')}</td><td class="t-num"><strong class="num">${r.total}</strong></td></tr>`).join('')
       : `<tr><td colspan="9">${empty('bar-chart-2', 'No hay datos disponibles para mostrar.')}</td></tr>`;
   },
   exportCourseSummaryPDF() { this.openExportModal('course_summary_report'); },
@@ -1036,19 +1103,68 @@ window.app = {
     icons();
   },
   admin_users() {
-    const sinCorreo = State.users.filter(u => !u.email).length;
-    const pendientes = State.users.filter(u => u.email && !u.accesoNotificado && u.active !== false).length;
-    return `<section class="panel"><div class="panel__head"><h2>Directorio de personal</h2><div class="row-actions">
+    const vigentes = State.users.filter(u => !u.eliminado);
+    const bajas = State.users.filter(u => u.eliminado);
+    const sinCorreo = vigentes.filter(u => !u.email).length;
+    const pendientes = vigentes.filter(u => u.email && !u.accesoNotificado && u.active !== false).length;
+    const solo = !!State.variables.soloGoogle;
+    const listos = vigentes.filter(u => u.active !== false && u.email && u.accesoNotificado).length;
+    const activos = vigentes.filter(u => u.active !== false).length;
+    return `<section class="panel google-mode" data-on="${solo}">
+        <div class="panel__head"><h2>${ico('shield-check')}Ingreso solo con cuenta de Google</h2>${solo ? chip('Activo', 'conv', 'check') : chip('Desactivado', 'neutral')}</div>
+        <p class="muted">${solo ? `La portada muestra solo el botón de Google y el servidor rechaza los ingresos con clave. Solo entran cuentas @${this.domain()} registradas en un funcionario vigente.` : 'Hoy se puede ingresar con perfil y clave, o con Google. Antes de activar el modo solo Google, siga estos pasos en orden:'}</p>
+        ${solo ? '' : `<ol class="steps">
+          <li>Registre el correo @${this.domain()} de cada funcionario (columna "Correo institucional" o "Sugerir correos"). Faltan <strong>${sinCorreo}</strong>.</li>
+          <li>Envíe el aviso de acceso, que explica cómo ingresar con Google. Faltan <strong>${pendientes}</strong> con correo y sin aviso.</li>
+          <li>Active el modo solo Google. Listos: <strong>${listos} de ${activos}</strong> funcionarios activos.</li>
+        </ol>`}
+        <div class="row-actions">${solo
+          ? `<button class="btn" onclick="app.setGoogleOnly(false)">${ico('key-round')}Volver a permitir ingreso con clave</button>`
+          : `<button class="btn btn--primary" onclick="app.setGoogleOnly(true)">${ico('shield-check')}Activar ingreso solo con Google</button>`}</div>
+      </section>
+      <section class="panel"><div class="panel__head"><h2>Directorio de personal</h2><div class="row-actions">
         <button class="btn" ${sinCorreo ? '' : 'disabled'} onclick="app.suggestAllEmails()">${ico('at-sign')}Sugerir correos (${sinCorreo})</button>
         <button class="btn" ${pendientes ? '' : 'disabled'} onclick="app.notifyPending()">${ico('send')}Enviar avisos pendientes (${pendientes})</button>
         <button class="btn btn--primary" onclick="app.openUserModal()">${ico('user-plus')}Nuevo funcionario</button></div></div>
       <p class="muted small">El correo institucional permite ingresar con la cuenta de Google @${this.domain()}. Edítelo directamente en la tabla: se guarda al salir del campo.</p>
       <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Perfil</th><th>Correo institucional</th><th>Estado</th><th class="t-actions">Acciones</th></tr></thead><tbody>
-      ${State.users.map(u => `<tr><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, ROLE_TONE[u.role] || 'neutral')}</td>
+      ${vigentes.map(u => `<tr><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, ROLE_TONE[u.role] || 'neutral')}</td>
         <td><input type="email" class="input input--email" aria-label="Correo de ${esc(u.name)}" value="${esc(u.email || '')}" placeholder="nombre.apellido@${this.domain()}" onchange="app.saveUserEmail(${jsq(u.id)}, this)"><span class="cell-sub">${u.accesoNotificado ? `Aviso enviado el ${fmtDate(u.accesoNotificado)}` : 'Sin aviso enviado'}</span></td>
         <td>${u.active === false ? chip('Inactivo', 'neutral') : chip('Activo', 'conv')}</td>
-        <td class="t-actions"><div class="row-actions"><button class="icon-btn" aria-label="Enviar aviso de acceso" title="Enviar aviso de acceso" onclick="app.openNotifyModal(${jsq(u.id)})">${ico('send')}</button><button class="icon-btn" aria-label="Cambiar clave" title="Cambiar clave" onclick="app.resetUserPassword(${jsq(u.id)})">${ico('key')}</button><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.openUserModal(${jsq(u.id)})">${ico('edit')}</button><button class="icon-btn icon-btn--danger" aria-label="Eliminar" title="Eliminar" onclick="app.deleteUser(${jsq(u.id)})">${ico('trash-2')}</button></div></td></tr>`).join('')}
-      </tbody></table></div></section>`;
+        <td class="t-actions"><div class="row-actions"><button class="icon-btn" aria-label="Enviar aviso de acceso" title="Enviar aviso de acceso" onclick="app.openNotifyModal(${jsq(u.id)})">${ico('send')}</button><button class="icon-btn" aria-label="Cambiar clave" title="Cambiar clave" onclick="app.resetUserPassword(${jsq(u.id)})">${ico('key')}</button><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.openUserModal(${jsq(u.id)})">${ico('edit')}</button><button class="icon-btn icon-btn--danger" aria-label="Dar de baja" title="Dar de baja (sus registros se conservan)" onclick="app.deleteUser(${jsq(u.id)})">${ico('user-x')}</button></div></td></tr>`).join('')}
+      </tbody></table></div></section>
+      ${bajas.length ? `<section class="panel">
+        <div class="panel__head"><h2>${ico('archive')}Funcionarios dados de baja (${bajas.length})</h2></div>
+        <p class="muted small">No pueden ingresar. Todo lo que registraron (intervenciones, observaciones, planes, respaldos) se conserva con su nombre.</p>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Perfil</th><th>Correo</th><th>Fecha de baja</th><th class="t-actions">Acciones</th></tr></thead><tbody>
+        ${bajas.map(u => `<tr class="is-muted"><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, 'neutral')}</td><td class="small">${esc(u.email || '-')}</td><td class="num small">${fmtDate(u.fechaBaja) || '-'}</td>
+          <td class="t-actions"><button class="btn btn--sm" onclick="app.restoreUser(${jsq(u.id)})">${ico('user-check')}Reactivar</button></td></tr>`).join('')}
+        </tbody></table></div></section>` : ''}`;
+  },
+  setGoogleOnly(on) {
+    const vigentes = State.users.filter(u => !u.eliminado && u.active !== false);
+    const faltan = vigentes.filter(u => !u.email || !u.accesoNotificado);
+    if (on && !String(State.currentUser.email || '').toLowerCase().endsWith('@' + this.domain())) return toast(`Primero registre su propio correo @${this.domain()} en su perfil.`, 'error');
+    ui.confirm({
+      title: on ? 'Activar ingreso solo con Google' : 'Permitir ingreso con clave', icon: on ? 'shield-check' : 'key-round', tone: on ? 'conv' : 'warn', okText: on ? 'Sí, activar' : 'Sí, permitir claves',
+      msg: on
+        ? `Desde ahora solo se podrá ingresar con una cuenta de Google @${this.domain()} registrada en un funcionario. Los perfiles y las claves desaparecen de la portada.${faltan.length ? `<br><br><strong>Atención:</strong> ${faltan.length} funcionario(s) activo(s) no tienen correo o no han recibido el aviso, y no podrán ingresar: ${faltan.slice(0, 12).map(u => esc(u.name)).join(', ')}${faltan.length > 12 ? '...' : ''}.` : ''}`
+        : 'La portada volverá a mostrar los perfiles para ingresar con nombre y clave, además del botón de Google.',
+      action: async () => {
+        await DB.saveVars({ soloGoogle: on });
+        State.loginOptions = { ...State.loginOptions, soloGoogle: on };
+        toast(on ? 'Ingreso solo con Google activado' : 'Ingreso con clave permitido nuevamente');
+        this.renderAdmin();
+      }
+    });
+  },
+  restoreUser(id) {
+    const u = State.users.find(x => sameId(x.id, id));
+    ui.confirm({ title: 'Reactivar funcionario', icon: 'user-check', tone: 'conv', okText: 'Sí, reactivar', msg: `<strong>${esc(u?.name)}</strong> podrá volver a ingresar con sus mismos permisos y cursos.`, action: async () => {
+      await DB.patch('users', id, { eliminado: false, active: true, fechaBaja: '' });
+      toast('Funcionario reactivado');
+      this.renderAdmin();
+    } });
   },
   admin_students() {
     return `<section class="panel panel--narrow">
@@ -1198,7 +1314,12 @@ window.app = {
   },
   deleteUser(id) {
     if (sameId(id, State.currentUser.id)) return toast('No puede eliminar su propia cuenta', 'error');
-    ui.confirm({ title: 'Eliminar funcionario', icon: 'user-x', msg: '¿Está seguro de eliminar a este funcionario del sistema?', action: async () => { await DB.remove('users', id); toast('Funcionario eliminado'); this.renderAdmin(); } });
+    const u = State.users.find(x => sameId(x.id, id));
+    ui.confirm({ title: 'Dar de baja al funcionario', icon: 'user-x', okText: 'Sí, dar de baja', msg: `<strong>${esc(u?.name)}</strong> ya no podrá ingresar al sistema. Todo lo que registró (intervenciones, observaciones, planes, respaldos) se conserva con su nombre. Podrá reactivarlo más adelante.`, action: async () => {
+      await DB.patch('users', id, { eliminado: true, active: false, fechaBaja: today() });
+      toast('Funcionario dado de baja. Sus registros se conservan.');
+      this.renderAdmin();
+    } });
   }
 };
 
