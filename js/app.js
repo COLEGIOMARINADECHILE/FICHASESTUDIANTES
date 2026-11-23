@@ -96,9 +96,13 @@ window.app = {
     this.loginImageList().forEach(src => {
       const img = new Image();
       img.onload = () => {
+        // Dos capas: la imagen completa (sin recortes) sobre una versión difuminada que rellena los bordes
+        const url = `url("${String(src).replace(/"/g, '%22')}")`;
         const layer = document.createElement('div');
         layer.className = 'login__slide';
-        layer.style.backgroundImage = `url("${String(src).replace(/"/g, '%22')}")`;
+        layer.innerHTML = '<div class="login__slide-fill"></div><div class="login__slide-img"></div>';
+        layer.firstChild.style.backgroundImage = url;
+        layer.lastChild.style.backgroundImage = url;
         bg.appendChild(layer);
         ok.push(layer);
         if (ok.length === 1) show(0);
@@ -328,7 +332,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -365,7 +369,7 @@ window.app = {
     const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']]] : [
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
-      ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
+      ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail', 'traspaso']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
       ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), []],
@@ -438,6 +442,7 @@ window.app = {
   // ---------------- PANEL PRINCIPAL ----------------
   renderDashboard() {
     el('dash-school-days').value = State.variables.diasTotalesClases || 180;
+    el('dashboard-tasks').innerHTML = this.tasksHtml();
     const studs = this.getStudents().filter(s => State.showWithdrawn || s.status !== 'blocked');
     const tot = { conv: 0, pie: 0, proto: 0, obs: 0, enf: 0 };
     const cy = Object.fromEntries(Object.keys(CYCLES).map(k => [k, 0]));
@@ -529,6 +534,8 @@ window.app = {
     el('students-actions').innerHTML = [
       course && canImport ? `<button class="btn" onclick="app.openAttendanceImport()">${ico('file-spreadsheet')}Cargar inasistencias</button>` : '',
       canImport ? `<button class="btn" onclick="app.openGradesImport()">${ico('file-badge')}Cargar notas (PDF)</button>` : '',
+      this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('puzzle')}Cargar planes PIE</button>` : '',
+      course ? `<button class="btn" onclick="app.openTraspaso(${jsq(course)})">${ico('file-stack')}Ficha de traspaso</button>` : '',
       course ? `<button class="btn" onclick="app.openExportModal('course_full_report')">${ico('file-text')}Reporte del curso</button>` : '',
       course ? `<button class="btn" onclick="app.exportActivePlansPDF()">${ico('file-output')}Reporte planes</button>` : '',
       course ? `<button class="btn" onclick="app.openCoursePlans()">${ico('clipboard-list')}Planes del curso</button>` : '',
@@ -1041,7 +1048,17 @@ window.app = {
           ${(e.acciones || []).length ? `<ul class="bullets">${e.acciones.map(a => `<li>${esc(a.descripcion)}</li>`).join('')}</ul>` : ''}</div>`).join('')}</div>`
           : '<p class="muted">No se encontraron acciones o estrategias explícitas en este reporte.</p>'}
       </article>`).join('');
-    this.panel(`${this.panelHead('Estrategias de inclusión (PIE)', 'network', '<span class="muted small">Datos sincronizados desde el módulo de inclusión</span>')}<div class="stack">${html || empty('network', 'No hay planes ni estrategias PIE sincronizadas para este estudiante.', 'pie')}</div>`);
+    // Documentos PIE (informes, derivaciones, evaluaciones) agrupados por año
+    const docs = this.getStudentEvidences(State.selectedStudentId).filter(e => e.area === 'PIE');
+    const porAnio = {};
+    docs.forEach(d => { const y = d.anio || String(d.date || '').slice(0, 4) || 'Sin año'; (porAnio[y] = porAnio[y] || []).push(d); });
+    const docsHtml = Object.keys(porAnio).sort().reverse().map(y => `
+      <div class="pie-year"><h3>${esc(y)}</h3><div class="table-wrap"><table class="table table--dense"><thead><tr><th>Tipo</th><th>Documento</th><th>Fecha</th><th class="t-actions">Abrir</th></tr></thead><tbody>
+      ${porAnio[y].map(d => `<tr><td>${chip(d.type || 'Documento PIE', 'pie')}</td><td><span class="cell-title">${esc(d.fileName)}</span><span class="cell-sub">${esc(d.description || '')}</span></td><td class="num small">${fmtDate(d.date)}</td><td class="t-actions"><button class="icon-btn" aria-label="Abrir ${esc(d.fileName)}" title="Abrir" onclick="app.openEvidence(${jsq(d.id)})">${ico('external-link')}</button></td></tr>`).join('')}
+      </tbody></table></div></div>`).join('');
+    const acciones = this.canImportPie() ? `<div class="row-actions"><button class="btn btn--sm" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes (Word)</button><button class="btn btn--sm" onclick="app.openDriveLink()">${ico('folder-sync')}Vincular carpeta de Drive</button></div>` : '';
+    this.panel(`${this.panelHead('Planes PIE', 'puzzle', acciones)}<div class="stack">${html || empty('network', 'No hay planes PIE cargados para este estudiante.', 'pie')}</div>
+      ${this.panelHead(`Documentos PIE (${docs.length})`, 'folder-open')}${docsHtml || empty('folder-open', 'No hay informes, derivaciones ni otros documentos PIE vinculados.', 'pie')}`);
   },
 
   renderCartas() {
@@ -1258,6 +1275,8 @@ window.app = {
       <div class="option-block"><h3>${ico('file-text')}Opción 1: subir PDF (sistema SIGE)</h3><p class="muted small">El sistema extrae automáticamente el RUN y el nombre.</p><input type="file" id="pdf-upload" class="file" accept="application/pdf" onchange="app.handlePDFUpload(event)"></div>
       <div class="option-block"><h3>${ico('clipboard-paste')}Opción 2: pegar desde Excel</h3><textarea id="excel-paste-data" class="input num" rows="4" placeholder="Pegue aquí los datos copiados desde Excel..."></textarea><button class="btn" onclick="app.handleExcelPaste()">${ico('check')}Procesar texto pegado</button></div>
       <div class="option-block"><h3>${ico('file-spreadsheet')}Opción 3: inasistencias por mes (Excel del curso)</h3><p class="muted small">Suba el informe de inasistencias por curso. Se detecta el curso, se leen marzo a diciembre y el total, y se muestra el resultado antes de guardar. El porcentaje no se utiliza.</p><button class="btn" onclick="app.openAttendanceImport()">${ico('upload')}Seleccionar Excel de inasistencias</button></div>
+      <div class="option-block"><h3>${ico('puzzle')}Opción 4: planes PIE en Word (varios a la vez)</h3><p class="muted small">PAI y PACI en .docx. Se identifica a cada estudiante por RUN o nombre, se guardan en Drive y se agregan a su ficha con sus ámbitos de intervención.</p><button class="btn" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes PIE</button></div>
+      <div class="option-block"><h3>${ico('folder-sync')}Opción 5: documentos por estudiante desde Google Drive</h3><p class="muted small">Informes, derivaciones, evaluaciones y certificados. Se vinculan los archivos de una carpeta de Drive a la ficha de cada estudiante según el nombre de su carpeta, sin volver a subirlos.</p><button class="btn" onclick="app.openDriveLink()">${ico('link')}Vincular carpeta de Drive</button></div>
     </section>`;
   },
   admin_variables() {

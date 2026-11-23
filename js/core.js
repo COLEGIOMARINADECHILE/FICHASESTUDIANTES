@@ -91,7 +91,7 @@ const txtNormativoPlano = () => `MEDIDA EN CASO DE INCUMPLIMIENTO:\n${TXT_INCUMP
 window.State = {
   loading: true, currentUser: null, showWithdrawn: false, demo: false, lastSync: 0,
   users: [], rawStudents: [], rawInterventions: [], rawNursings: [], rawObservations: [], rawCoursesDB: [],
-  rawInclusionReports: [], knowledgeDocs: [], coursePlans: [], studentPlans: [], rawEvidences: [],
+  rawInclusionReports: [], knowledgeDocs: [], coursePlans: [], studentPlans: [], rawEvidences: [], traspasos: [],
   loginOptions: { roles: INIT_VARS.roles, users: [] },
   variables: { ...INIT_VARS },
   currentView: 'dashboard', selectedStudentId: null, detailTab: 'entrevistas', filterCourse: '',
@@ -217,7 +217,7 @@ const API = {
 };
 
 // Colección del servidor → arreglo en State
-const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences' };
+const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences', traspasos: 'traspasos' };
 
 const DB = {
   async load() {
@@ -310,6 +310,7 @@ const Demo = {
       case 'remove': this.db[col] = this.db[col].filter(x => !sameId(x.id, p.id)); return { removed: 1 };
       case 'import': p.docs.forEach(d => this.handle('save', { col, id: d.id, data: d })); return { saved: p.docs.length };
       case 'changePassword': case 'logout': case 'setSecret': return {};
+      case 'notificarAsignacion': return { enviado: (this.db.users.find(x => sameId(x.id, p.userId)) || {}).email || 'sin correo' };
       case 'getAudit': return { rows: [...(this.audit || [])].reverse(), total: (this.audit || []).length };
       case 'notificarAcceso': { const u = this.db.users.find(x => sameId(x.id, p.userId)); u.accesoNotificado = today(); return { enviado: u.email, fecha: u.accesoNotificado, quedan: 99 }; }
       case 'registrarEvento': {

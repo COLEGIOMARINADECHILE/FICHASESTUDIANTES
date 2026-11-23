@@ -264,6 +264,36 @@ Object.assign(app, {
           ${docTable(['N°', 'Estudiante', 'Asist.', 'Inasist.', 'Atrasos', 'Prot.', 'Conv.', 'PIE', 'Obs.', 'Enf.', 'Planes'], studs.map((st, i) => { const c = app.countRecords(st); return [i + 1, `<strong>${esc(app.formatStudentName(st.name))}</strong>`, st.asistencia.alerta ? `<strong class="doc-alert">${st.asistencia.real}%</strong>` : `${st.asistencia.real}%`, st.asistencia.inasistencias, st.asistencia.atrasos, c.proto, c.conv, c.pie, c.obs, c.enf, State.studentPlans.filter(p => sameId(p.studentId, st.id)).length]; }), 'No hay estudiantes registrados en este curso.', 'doc-table--center')}`
       };
     },
+    traspaso() {
+      const d = State.trDraft || {}, a = State.trData || app.computeTraspaso(State.traspasoCourse, State.traspasoAnio);
+      const n = s => esc(app.formatStudentName(s.name));
+      const graficos = (app._trCharts || []).map(c => { try { return `<img src="${c.toBase64Image('image/png', 1)}" style="width:32%;display:inline-block;margin-right:1%">`; } catch (e) { return ''; } }).join('');
+      const listaSimple = (arr, fn) => arr.length ? `<ul>${arr.map(x => `<li>${fn(x)}</li>`).join('')}</ul>` : '<p class="doc-muted">Sin registros.</p>';
+      const auto = {
+        matricula: `${docKv([[['Matrícula inicial', a.matriculaInicial], ['Matrícula actual', a.activos.length]], [['Se incorporaron', a.incorporados.length], ['Se retiraron', a.retirados.length]]])}
+          ${a.incorporados.length ? docTable(['Incorporado', 'Fecha'], a.incorporados.map(s => [n(s), fmtDate(s.fechaIngreso)]), '') : ''}
+          ${a.retirados.length ? docTable(['Retirado', 'Fecha', 'Motivo'], a.retirados.map(s => [n(s), fmtDate(s.fechaRetiro), esc(s.motivoRetiro || '')]), '') : ''}`,
+        rendimiento: a.rendimiento.length ? docTable(['Asignatura', 'Bajo 4,0', '%', '4,0 a 5,9', '%', '6,0 o más', '%', 'Promedio'], a.rendimiento.map(r => { const p = v => r.n ? Math.round(v / r.n * 100) : 0; return [esc(r.nombre), r.bajo, p(r.bajo), r.medio, p(r.medio), r.alto, p(r.alto), `<strong>${String(r.promedio).replace('.', ',')}</strong>`]; }), '', 'doc-table--center') : '<p class="doc-muted">Sin notas cargadas.</p>',
+        riesgo: listaSimple(a.riesgo, x => `${n(x.s)}: ${esc(x.motivos.join(', '))}`),
+        asistencia: listaSimple(a.asistencia, s => `${n(s)}: ${s.asistencia.real} % (${s.asistencia.inasistencias} inasistencias)`),
+        disciplina: listaSimple(a.disciplina, x => `${n(x.s)}: ${[x.prot && `${x.prot} protocolo(s)`, x.graves && `${x.graves} falta(s) grave(s)`, x.anot && `${x.anot} anotación(es) negativa(s)`].filter(Boolean).join(', ')}`),
+        socioemocional: listaSimple(a.socio, x => `${n(x.s)}: ${esc([x.planes.join(', '), x.apoyos && `${x.apoyos} apoyo(s)`].filter(Boolean).join('. '))}`),
+        pie: listaSimple(a.pie, x => `${n(x.s)}: ${esc(x.tipos.join(', ') || 'Documentos PIE')} (${x.docs} documento(s))`),
+        ritmo: `<p><strong>Evaluación:</strong> ${esc((RITMO_OPCIONES.find(o => o[0] === d.ritmo) || [, 'Sin definir'])[1])}</p>`,
+        talleres: listaSimple(a.talleres, t => esc(t))
+      };
+      const an = d.analisis;
+      const analisis = an ? `<div class="doc-avoid">${docH('Análisis para el equipo del próximo año (IA)')}<div class="doc-box doc-pre">${esc(an.resumen || '')}</div>
+        ${[['Fortalezas', an.fortalezas], ['Desafíos y alertas', an.desafios], ['Recomendaciones para planificar', an.recomendaciones], ['Apoyos sugeridos', an.apoyos_sugeridos]].filter(([, l]) => (l || []).length).map(([t, l]) => `<p><strong>${t}:</strong></p><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}
+        ${(an.focos_por_asignatura || []).length ? docTable(['Asignatura', 'Foco sugerido'], an.focos_por_asignatura.map(f => [esc(f.asignatura), esc(f.sugerencia)]), '') : ''}</div>` : '';
+      return {
+        filename: `Ficha_Traspaso_${String(State.traspasoCourse).replace(/\s+/g, '_')}_${State.traspasoAnio}.pdf`, title: 'FICHA DE CARACTERIZACIÓN Y TRASPASO',
+        body: `${docKv([[['Curso', esc(State.traspasoCourse)], ['Año', esc(State.traspasoAnio)]], [['Profesor(a) jefe', esc(app.profJefeOf(State.traspasoCourse) || '-')], ['Profesor(a) especialista', esc(d.profesorEspecialista || '-')]], [['Asistencia promedio', `${a.promAsis}%`], ['Promedio del curso', a.promCurso]]])}
+          ${graficos ? `<div class="doc-avoid" style="margin:8px 0 14px">${graficos}</div>` : ''}
+          ${TRASPASO_SECCIONES.map(([k, t]) => `<div class="doc-avoid">${docH(t)}${auto[k] || ''}${d.secciones?.[k]?.texto ? `<div class="doc-box doc-pre">${esc(d.secciones[k].texto)}</div>` : ''}</div>`).join('')}
+          ${analisis}`
+      };
+    },
     course_active_plans() {
       const course = State.filterCourse || 'Todos los cursos';
       const planes = State.studentPlans.filter(p => !State.filterCourse || p.course === State.filterCourse);

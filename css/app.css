@@ -683,6 +683,22 @@ html.is-exporting, html.is-exporting body { background: var(--doc-paper) !import
 .access-request { display: flex; gap: var(--space-xs); align-items: flex-start; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-card); background: var(--tone-warn-soft); color: var(--color-ink); }
 .access-request .ico { color: var(--tone-warn-ink); margin-top: 0.2rem; }
 
+/* ============ FICHA DE TRASPASO Y PIE ============ */
+.tr-list { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: var(--text-sm); }
+.tr-list li { line-height: 1.45; }
+.tr-auto { display: grid; gap: var(--space-sm); padding: var(--space-md); border-radius: var(--radius-card); background: var(--color-paper); box-shadow: inset 0 0 0 1px var(--color-rule); }
+.tr-auto h4 { font-size: var(--text-sm); margin-bottom: var(--space-2xs); }
+.tr-section[data-done="true"] { box-shadow: var(--shadow-card), inset 4px 0 0 var(--tone-conv-ink); }
+.tr-assign { flex: 1; max-width: 34rem; }
+.tr-ai { border: 1px solid color-mix(in oklab, var(--tone-plan-ink) 30%, transparent); background: linear-gradient(180deg, var(--tone-plan-soft), var(--color-paper-2) 40%); }
+.tr-ai__summary { font-size: var(--text-md); line-height: 1.6; color: var(--color-ink); }
+.cell__text { font-weight: 600; color: var(--color-heading); }
+.entry__cells .cell .input { min-height: 2.25rem; }
+.chart--sm { height: 15rem; }
+.tasks { border-left: 5px solid var(--color-accent); }
+.pie-year { display: grid; gap: var(--space-xs); }
+.pie-year h3 { color: var(--tone-pie-ink); }
+
 /* ============ CONTADORES CLICABLES ============ */
 .chip--btn { border: 0; cursor: pointer; font: inherit; font-size: var(--text-xs); font-weight: 600; transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out); }
 .chip--btn:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px currentColor; }
@@ -819,7 +835,15 @@ h1, h2 { color: var(--color-heading); }
   opacity: 0; transform: scale(1.02);
   transition: opacity 1.4s var(--ease-out), transform 9s linear;
 }
-.login__slide.is-on { opacity: 1; transform: scale(1.08); }
+.login__slide.is-on { opacity: 1; transform: scale(1.03); }
+/* La fotografía se ve completa (contain); el fondo difuminado rellena los costados sin cortar cabezas */
+.login__slide-fill, .login__slide-img { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; }
+.login__slide-fill { background-size: cover; filter: blur(28px) saturate(1.1); transform: scale(1.15); opacity: 0.85; }
+.login__slide-img { background-size: contain; }
+/* Tarjeta de ingreso más compacta */
+.login--v2 .login__form { max-width: 25rem; padding: var(--space-lg) var(--space-lg); gap: var(--space-sm); border-radius: 18px; }
+.login--v2 .login__h { font-size: var(--text-xl); }
+.login--v2 .login__lede { font-size: var(--text-sm); }
 .login__veil {
   position: absolute; inset: 0; z-index: -1;
   background:
