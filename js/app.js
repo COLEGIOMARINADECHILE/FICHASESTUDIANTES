@@ -233,7 +233,7 @@ window.app = {
   permissionSummary(u) {
     const fn = u.functions || [];
     if (fn.includes('acceso_total')) return ['Acceso total al sistema'];
-    const corto = { ver_fichas: 'ver fichas de estudiantes', agregar_entrevistas: 'registrar intervenciones y observaciones', editar_fichas: 'editar y actualizar fichas', gestionar_protocolos: 'gestionar protocolos confidenciales', registro_rapido: 'registrar anotaciones, atrasos e inasistencias', ver_reportes: 'imprimir su reporte de gestión', ver_todos_reportes: 'imprimir reportes de todos', gestionar_usuarios: 'gestionar funcionarios y alumnos', configurar_sistema: 'configurar el sistema', ver_top_intervenciones: 'ver alertas preventivas', ver_resumen_cursos: 'ver resumen por cursos', ver_bitacora: 'ver la bitácora' };
+    const corto = { ver_fichas: 'ver fichas de estudiantes', agregar_entrevistas: 'registrar intervenciones y observaciones', editar_fichas: 'editar y actualizar fichas', gestionar_protocolos: 'gestionar protocolos confidenciales', registro_rapido: 'registrar anotaciones, atrasos, inasistencias y entrevistas', ver_reportes: 'imprimir su reporte de gestión', ver_todos_reportes: 'imprimir reportes de todos', gestionar_usuarios: 'gestionar funcionarios y alumnos', configurar_sistema: 'configurar el sistema', ver_top_intervenciones: 'ver alertas preventivas', ver_resumen_cursos: 'ver resumen por cursos', ver_bitacora: 'ver la bitácora' };
     return fn.map(f => corto[f]).filter(Boolean);
   },
   renderSessionBanner() {
@@ -261,7 +261,7 @@ window.app = {
     icons();
   },
 
-  /** Paradocente: solo registra anotaciones, atrasos e inasistencias; no ve fichas. */
+  /** Paradocente: solo registra anotaciones, atrasos, inasistencias y entrevistas; no ve fichas. */
   isQuickOnly() { return hasAccess('registro_rapido') && !hasAccess('ver_fichas') && !hasAccess('editar_fichas') && !hasAccess('agregar_entrevistas'); },
 
   // Ingreso con cuenta institucional de Google (se activa cuando el servidor tiene GOOGLE_CLIENT_ID)
@@ -1358,17 +1358,38 @@ window.app = {
       <div class="grid-2">
         ${fieldHtml('Nombre completo', `<input class="input" value="${esc(f.name)}" oninput="State.tempUserForm.name=this.value">`)}
         ${fieldHtml('Cargo específico (opcional)', `<input class="input" placeholder="Encargada de Convivencia Escolar" value="${esc(f.customRole)}" oninput="State.tempUserForm.customRole=this.value">`)}
-        ${fieldHtml('Perfil de permisos', `<select class="input" onchange="State.tempUserForm.role=this.value">${options(State.variables.roles, f.role)}</select>`)}
+        ${fieldHtml('Perfil de permisos', `<select class="input" onchange="app.onUserRoleChange(this.value)">${options(State.variables.roles, f.role)}</select>`)}
         ${fieldHtml(State.editingUserId ? 'Nueva clave (vacío = sin cambios)' : 'Clave inicial (vacío = se genera sola)', `<input class="input" type="text" autocomplete="off" value="${esc(f.password)}" oninput="State.tempUserForm.password=this.value">`)}
         ${fieldHtml(`Correo institucional (@${this.domain()})`, `<div class="row-field"><input class="input" type="email" id="user-email" value="${esc(f.email)}" placeholder="nombre.apellido@${this.domain()}" oninput="State.tempUserForm.email=this.value.trim().toLowerCase()"><button type="button" class="btn btn--sm" onclick="State.tempUserForm.email=app.suggestEmail(State.tempUserForm.name); el('user-email').value=State.tempUserForm.email">Sugerir</button></div>`, 'span-2')}
       </div>
       <label class="check"><input type="checkbox" ${f.active ? 'checked' : ''} onchange="State.tempUserForm.active=this.checked"><span>Cuenta activa (permitir ingreso)</span></label>
+      ${this.paradocenteHint(f)}
       <h3>Permisos de sistema</h3>
       <label class="check check--strong"><input type="checkbox" ${total ? 'checked' : ''} onchange="app.toggleFunc('acceso_total')"><span>Administrador total (acceso sin restricciones)</span></label>
       ${total ? '' : `<div class="grid-2 checks">${State.variables.functionsList.map(fn => `<label class="check"><input type="checkbox" ${f.functions.includes(fn) ? 'checked' : ''} onchange="app.toggleFunc('${fn}')"><span>${esc(FUNCTION_LABELS[fn] || fn.replace(/_/g, ' '))}</span></label>`).join('')}</div>`}
       <h3>Cursos asignados</h3>
       <p class="muted small">Si no selecciona ninguno, el funcionario tendrá acceso a todos los estudiantes.</p>
       <div class="segs segs--wrap">${ALL_COURSES.map(c => `<button type="button" class="seg" aria-pressed="${f.assignedCourses.includes(c)}" onclick="app.toggleCourse(${jsq(c)})">${esc(c)}</button>`).join('')}</div>`;
+  },
+  /** Perfil de asistente de la educación: solo registro rápido (anotaciones, atrasos, inasistencias y entrevistas). */
+  esParadocente(f) { return /asistente|paradocente|inspector/i.test(`${f.role || ''} ${f.customRole || ''}`); },
+  soloRegistroRapido(f) { return f.functions.length === 1 && f.functions[0] === 'registro_rapido'; },
+  paradocenteHint(f) {
+    if (!this.esParadocente(f)) return '';
+    const ok = this.soloRegistroRapido(f);
+    return `<div class="subpanel" data-tone="${ok ? 'conv' : 'warn'}">
+      <h4>${ico('hand-helping')}Asistente de la educación (paradocente)</h4>
+      <p class="small">Con el perfil recomendado solo puede <strong>registrar anotaciones, atrasos, inasistencias y entrevistas</strong> desde "Registro rápido". Ve solo la nómina de estudiantes (nombre, RUN y curso) de sus cursos; no accede a fichas, notas, informes, PIE ni a otra información.</p>
+      ${ok ? chip('Perfil aplicado: solo registro rápido', 'conv', 'check') : `<div class="row-actions">${chip(f.functions.includes('acceso_total') ? 'Tiene acceso total' : 'Tiene permisos adicionales', 'warn', 'alert-triangle')}<button type="button" class="btn btn--sm btn--primary" onclick="app.applyParadocente()">${ico('shield-check')}Aplicar perfil de solo registro rápido</button></div>`}
+    </div>`;
+  },
+  applyParadocente() { State.tempUserForm.functions = ['registro_rapido']; this.renderUserModalContent(); toast('Perfil aplicado: solo registro rápido'); },
+  onUserRoleChange(role) {
+    const f = State.tempUserForm;
+    f.role = role;
+    // A un funcionario nuevo de este perfil se le aplica de inmediato el acceso restringido
+    if (!State.editingUserId && this.esParadocente(f)) f.functions = ['registro_rapido'];
+    this.renderUserModalContent();
   },
   toggleFunc(fn) {
     const f = State.tempUserForm;

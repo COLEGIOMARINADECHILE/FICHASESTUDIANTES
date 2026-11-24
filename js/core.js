@@ -40,7 +40,7 @@ const FUNCTION_LABELS = {
   gestionar_protocolos: 'Gestión confidencial de protocolos',
   ver_top_intervenciones: 'Ver alertas preventivas',
   ver_resumen_cursos: 'Ver resumen por cursos',
-  registro_rapido: 'Registro rápido: anotaciones, atrasos e inasistencias (paradocentes; sin ver fichas)',
+  registro_rapido: 'Registro rápido: anotaciones, atrasos, inasistencias y entrevistas (asistentes de la educación; sin ver fichas)',
   ver_bitacora: 'Ver la bitácora de acciones de los funcionarios'
 };
 
@@ -332,7 +332,8 @@ const Demo = {
       case 'notificarAcceso': { const u = this.db.users.find(x => sameId(x.id, p.userId)); u.accesoNotificado = today(); return { enviado: u.email, fecha: u.accesoNotificado, quedan: 99 }; }
       case 'registrarEvento': {
         const s = this.db.students.find(x => sameId(x.id, p.studentId));
-        if (p.kind === 'anotacion') this.db.interventions.push({ id: Date.now(), studentId: s.id, studentName: s.name, date: p.date, type: 'Acción Estudiantil (Anotación)', professional: State.currentUser.name, professionalId: State.currentUser.id, background: `Anotación ${String(p.tipo).toLowerCase()}: ${p.detail}`, anotacion: { tipo: p.tipo }, isPrivate: false, sharedWith: [], agreements: [] });
+        if (p.kind === 'entrevista') this.db.interventions.push({ id: Date.now(), studentId: s.id, studentName: s.name, date: p.date, type: p.tipoEntrevista, professional: State.currentUser.name, professionalId: State.currentUser.id, background: [p.participantes && `Participantes: ${p.participantes}`, `Motivo: ${p.motivo}`, p.desarrollo && `Desarrollo: ${p.desarrollo}`, p.seguimiento && 'Se solicita seguimiento del equipo de convivencia escolar.'].filter(Boolean).join('\n\n'), agreements: (p.acuerdos || []).map(t => ({ text: t, progress: 'No Iniciado' })), isPrivate: false, sharedWith: [], registroRapido: true, solicitaSeguimiento: !!p.seguimiento });
+        else if (p.kind === 'anotacion') this.db.interventions.push({ id: Date.now(), studentId: s.id, studentName: s.name, date: p.date, type: 'Acción Estudiantil (Anotación)', professional: State.currentUser.name, professionalId: State.currentUser.id, background: `Anotación ${String(p.tipo).toLowerCase()}: ${p.detail}`, anotacion: { tipo: p.tipo }, isPrivate: false, sharedWith: [], agreements: [] });
         else { const f = p.kind === 'atraso' ? 'atrasos' : 'inasistencias'; s[f] = (parseInt(s[f]) || 0) + 1; s.registroAsistencia = [...(s.registroAsistencia || []), { fecha: p.date, tipo: p.kind, detalle: p.detail || '', por: State.currentUser.name }]; }
         return { ok: true };
       }

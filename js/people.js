@@ -347,8 +347,54 @@ ${b.tagline}`.trim();
             <button class="btn btn--sm" onclick="app.quickEvent(${jsq(s.id)}, 'anotacion')">${ico('pen-line')}Anotación</button>
             <button class="btn btn--sm" onclick="app.quickEvent(${jsq(s.id)}, 'atraso')">${ico('clock')}Atraso</button>
             <button class="btn btn--sm" onclick="app.quickEvent(${jsq(s.id)}, 'inasistencia')">${ico('calendar-x')}Inasistencia</button>
+            <button class="btn btn--sm btn--primary" onclick="app.quickInterview(${jsq(s.id)})">${ico('messages-square')}Entrevista</button>
           </div></td></tr>`).join('')}</tbody></table></div>` : empty('search-x', 'No se encontraron estudiantes.');
+    el('quick-list').insertAdjacentHTML('beforeend', this.quickLogHtml());
     icons();
+  },
+  /** Lo registrado en esta sesión (quien solo hace registro rápido no puede abrir las fichas para revisarlo). */
+  quickLogHtml() {
+    const log = State.quickLog || [];
+    if (!log.length) return '';
+    return `<section class="panel quick-log"><div class="panel__head"><h2>${ico('history')}Registrado en esta sesión (${log.length})</h2></div>
+      <ul class="ruled">${log.slice().reverse().map(x => `<li><span><strong>${esc(x.que)}</strong> · ${esc(x.nombre)} <span class="muted small">${esc(x.curso)} · ${fmtDate(x.fecha)} · ${esc(x.hora)}</span></span>${chip('Guardado', 'conv', 'check')}</li>`).join('')}</ul>
+      <p class="muted small">Esta lista se borra al cerrar sesión. Los registros quedan guardados en la ficha de cada estudiante.</p></section>`;
+  },
+  logQuick(s, que) {
+    (State.quickLog = State.quickLog || []).push({ que, nombre: this.clean(s.name), curso: this.courseNameOf(s), fecha: today(), hora: new Date().toTimeString().slice(0, 5) });
+    if (State.currentView === 'quick') this.renderQuickList();
+  },
+  /** Entrevista rápida: un formulario breve que queda en la ficha del estudiante. */
+  quickInterview(studentId) {
+    const s = State.rawStudents.find(x => sameId(x.id, studentId));
+    if (!s) return;
+    const tipos = (State.variables.interviewTypes || []).filter(t => t !== PROTOCOLO && !/protocolo|carta|anotaci/i.test(t));
+    const lista = tipos.length ? tipos : ['Entrevista Estudiante', 'Entrevista Apoderado', 'Entrevista Estudiante y Apoderado'];
+    const soloRapido = this.isQuickOnly();
+    ui.modal({
+      title: 'Registrar entrevista', icon: 'messages-square', tone: 'conv', size: 'md', okText: 'Guardar entrevista',
+      body: `<div class="stack">
+        <p class="modal__msg"><strong>${esc(this.clean(s.name))}</strong>, ${esc(this.courseNameOf(s))}</p>
+        <div class="grid-2">
+          ${fieldHtml('Fecha', `<input type="date" id="qi-date" class="input" value="${today()}">`)}
+          ${fieldHtml('Tipo de entrevista', `<select id="qi-tipo" class="input">${options(lista.map(t => [t, t]), lista.find(t => /estudiante/i.test(t)) || lista[0])}</select>`)}
+        </div>
+        ${fieldHtml('Participantes', '<input id="qi-part" class="input" placeholder="Estudiante, apoderada (madre), inspector...">')}
+        ${fieldHtml('Motivo de la entrevista', '<textarea id="qi-motivo" class="input" rows="2" placeholder="Por qué se realiza la entrevista"></textarea>')}
+        ${fieldHtml('Lo conversado', '<textarea id="qi-desarrollo" class="input" rows="4" placeholder="Describa de forma objetiva lo conversado y lo observado"></textarea>')}
+        ${fieldHtml('Acuerdos (uno por línea)', '<textarea id="qi-acuerdos" class="input" rows="3" placeholder="El estudiante llegará a la hora&#10;La apoderada enviará el justificativo"></textarea>')}
+        <label class="check"><input type="checkbox" id="qi-seg"><span>Solicitar seguimiento del equipo de convivencia escolar</span></label>
+        <p class="note">${ico('shield-check')}La entrevista queda en la ficha del estudiante con su nombre como responsable.${soloRapido ? ' Con su perfil de registro rápido no podrá volver a abrirla; si necesita corregirla, avise a convivencia escolar.' : ''} La información es confidencial (Ley N° 21.719).</p>
+      </div>`,
+      onOk: async () => {
+        const motivo = el('qi-motivo').value.trim();
+        if (!motivo) { toast('Escriba el motivo de la entrevista', 'error'); return false; }
+        await API.call('registrarEvento', { studentId: s.id, kind: 'entrevista', date: el('qi-date').value, tipoEntrevista: el('qi-tipo').value, participantes: el('qi-part').value.trim(), motivo, desarrollo: el('qi-desarrollo').value.trim(), acuerdos: el('qi-acuerdos').value.split('\n').map(x => x.trim()).filter(Boolean), seguimiento: el('qi-seg').checked });
+        toast(`Entrevista registrada para ${this.clean(s.name)}`);
+        this.logQuick(s, el('qi-tipo').value);
+        if (!soloRapido) DB.load().then(() => this.render()).catch(() => {});
+      }
+    });
   },
   quickEvent(studentId, kind) {
     const s = State.rawStudents.find(x => sameId(x.id, studentId));
@@ -370,6 +416,7 @@ ${b.tagline}`.trim();
         if (kind === 'anotacion' && !detail) { toast('Escriba el detalle de la anotación', 'error'); return false; }
         await API.call('registrarEvento', { studentId: s.id, kind, date: el('qe-date').value, detail, tipo: kind === 'anotacion' && el('qe-pos').getAttribute('aria-pressed') === 'true' ? 'Positiva' : 'Negativa' });
         toast(`${{ anotacion: 'Anotación registrada', atraso: 'Atraso registrado', inasistencia: 'Inasistencia registrada' }[kind]} para ${this.clean(s.name)}`);
+        this.logQuick(s, { anotacion: 'Anotación', atraso: 'Atraso', inasistencia: 'Inasistencia' }[kind]);
         DB.load().catch(() => {});
       }
     });
