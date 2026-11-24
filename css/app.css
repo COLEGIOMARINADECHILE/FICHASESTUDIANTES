@@ -1194,3 +1194,4 @@ body.has-iv-panel .main { padding-right: min(400px, 40vw); }
 .sige-sec h4 { display: flex; align-items: center; gap: 0.35rem; margin: 0; }
 .sige-sec h4 svg { width: 1rem; height: 1rem; }
 .option-block--destacado { border-color: var(--tone-conv-ink); background: var(--tone-conv-soft); }
+.dia-ia { margin: 0.4rem 0 0.6rem; align-items: center; flex-wrap: wrap; }

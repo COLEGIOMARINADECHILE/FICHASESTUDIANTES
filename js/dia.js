@@ -360,7 +360,8 @@ Object.assign(app, {
     const k = d.id.replace(/\W/g, '');
     const celda = v => `<td class="dia-cell" data-v="${c.esLogro(v) ? 'L' : v ? 'NL' : ''}">${esc(v || '')}</td>`;
     const con = d.conclusiones || {};
-    const area = (txt, campo, ph) => fieldHtml(txt, `<textarea class="input" rows="2" placeholder="${ph}" onchange="app.saveDiaField(${jsq(d.id)}, '${campo}', this.value)">${esc(con[campo] || '')}</textarea>`);
+    const bor = (State.diaBorrador || {})[d.id];
+    const area = (txt, campo, ph) => fieldHtml(txt, `<textarea class="input" rows="${bor ? 5 : 3}" id="dia-c-${k}-${campo}" placeholder="${ph}" ${this.canDia() ? '' : 'readonly'} oninput="app.diaDraftSet(${jsq(d.id)}, '${campo}', this.value)">${esc(bor && bor[campo] !== undefined ? bor[campo] : (con[campo] || ''))}</textarea>`);
     return `<section class="panel dia-card">
       <div class="panel__head"><h2>${ico('bar-chart-3')}${esc(d.asignatura)} · ${esc(d.periodo)} ${esc(d.anio)}</h2>
         <div class="row-actions"><button class="btn btn--sm" onclick="app.openDiaPdf(${jsq(d.id)})">${ico('file-text')}Informe original</button>${this.canDia() ? `<button class="icon-btn icon-btn--danger" title="Eliminar" aria-label="Eliminar resultados" onclick="app.deleteDia(${jsq(d.id)})">${ico('trash-2')}</button>` : ''}</div></div>
@@ -376,12 +377,17 @@ Object.assign(app, {
       ${d.estudiantes.length ? `<details ${d.estudiantes.length <= 20 ? '' : ''}><summary class="small">${ico('table')}Resultados por estudiante (${d.estudiantes.length})</summary><div class="table-wrap"><table class="table table--dense dia-table">
         <thead><tr><th>Estudiante</th>${d.columnas.map(col => `<th class="t-num">${esc(col)}</th>`).join('')}</tr></thead>
         <tbody>${d.estudiantes.map(e => `<tr><td>${e.studentId ? `<button type="button" class="link-btn" onclick="app.openStudent(${jsq(e.studentId)})">${esc(e.ficha || e.nombre)}</button>` : esc(e.nombre)}</td>${d.columnas.map((_, i) => celda(e.valores[i])).join('')}</tr>`).join('')}</tbody></table></div></details>` : ''}
-      <details ${Object.values(con).some(Boolean) ? 'open' : ''}><summary class="small">${ico('clipboard-check')}Conclusiones del equipo</summary><div class="grid-2">
+      <details ${Object.values(con).some(Boolean) || bor ? 'open' : ''}><summary class="small">${ico('clipboard-check')}Conclusiones del equipo</summary>
+        ${this.canDia() ? `<div class="row-actions dia-ia"><button type="button" class="btn btn--sm" onclick="app.completeDiaAI(${jsq(d.id)})">${ico('sparkles')}${Object.values(con).some(Boolean) ? 'Proponer de nuevo con IA' : 'Completar con IA'}</button><span class="muted small">La IA redacta una propuesta a partir de los resultados cargados. Puede editarla antes de guardar.</span></div>` : ''}
+        ${bor?.ia ? `<p class="tr-review">${ico('alert-triangle')}<span><strong>Propuesta de la IA sin guardar.</strong> Revise y ajuste el texto según lo que conoce del curso; luego presione "Guardar conclusiones".</span></p>` : ''}
+        <div class="grid-2">
         ${area('Aprendizajes a enfatizar el resto del año', 'enfatizar', 'Según lo trabajado y los resultados...')}
         ${area('Habilidades no logradas por la mayoría y cómo reforzarlas', 'reforzar', 'Habilidades y ajustes a las estrategias...')}
         ${area('Diversidad del curso y estrategias focalizadas', 'diversidad', 'Grupos de estudiantes y apoyos...')}
         ${area('Acuerdos y responsables', 'acuerdos', 'Qué se hará, quién y cuándo...')}
-      </div></details>
+        </div>
+        ${this.canDia() ? `<div class="form-foot"><span class="muted small">${d.conclusionesPor ? `Guardadas por ${esc(d.conclusionesPor)} el ${fmtDate(d.conclusionesFecha)}${d.conclusionesIA ? ' (con apoyo de IA)' : ''}` : ''}</span><div class="row-actions">${bor ? `<button type="button" class="btn btn--sm" onclick="app.discardDiaDraft(${jsq(d.id)})">Descartar cambios</button>` : ''}<button type="button" class="btn btn--sm btn--primary" onclick="app.saveDiaConclusiones(${jsq(d.id)}, '${k}')">${ico('save')}Guardar conclusiones</button></div></div>` : ''}
+      </details>
     </section>`;
   },
   drawDiaChart(d) {
@@ -392,6 +398,64 @@ Object.assign(app, {
     const color = p => cssVar(p < 50 ? '--tone-proto-ink' : p < 75 ? '--tone-warn-ink' : '--tone-conv-ink');
     this._diaCharts.push(new Chart(cv, { type: 'bar', data: { labels: c.areas.map(a => a.nombre), datasets: [{ label: '% del curso', data: c.areas.map(a => a.pct), backgroundColor: c.areas.map(a => color(a.pct)) }] },
       options: { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, title: { display: true, text: 'Porcentaje del curso por área', color: cssVar('--color-heading') } }, scales: { y: { min: 0, max: 100, ticks: { callback: v => `${v}%` } } } } }));
+  },
+  // ---------------- CONCLUSIONES: BORRADOR, IA Y GUARDADO ----------------
+  diaDraftSet(id, campo, valor) {
+    State.diaBorrador = State.diaBorrador || {};
+    const d = State.dia.find(x => x.id === id);
+    const b = State.diaBorrador[id] = State.diaBorrador[id] || { ...(d.conclusiones || {}) };
+    b[campo] = valor;
+  },
+  discardDiaDraft(id) { if (State.diaBorrador) delete State.diaBorrador[id]; this.renderDia(); },
+  async saveDiaConclusiones(id, k) {
+    const d = State.dia.find(x => x.id === id);
+    const campos = ['enfatizar', 'reforzar', 'diversidad', 'acuerdos'];
+    const con = Object.fromEntries(campos.map(c => [c, (el(`dia-c-${k}-${c}`)?.value || '').trim()]));
+    const usoIA = !!(State.diaBorrador?.[id]?.ia || d.conclusionesIA);
+    try {
+      await DB.save('dia', { id, conclusiones: con, conclusionesPor: State.currentUser.name, conclusionesFecha: today(), conclusionesIA: usoIA }, true);
+      if (State.diaBorrador) delete State.diaBorrador[id];
+      notice({ type: 'success', title: 'Conclusiones guardadas', msg: `${d.asignatura} · ${d.periodo} de ${d.course}. Se incluyen en el reporte del curso y en la ficha de traspaso.` });
+      this.renderDia();
+    } catch (e) { notice({ type: 'error', title: 'No se guardaron las conclusiones', msg: e.message }); }
+  },
+  /** La IA propone las conclusiones a partir de los resultados del informe (sin nombres de estudiantes). */
+  async completeDiaAI(id) {
+    if (!AI.ready()) return;
+    const d = State.dia.find(x => x.id === id);
+    const c = this.diaCalc(d);
+    const ok = await this.iaConsent(`Informe DIA de ${esc(d.asignatura)} (${esc(d.periodo)} ${esc(d.anio)}) del curso ${esc(d.course)}: porcentajes del curso por eje e indicador, porcentaje de respuestas correctas por pregunta y la cantidad de estudiantes que requieren apoyo. No se envían nombres de estudiantes.`);
+    if (!ok) return;
+    const pr = d.preguntas || [];
+    const distractores = pr.filter(p => p.correcta && Object.entries(p.opciones || {}).some(([o, v]) => o !== p.correcta && o !== 'N' && !/^R/.test(o) && v > p.pct)).map(p => ({ pregunta: p.n, eje: p.eje || '', correcta: p.correcta, porcentaje_correcta: p.pct, alternativa_mas_elegida: Object.entries(p.opciones).filter(([o]) => o !== 'N').sort((a, b) => b[1] - a[1])[0] }));
+    const datos = {
+      asignatura: d.asignatura, periodo: d.periodo, anio: d.anio, curso: d.course, estudiantes_evaluados: d.estudiantes.length || d.nInforme,
+      ejes: c.areas.map(a => ({ eje: a.nombre, porcentaje_curso: a.pct, preguntas: a.preguntas || undefined, indicadores: a.sub.map(s => ({ indicador: s.nombre, porcentaje: s.pct })) })),
+      preguntas_mas_bajas: pr.slice().sort((a, b) => a.pct - b.pct).slice(0, 6).map(p => ({ pregunta: p.n, eje: p.eje || '', porcentaje_correcta: p.pct })),
+      preguntas_con_distractor_mas_elegido_que_la_correcta: distractores.slice(0, 8),
+      estudiantes_que_requieren_apoyo: c.apoyo.length,
+      conclusiones_actuales: d.conclusiones || {}
+    };
+    AI.run('Redactando conclusiones del DIA', 'La IA analiza los ejes, las preguntas y los grupos de estudiantes...', async () => {
+      const r = await API.call('ai', { motivo: `Conclusiones DIA ${d.asignatura} ${d.periodo} ${d.course}`, json: true, prompt: `Eres jefe(a) de UTP de un colegio público en Chile. A partir de los resultados del DIA (Diagnóstico Integral de Aprendizajes, Agencia de Calidad de la Educación), redacta las conclusiones preliminares del equipo para el curso ${d.course}, en ${d.asignatura}, periodo ${d.periodo}.
+Reglas:
+- Basa todo en los datos: menciona ejes, indicadores o preguntas con sus porcentajes.
+- Los ejes bajo 50 % son prioritarios; entre 50 % y 75 % requieren refuerzo; sobre 75 % son fortalezas.
+- Si una alternativa incorrecta fue más elegida que la correcta, sugiere la posible confusión de los estudiantes y cómo abordarla.
+- Propón estrategias concretas y realistas de aula, coherentes con el currículum nacional y el nivel.
+- No uses los resultados para calificar ni para comparar cursos. No inventes datos ni nombres.
+- Redacta en español de Chile, en tono profesional y breve (3 a 6 líneas por campo).
+
+DATOS (JSON): ${JSON.stringify(datos).slice(0, 12000)}
+
+Devuelve SOLO un JSON con esta estructura:
+{"enfatizar": "Aprendizajes a enfatizar el resto del año", "reforzar": "Habilidades no logradas por la mayoría y cómo reforzarlas (estrategias concretas)", "diversidad": "Diversidad del curso y estrategias focalizadas: grupos según su nivel de logro y apoyos (incluye coordinación con PIE si corresponde)", "acuerdos": "Acuerdos con responsable (por cargo, por ejemplo docente de asignatura, UTP, PIE) y plazo (por ejemplo, semanas o mes)"}` });
+      const j = r.json || {};
+      State.diaBorrador = State.diaBorrador || {};
+      State.diaBorrador[id] = { ia: true, ...Object.fromEntries(['enfatizar', 'reforzar', 'diversidad', 'acuerdos'].map(k => [k, String(j[k] || '')])) };
+      this.renderDia();
+      toast('Propuesta lista: revísela y presione "Guardar conclusiones"');
+    });
   },
   async saveDiaField(id, campo, valor) {
     const d = State.dia.find(x => x.id === id);
