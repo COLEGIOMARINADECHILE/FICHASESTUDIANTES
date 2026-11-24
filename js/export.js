@@ -288,7 +288,11 @@ Object.assign(app, {
         socioemocional: listaSimple(a.socio, x => `${n(x.s)}: ${esc([x.planes.join(', '), x.apoyos && `${x.apoyos} apoyo(s)`].filter(Boolean).join('. '))}`),
         pie: listaSimple(a.pie, x => `${n(x.s)}: ${esc(x.tipos.join(', ') || 'Documentos PIE')} (${x.docs} documento(s))`),
         ritmo: `<p><strong>Evaluación:</strong> ${esc((RITMO_OPCIONES.find(o => o[0] === d.ritmo) || [, 'Sin definir'])[1])}</p>`,
-        talleres: listaSimple(a.talleres, t => esc(t))
+        talleres: listaSimple(a.talleres, t => esc(t)),
+        convivencia: (v => v ? `${docKv([[['Registros de convivencia', v.total], ['Protocolos', v.protocolos]], [['Faltas graves o gravísimas', v.faltas.GRAVE + v.faltas['GRAVÍSIMA']], ['Concentración en 3 estudiantes', `${v.concentracion} %`]], [['Cartas de compromiso', v.cartas], ['Anotaciones positivas / negativas', `${v.anot.positivas} / ${v.anot.negativas}`]]])}
+          ${v.porTipo.length ? `<p class="doc-muted"><strong>Tipos más frecuentes:</strong> ${v.porTipo.slice(0, 5).map(([t, n]) => `${esc(t)} (${n})`).join('; ')}.</p>` : ''}
+          ${d.convivenciaIA ? `<div class="doc-box"><strong>Análisis de convivencia (IA${d.convivenciaIA.revisado ? `, revisado por ${esc(d.convivenciaIA.revisadoPor || '')}` : ', pendiente de revisión'}):</strong> ${esc(d.convivenciaIA.clima || '')}
+            ${[['Claves para organizar el curso', d.convivenciaIA.claves_organizacion], ['Acciones preventivas', d.convivenciaIA.acciones_preventivas], ['Trabajo con familias', d.convivenciaIA.trabajo_con_familias], ['Coordinaciones', d.convivenciaIA.coordinaciones]].filter(([, l]) => (l || []).length).map(([t, l]) => `<p><strong>${t}:</strong></p><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}</div>` : ''}` : '')(a.convivencia)
       };
       const an = d.analisis;
       const interp = k => an?.interpretaciones?.[k] ? `<p class="doc-muted"><strong>Interpretación (IA):</strong> ${esc(an.interpretaciones[k])}</p>` : '';

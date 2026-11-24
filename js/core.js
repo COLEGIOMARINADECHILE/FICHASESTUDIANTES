@@ -91,7 +91,7 @@ const txtNormativoPlano = () => `MEDIDA EN CASO DE INCUMPLIMIENTO:\n${TXT_INCUMP
 window.State = {
   loading: true, currentUser: null, showWithdrawn: false, demo: false, lastSync: 0,
   users: [], rawStudents: [], rawInterventions: [], rawNursings: [], rawObservations: [], rawCoursesDB: [],
-  rawInclusionReports: [], knowledgeDocs: [], coursePlans: [], studentPlans: [], rawEvidences: [], traspasos: [],
+  rawInclusionReports: [], knowledgeDocs: [], coursePlans: [], studentPlans: [], rawEvidences: [], traspasos: [], riesgos: [],
   loginOptions: { roles: INIT_VARS.roles, users: [] },
   variables: { ...INIT_VARS },
   currentView: 'dashboard', selectedStudentId: null, detailTab: 'entrevistas', filterCourse: '',
@@ -217,7 +217,7 @@ const API = {
 };
 
 // Colección del servidor → arreglo en State
-const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences', traspasos: 'traspasos' };
+const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences', traspasos: 'traspasos', riesgos: 'riesgos' };
 
 const DB = {
   async load() {

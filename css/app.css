@@ -1000,3 +1000,34 @@ h1, h2 { color: var(--color-heading); }
 .split-btn .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .split-btn .btn + .btn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; }
 .doc-paper--print { max-height: none; overflow: visible; border: 0; }
+/* Ficha de traspaso: aviso de texto autocompletado por revisar y análisis de convivencia */
+.tr-review { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0.5rem 0; padding: 0.6rem 0.8rem; border-radius: 8px; background: var(--tone-warn-soft); color: var(--tone-warn-ink); font-size: 0.88rem; }
+.tr-review svg { width: 1.05rem; height: 1.05rem; flex: none; margin-top: 0.1rem; }
+.tr-interp--conv { border-left-color: var(--tone-conv-ink); background: var(--tone-conv-soft); }
+.tr-interp--conv h4 { color: var(--tone-conv-ink); flex-wrap: wrap; }
+.tr-interp--conv .grid-2 { margin-top: 0.6rem; gap: 0.75rem 1.25rem; }
+
+/* Riesgos del curso */
+.entry__note--info { background: var(--tone-obs-soft); color: var(--tone-obs-ink); }
+.rk-sub { display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; margin: 0.75rem 0 0.4rem; color: var(--color-heading); }
+.rk-sub svg { width: 1.05rem; height: 1.05rem; }
+.rk-card { padding: 0.9rem; border: 1px solid var(--color-rule); border-left: 5px solid var(--tone-warn-ink); border-radius: 10px; background: var(--color-paper); display: grid; gap: 0.6rem; }
+.rk-card[data-level="alto"] { border-left-color: var(--tone-proto-ink); }
+.rk-card[data-level="bajo"] { border-left-color: var(--tone-conv-ink); }
+.rk-card__head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: center; }
+.rk-title { font-weight: 600; }
+@media (max-width: 640px) { .rk-card__head { grid-template-columns: 1fr auto; } .rk-card__head .rk-title { grid-column: 1 / -1; } }
+
+/* Elegir curso desde el menú lateral */
+.picker__cycle { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--color-heading); }
+.picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0.4rem; }
+.picker__btn { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; padding: 0.55rem 0.7rem; border: 1px solid var(--color-rule); border-radius: 8px; background: var(--color-paper); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.picker__btn:hover { border-color: var(--tone-obs-ink); background: var(--tone-obs-soft); }
+.picker__btn.is-current { border-color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent); }
+.picker__btn svg { width: 0.95rem; height: 0.95rem; color: var(--tone-conv-ink); }
+
+/* Vista fiel del documento mientras se prepara */
+.doc-loading { display: flex; align-items: center; gap: 0.5rem; justify-content: center; min-height: 12rem; border: 1px dashed var(--color-rule); border-radius: 8px; color: var(--color-muted, #666); }
+.doc-loading svg { animation: spin 1.2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .doc-loading svg { animation: none; } }

@@ -11,6 +11,7 @@ const TRASPASO_SECCIONES = [
   ['riesgo', 'Riesgo de repitencia y repitentes', 'alert-triangle', 'Estudiantes que repiten o están en riesgo, y antecedentes.'],
   ['asistencia', 'Asistencia (bajo 85 %)', 'calendar-x', 'Causas de las inasistencias y apoyos realizados.'],
   ['disciplina', 'Disciplina', 'shield-alert', 'Estudiantes que requieren advertencia y monitoreo permanente.'],
+  ['convivencia', 'Convivencia escolar del curso', 'heart-handshake', 'Clima del curso, relaciones, normas y acuerdos que conviene mantener o cambiar al organizar el próximo año.'],
   ['socioemocional', 'Situación socioemocional y económica', 'heart-handshake', 'Dificultades emocionales, sociales o económicas que requieren apoyo.'],
   ['pie', 'Estudiantes PIE', 'puzzle', 'Fecha de última evaluación, PACI, apoyo familiar, avances pedagógicos y estado socioemocional.'],
   ['aprendizaje', 'Dificultades de aprendizaje que requieren evaluación', 'search', 'Estudiantes sin diagnóstico que deberían ser evaluados.'],
@@ -104,7 +105,135 @@ Object.assign(app, {
     activos.forEach(s => { const r = s.asistencia.real; if (r < 85) asisDist.bajo85++; else if (r < 90) asisDist.entre++; else asisDist.sobre++; });
     const promAsis = activos.length ? Math.round(activos.reduce((a, s) => a + s.asistencia.real, 0) / activos.length) : 0;
     const promCurso = promedios.length ? (promedios.reduce((a, p) => a + p.pg, 0) / promedios.length).toFixed(1) : '-';
-    return { activos, retirados, incorporados, matriculaInicial: activos.length + retirados.length - incorporados.length, rendimiento, riesgo, asistencia, disciplina, socio, pie, talleres, registros, asisDist, promAsis, promCurso, conNotas: promedios.length };
+    const convivencia = this.convivenciaStats(activos, anio);
+    return { activos, retirados, incorporados, matriculaInicial: activos.length + retirados.length - incorporados.length, rendimiento, riesgo, asistencia, disciplina, socio, pie, talleres, registros, asisDist, promAsis, promCurso, conNotas: promedios.length, convivencia };
+  },
+  /** Indicadores de convivencia del curso (sin nombres): tipos de registro, faltas, meses, concentración. */
+  convivenciaStats(activos, anio) {
+    const enAnio = f => !anio || String(f || '').startsWith(String(anio));
+    const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const regs = activos.flatMap(s => s.history.filter(h => enAnio(h.date) && !this.isCarta(h) && this.recordCategory(h) !== 'pie').map(h => ({ s, h })));
+    const cuenta = arr => Object.entries(arr.reduce((m, x) => { if (x) m[x] = (m[x] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]);
+    const porEst = cuenta(regs.map(r => String(r.s.id))).map(x => x[1]);
+    const top3 = porEst.slice(0, 3).reduce((t, n) => t + n, 0);
+    const faltas = { LEVE: 0, GRAVE: 0, 'GRAVÍSIMA': 0 };
+    regs.forEach(({ h }) => (h.agreements || []).forEach(x => { if (faltas[x.falta] !== undefined) faltas[x.falta]++; }));
+    const anot = { positivas: 0, negativas: 0 };
+    regs.forEach(({ h }) => { if (h.anotacion?.tipo === 'Positiva') anot.positivas++; if (h.anotacion?.tipo === 'Negativa' || /anotaci[oó]n negativa/i.test(h.background || '')) anot.negativas++; });
+    return {
+      total: regs.length,
+      protocolos: regs.filter(r => r.h.type === PROTOCOLO).length,
+      porTipo: cuenta(regs.map(r => r.h.type)).slice(0, 8),
+      porMes: cuenta(regs.map(r => { const m = parseInt(String(r.h.date || '').slice(5, 7), 10); return m ? MES[m - 1] : ''; })),
+      faltas, anot,
+      cartas: activos.reduce((t, s) => t + s.history.filter(h => enAnio(h.date) && this.isCarta(h)).length, 0),
+      estudiantesConRegistros: porEst.length,
+      concentracion: regs.length ? Math.round(top3 / regs.length * 100) : 0,
+      observacionesDocentes: activos.reduce((t, s) => t + (s.observations || []).filter(o => enAnio(o.date)).length, 0),
+      planesConvivencia: State.studentPlans.filter(p => activos.some(s => sameId(s.id, p.studentId))).length
+    };
+  },
+
+  // ---------------- AUTOCOMPLETAR CON DATOS DE LA PLATAFORMA ----------------
+  /** Borrador de texto para una sección, solo con datos registrados en la plataforma. '' si no hay datos. */
+  trAutoText(k, a) {
+    const n = s => this.formatStudentName(s.name);
+    const fuente = `\n(Fuente: datos de la plataforma al ${fmtDate(today())}. Revise y complete antes de guardar.)`;
+    const pct = (x, t) => t ? Math.round(x / t * 100) : 0;
+    const t = {
+      matricula: () => `Matrícula inicial: ${a.matriculaInicial}. Matrícula actual: ${a.activos.length}.` +
+        (a.incorporados.length ? `\nSe incorporaron ${a.incorporados.length}: ${a.incorporados.map(s => `${n(s)} (${fmtDate(s.fechaIngreso)})`).join('; ')}.` : '\nNo se registran incorporaciones.') +
+        (a.retirados.length ? `\nSe retiraron ${a.retirados.length}: ${a.retirados.map(s => `${n(s)} (${fmtDate(s.fechaRetiro)}${s.motivoRetiro ? `, ${s.motivoRetiro}` : ''})`).join('; ')}.` : '\nNo se registran retiros.'),
+      rendimiento: () => {
+        if (!a.rendimiento.length) return '';
+        const criticas = [...a.rendimiento].filter(r => r.bajo).sort((x, y) => pct(y.bajo, y.n) - pct(x.bajo, x.n)).slice(0, 4);
+        const mejores = [...a.rendimiento].sort((x, y) => parseFloat(y.promedio) - parseFloat(x.promedio)).slice(0, 3);
+        return `Promedio general del curso: ${String(a.promCurso).replace('.', ',')} (${a.conNotas} estudiantes con informe de notas).` +
+          (criticas.length ? `\nAsignaturas con más estudiantes bajo 4,0: ${criticas.map(r => `${r.nombre} (${r.bajo} estudiantes, ${pct(r.bajo, r.n)} %)`).join('; ')}.` : '\nNo hay asignaturas con estudiantes bajo 4,0.') +
+          `\nMejores promedios: ${mejores.map(r => `${r.nombre} (${String(r.promedio).replace('.', ',')})`).join('; ')}.`;
+      },
+      riesgo: () => a.riesgo.length ? `${a.riesgo.length} estudiante(s) cumplen criterios de riesgo de repitencia:\n${a.riesgo.map(x => `- ${n(x.s)}: ${x.motivos.join(', ')}.`).join('\n')}` : 'Con los datos actuales, ningún estudiante cumple criterios de riesgo de repitencia.',
+      asistencia: () => `Asistencia promedio del curso: ${a.promAsis} %.` + (a.asistencia.length ? `\n${a.asistencia.length} estudiante(s) bajo 85 %:\n${a.asistencia.map(s => `- ${n(s)}: ${s.asistencia.real} % (${s.asistencia.inasistencias} inasistencias).`).join('\n')}` : '\nNingún estudiante bajo 85 %.'),
+      disciplina: () => a.disciplina.length ? `Estudiantes que requieren monitoreo:\n${a.disciplina.map(x => `- ${n(x.s)}: ${[x.prot && `${x.prot} protocolo(s)`, x.graves && `${x.graves} falta(s) grave(s) o gravísima(s)`, x.anot && `${x.anot} anotación(es) negativa(s)`].filter(Boolean).join(', ')}.`).join('\n')}` : 'No se registran protocolos, faltas graves ni anotaciones negativas reiteradas.',
+      convivencia: () => { const v = a.convivencia; return v.total ? `Durante el año se registraron ${v.total} intervenciones de convivencia (${v.protocolos} protocolos), que involucran a ${v.estudiantesConRegistros} estudiante(s).${v.estudiantesConRegistros > 3 ? ` El ${v.concentracion} % de los registros se concentra en 3 estudiantes.` : ''}` +
+        `\nTipos más frecuentes: ${v.porTipo.slice(0, 4).map(([t, c]) => `${t} (${c})`).join('; ')}.` + (v.porMes.length ? `\nMeses con más registros: ${v.porMes.slice(0, 3).map(([m, c]) => `${m} (${c})`).join(', ')}.` : '') +
+        `\nFaltas: ${v.faltas.LEVE} leves, ${v.faltas.GRAVE} graves, ${v.faltas['GRAVÍSIMA']} gravísimas. Cartas de compromiso: ${v.cartas}. Anotaciones positivas: ${v.anot.positivas}; negativas: ${v.anot.negativas}.` : 'No se registran intervenciones de convivencia este año.'; },
+      socioemocional: () => a.socio.length ? `Estudiantes con apoyo socioemocional o planes:\n${a.socio.map(x => `- ${n(x.s)}: ${[x.planes.length && x.planes.join(', '), x.apoyos && `${x.apoyos} intervención(es) de apoyo o derivación`].filter(Boolean).join('. ')}.`).join('\n')}` : '',
+      pie: () => a.pie.length ? `${a.pie.length} estudiante(s) con apoyo PIE:\n${a.pie.map(x => `- ${n(x.s)}: ${x.tipos.join(', ') || 'documentos PIE'}; último registro ${fmtDate(x.ultima) || 'sin fecha'}.`).join('\n')}` : '',
+      talleres: () => a.talleres.length ? `Acciones y talleres de los planes de curso:\n${a.talleres.map(x => `- ${x}`).join('\n')}` : ''
+    }[k];
+    const txt = t ? t() : '';
+    return txt ? txt + fuente : '';
+  },
+  trAutoSections() { const a = State.trData; return TRASPASO_SECCIONES.map(s => s[0]).filter(k => this.canEditTrSection(k) && this.trAutoText(k, a)); },
+  autofillTrSection(k, silent = false) {
+    const sec = State.trDraft.secciones[k] = State.trDraft.secciones[k] || {};
+    const txt = this.trAutoText(k, State.trData);
+    if (!txt) return toast('No hay datos en la plataforma para esta sección', 'error');
+    if (sec.texto && sec.texto.trim() && !silent && !window.confirm('La sección ya tiene texto. ¿Agregar los datos de la plataforma al final?')) return;
+    sec.texto = sec.texto && sec.texto.trim() ? `${sec.texto.trim()}\n\n${txt}` : txt;
+    sec.auto = { fecha: today(), por: State.currentUser.name, revisado: false };
+    if (sec.estado === 'completo') sec.estado = 'pendiente';
+    if (!silent) { toast('Borrador agregado. Revíselo y corrija lo que no corresponda antes de guardar.'); this.renderTraspaso(); icons(); }
+  },
+  openTrAutofill() {
+    const ks = this.trAutoSections();
+    if (!ks.length) return toast('No hay secciones que se puedan completar con los datos actuales', 'error');
+    const d = State.trDraft;
+    ui.modal({
+      title: 'Autocompletar con datos de la plataforma', icon: 'wand-2', tone: 'obs', size: 'md', okText: 'Autocompletar',
+      body: `<div class="stack">
+        <p class="modal__msg">El sistema puede escribir un <strong>borrador</strong> en estas secciones usando solo lo registrado en la plataforma (matrícula, notas cargadas, asistencia, registros de convivencia, PIE y planes).</p>
+        <div class="subpanel">${ks.map(k => { const t = TRASPASO_SECCIONES.find(s => s[0] === k)[1]; const lleno = (d.secciones[k]?.texto || '').trim(); return `<label class="check"><input type="checkbox" class="tr-auto-k" value="${k}" ${lleno ? '' : 'checked'}><span>${esc(t)}${lleno ? ' <span class="muted small">(ya tiene texto: se agregará al final)</span>' : ''}</span></label>`; }).join('')}</div>
+        <p class="note">${ico('shield-check')}Criterio de validez: los datos pueden estar incompletos o desactualizados (por ejemplo, notas o inasistencias no cargadas). Cada sección quedará marcada "por revisar" y no se podrá dar por completa hasta que alguien confirme que revisó la información.</p>
+      </div>`,
+      onOk: () => {
+        const sel = [...document.querySelectorAll('.tr-auto-k:checked')].map(i => i.value);
+        if (!sel.length) { toast('Elija al menos una sección', 'error'); return false; }
+        sel.forEach(k => this.autofillTrSection(k, true));
+        toast(`${sel.length} sección(es) con borrador. Revíselas y guarde la ficha.`);
+        setTimeout(() => { this.renderTraspaso(); icons(); }, 0);
+      }
+    });
+  },
+
+  // ---------------- CONVIVENCIA ESCOLAR CON IA ----------------
+  async analyzeConvivenciaAI() {
+    if (!AI.ready()) return;
+    const ok = await this.iaConsent(`Indicadores de convivencia del curso ${esc(State.traspasoCourse)}: cantidades por tipo de registro, faltas, meses, concentración de casos, cartas y anotaciones, más el texto de la sección escrito por el equipo, sin nombres, RUN ni datos de contacto.`);
+    if (!ok) return;
+    const a = State.trData, d = State.trDraft;
+    AI.run('Analizando la convivencia del curso', 'La IA propone claves para organizar el curso el próximo año...', async () => {
+      const datos = { curso: State.traspasoCourse, anio: State.traspasoAnio, matricula: a.activos.length, convivencia: a.convivencia, disciplina: { estudiantes_monitoreo: a.disciplina.length }, apoyos_socioemocionales: a.socio.length, estudiantes_pie: a.pie.length,
+        asistencia_promedio: a.promAsis, texto_equipo: this.anonimizar(String(d.secciones.convivencia?.texto || '').slice(0, 1500), a.activos) };
+      const r = await API.call('ai', { motivo: `Análisis de convivencia escolar, ficha de traspaso ${State.traspasoCourse}`, json: true, prompt: `Actúa como encargado(a) de convivencia escolar de un colegio público en Chile, según la Política Nacional de Convivencia Escolar, la Ley N° 20.536 sobre violencia escolar y la Circular N° 482 de la Superintendencia de Educación. Con los datos del curso, propone elementos clave de convivencia para que el equipo diseñe y organice el curso el próximo año. Reglas: usa solo los datos; no inventes casos; no identifiques personas; no etiquetes a estudiantes; considera el nivel del curso (${State.traspasoCourse}); lenguaje claro y preventivo.
+
+DATOS (JSON): ${JSON.stringify(datos).slice(0, 8000)}
+
+Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del curso en 3 a 5 líneas", "patrones": ["Patrones observados en los datos (tipos de situaciones, momentos del año, concentración)"], "claves_organizacion": ["Decisiones concretas para organizar el curso: normas de aula, rutinas, distribución, recreos, trabajo en equipo, roles"], "acciones_preventivas": ["Acciones de convivencia para el primer mes y el año"], "trabajo_con_familias": ["..."], "coordinaciones": ["Con quién coordinar: profesor jefe, inspectoría, dupla psicosocial, PIE, redes"], "alertas": ["Situaciones que requieren seguimiento sin identificar a personas"]}` });
+      d.convivenciaIA = { ...r.json, fecha: today(), por: State.currentUser.name, revisado: false };
+      await this.saveTraspaso(true);
+      toast('Análisis de convivencia generado. Revíselo antes de usarlo.');
+      this.renderTraspaso(); icons();
+    });
+  },
+  convivenciaIAHtml(ci, can) {
+    if (!ci) return '';
+    const ul = arr => (arr || []).length ? `<ul class="tr-list">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted small">Sin elementos.</p>';
+    return `<div class="tr-interp tr-interp--conv">
+      <h4>${ico('sparkles')}Análisis de convivencia con IA ${ci.revisado ? chip(`Revisado por ${ci.revisadoPor || ''}`, 'conv', 'check') : chip('Por revisar', 'warn', 'alert-triangle')}</h4>
+      <p>${esc(ci.clima || '')}</p>
+      <div class="grid-2">
+        <div><strong>Patrones observados</strong>${ul(ci.patrones)}</div>
+        <div><strong>Claves para organizar el curso</strong>${ul(ci.claves_organizacion)}</div>
+        <div><strong>Acciones preventivas</strong>${ul(ci.acciones_preventivas)}</div>
+        <div><strong>Trabajo con familias</strong>${ul(ci.trabajo_con_familias)}</div>
+        <div><strong>Coordinaciones</strong>${ul(ci.coordinaciones)}</div>
+        <div><strong>Alertas de seguimiento</strong>${ul(ci.alertas)}</div>
+      </div>
+      <p class="note">${ico('shield-check')}Interpretación generada con IA el ${fmtDate(ci.fecha)} a partir de datos sin identificar. Un profesional debe revisarla y ajustarla antes de usarla.</p>
+      ${can && !ci.revisado ? `<label class="check"><input type="checkbox" onchange="if(this.checked){ State.trDraft.convivenciaIA.revisado=true; State.trDraft.convivenciaIA.revisadoPor=State.currentUser.name; app.saveTraspaso(true).then(()=>{ app.renderTraspaso(); icons(); }); }"><span>Revisé la interpretación y la considero válida para este curso</span></label>` : ''}
+    </div>`;
   },
 
   // ---------------- PANTALLA ----------------
@@ -140,6 +269,14 @@ Object.assign(app, {
       aprendizaje: '',
       ritmo: `${fieldHtml('Evaluación del ritmo de trabajo', `<select class="input" ${this.canEditTrSection('ritmo') ? '' : 'disabled'} onchange="State.trDraft.ritmo=this.value">${options(RITMO_OPCIONES, d.ritmo || '')}</select>`)}`,
       talleres: lista(a.talleres, t => `<li>${esc(t)}</li>`, 'No hay acciones de planes de curso registradas este año.'),
+      convivencia: (v => `<div class="stats stats--4">
+          <div class="stat" data-tone="conv"><span class="stat__num num">${v.total}</span><span class="stat__label">Registros de convivencia</span></div>
+          <div class="stat" data-tone="proto"><span class="stat__num num">${v.protocolos}</span><span class="stat__label">Protocolos</span></div>
+          <div class="stat" data-tone="warn"><span class="stat__num num">${v.faltas.GRAVE + v.faltas['GRAVÍSIMA']}</span><span class="stat__label">Faltas graves o gravísimas</span></div>
+          <div class="stat" data-tone="obs"><span class="stat__num num">${v.concentracion}%</span><span class="stat__label">Concentración en 3 estudiantes</span></div></div>
+        <div class="grid-2"><div><h4>Tipos más frecuentes</h4>${lista(v.porTipo.slice(0, 6), ([t, n]) => `<li>${esc(t)} <span class="muted small">${n}</span></li>`, 'Sin registros.')}</div>
+        <div><h4>Meses con más registros</h4>${lista(v.porMes.slice(0, 4), ([m, n]) => `<li>${esc(m)} <span class="muted small">${n}</span></li>`, 'Sin registros.')}</div></div>
+        <p class="muted small">Cartas de compromiso: ${v.cartas}. Anotaciones positivas: ${v.anot.positivas}; negativas: ${v.anot.negativas}. Observaciones docentes: ${v.observacionesDocentes}.</p>`)(a.convivencia),
       otros: ''
     };
 
@@ -147,6 +284,7 @@ Object.assign(app, {
       <button class="btn" onclick="app.navigate('students')">${ico('arrow-left')}Volver al curso</button>
       <div class="row-actions">
         <label class="field field--inline"><span class="field__label">Año</span><input type="number" class="input input--num num" value="${esc(State.traspasoAnio)}" onchange="State.traspasoAnio=this.value; State.trDraft=null; app.renderTraspaso(); icons()"></label>
+        <button class="btn" onclick="app.openTrAutofill()">${ico('wand-2')}Autocompletar con datos</button>
         <button class="btn" onclick="app.analyzeTraspasoAI()">${ico('sparkles')}${d.analisis ? 'Volver a interpretar con IA' : 'Interpretar con IA'}</button>
         <button class="btn" onclick="app.openExportModal('traspaso')">${ico('file-output')}PDF de la ficha</button>
         <button class="btn btn--primary" onclick="app.saveTraspaso()">${ico('save')}Guardar ficha</button>
@@ -192,10 +330,13 @@ Object.assign(app, {
     const users = State.users.filter(u => !u.eliminado && u.active !== false).sort((a, b) => a.name.localeCompare(b.name));
     return `<section class="panel tr-section" data-done="${sec.estado === 'completo'}">
       <div class="panel__head"><h2>${ico(icon)}${titulo}</h2>
-        <div class="row-actions">${as ? chip(`Asignado a ${as.userName}`, 'obs', 'user-check') : ''}${sec.estado === 'completo' ? chip('Completo', 'conv', 'check') : chip('Pendiente', 'warn')}</div></div>
+        <div class="row-actions">${sec.auto && !sec.auto.revisado ? chip('Por revisar', 'warn', 'alert-triangle') : ''}${as ? chip(`Asignado a ${as.userName}`, 'obs', 'user-check') : ''}${sec.estado === 'completo' ? chip('Completo', 'conv', 'check') : chip('Pendiente', 'warn')}</div></div>
       ${autoHtml ? `<div class="tr-auto">${autoHtml}</div>` : ''}
+      ${k === 'convivencia' ? this.convivenciaIAHtml(d.convivenciaIA, can) : ''}
+      ${sec.auto && !sec.auto.revisado ? `<p class="tr-review">${ico('alert-triangle')}<span>Texto autocompletado el ${fmtDate(sec.auto.fecha)} con datos de la plataforma: <strong>revise que la información sea correcta y esté completa</strong> antes de dar la sección por completa.</span></p>` : ''}
       ${d.analisis?.interpretaciones?.[k] ? `<div class="tr-interp"><h4>${ico('sparkles')}Interpretación con IA</h4><p>${esc(d.analisis.interpretaciones[k])}</p></div>` : ''}
       ${fieldHtml(ayuda, `<textarea class="input" rows="3" ${can ? '' : 'readonly'} placeholder="${can ? 'Escriba aquí los antecedentes...' : 'Solo lectura'}" oninput="(State.trDraft.secciones['${k}'] = State.trDraft.secciones['${k}'] || {}).texto=this.value">${esc(sec.texto || '')}</textarea>`)}
+      ${can && (this.trAutoText(k, State.trData) || k === 'convivencia') ? `<div class="row-actions">${this.trAutoText(k, State.trData) ? `<button type="button" class="btn btn--sm" onclick="app.autofillTrSection('${k}')">${ico('wand-2')}Autocompletar con datos de la plataforma</button>` : ''}${k === 'convivencia' ? `<button type="button" class="btn btn--sm" onclick="app.analyzeConvivenciaAI()">${ico('sparkles')}${d.convivenciaIA ? 'Volver a analizar con IA' : 'Analizar convivencia con IA'}</button>` : ''}</div>` : ''}
       ${sec.actualizado ? `<p class="note">Actualizado el ${fmtDate(sec.actualizado)} por ${esc(sec.por || '')}.</p>` : ''}
       <div class="form-foot">
         ${manage ? `<div class="row-field tr-assign"><select class="input" id="tr-asg-${k}" aria-label="Asignar ${titulo}"><option value="">Asignar a un funcionario...</option>${options(users.map(u => [u.id, `${u.name} (${u.role})`]), as?.userId)}</select><button type="button" class="btn btn--sm" onclick="app.assignTrSection('${k}')">${ico('send')}Asignar y avisar</button></div>` : '<span></span>'}
@@ -233,6 +374,13 @@ Object.assign(app, {
   },
   async toggleTrDone(k) {
     const s = State.trDraft.secciones[k] = State.trDraft.secciones[k] || {};
+    if (s.estado !== 'completo' && s.auto && !s.auto.revisado) {
+      const t = TRASPASO_SECCIONES.find(x => x[0] === k)[1];
+      ui.modal({ title: 'Confirmar revisión', icon: 'shield-check', tone: 'warn', size: 'sm', okText: 'Confirmo y marco como completa',
+        body: `<p class="modal__msg">La sección <strong>${esc(t)}</strong> tiene texto autocompletado con datos de la plataforma.</p><label class="check"><input type="checkbox" id="tr-revise"><span>Revisé la información: es correcta, está completa y corresponde a este curso.</span></label>`,
+        onOk: async () => { if (!el('tr-revise').checked) { toast('Marque la casilla para confirmar la revisión', 'error'); return false; } Object.assign(s.auto, { revisado: true, revisadoPor: State.currentUser.name, fechaRevision: today() }); ui.close(); await this.toggleTrDone(k); } });
+      return;
+    }
     s.estado = s.estado === 'completo' ? 'pendiente' : 'completo';
     s.actualizado = today(); s.por = State.currentUser.name;
     await this.saveTraspaso(true).catch(() => {});

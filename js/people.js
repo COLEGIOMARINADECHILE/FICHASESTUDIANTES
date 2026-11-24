@@ -151,6 +151,94 @@ ${b.tagline}`.trim();
       <p class="muted small">Un funcionario con cursos asignados solo ve esos cursos. Si no tiene ninguno asignado, ve todos los que su perfil permite.</p>
     </div>`;
   },
+  // ---------------- ADMINISTRACIÓN: ACCESO A CURSOS ----------------
+  /** ¿El funcionario ve el curso? Acceso total, sin cursos asignados (ve todos) o el curso en su lista. */
+  hasCourseAccess(u, course) { const ac = u.assignedCourses || []; return (u.functions || []).includes('acceso_total') || !ac.length || ac.includes(course); },
+  accessLabel(u, course) {
+    const ac = u.assignedCourses || [];
+    if ((u.functions || []).includes('acceso_total')) return chip('Acceso total', 'conv', 'shield-check');
+    if (!ac.length) return chip('Ve todos los cursos', 'conv', 'check');
+    return ac.includes(course) ? chip('Ya tiene acceso', 'conv', 'check') : chip('Sin acceso', 'warn', 'lock');
+  },
+  /** Cuántos registros hizo cada funcionario en cada curso: { "userId|curso": n }. */
+  contributionsByCourse() {
+    const m = {};
+    const add = (uid, curso) => { if (!uid || !curso) return; const k = `${uid}|${curso}`; m[k] = (m[k] || 0) + 1; };
+    const curso = {}; this.getStudents().forEach(s => { curso[String(s.id)] = s.curso; });
+    State.rawInterventions.forEach(h => add(h.professionalId, curso[String(h.studentId)]));
+    (State.rawObservations || []).forEach(h => add(h.professionalId, curso[String(h.studentId)]));
+    (State.rawNursings || []).forEach(h => add(h.professionalId, curso[String(h.studentId)]));
+    State.rawEvidences.forEach(e => add(e.uploaderId, curso[String(e.studentId)]));
+    return m;
+  },
+  admin_access() {
+    const a = State.accessAdmin = State.accessAdmin || { course: State.filterCourse || ALL_COURSES[0], verTodos: false, sel: {} };
+    const users = State.users.filter(u => !u.eliminado && u.active !== false).sort((x, y) => x.name.localeCompare(y.name));
+    const contrib = this.contributionsByCourse();
+    // Funcionarios que registraron información en cursos donde (aún) no tienen acceso
+    const pares = Object.entries(contrib).map(([k, n]) => { const [uid, curso] = k.split('|'); return { u: users.find(x => sameId(x.id, uid)), curso, n }; })
+      .filter(p => p.u).sort((x, y) => x.u.name.localeCompare(y.u.name) || ALL_COURSES.indexOf(x.curso) - ALL_COURSES.indexOf(y.curso));
+    const sinAcceso = pares.filter(p => !this.hasCourseAccess(p.u, p.curso));
+    const mostrar = a.verTodos ? pares : sinAcceso;
+    const key = p => `${p.u.id}|${p.curso}`;
+    const n = contrib;
+    return `<section class="stack">
+      <div class="panel">
+        <div class="panel__head"><h2>${ico('history')}Funcionarios que ya registraron información</h2>${chip(`${sinAcceso.length} sin acceso`, sinAcceso.length ? 'warn' : 'conv')}</div>
+        <p class="muted">Funcionarios que hicieron registros (intervenciones, observaciones, enfermería o documentos) en estudiantes de un curso. Se indica si ya tienen acceso a ese curso, para no autorizar dos veces.</p>
+        <label class="check"><input type="checkbox" ${a.verTodos ? 'checked' : ''} onchange="State.accessAdmin.verTodos=this.checked; app.renderAdmin()"><span>Mostrar también a quienes ya tienen acceso</span></label>
+        ${mostrar.length ? `<div class="table-wrap"><table class="table table--dense">
+          <thead><tr><th>Dar acceso</th><th>Funcionario</th><th>Curso</th><th class="t-num">Registros</th><th>Estado</th></tr></thead>
+          <tbody>${mostrar.map(p => { const ok = this.hasCourseAccess(p.u, p.curso); return `<tr>
+            <td>${ok ? '' : `<input type="checkbox" aria-label="Dar acceso a ${esc(p.u.name)} en ${esc(p.curso)}" ${a.sel[key(p)] !== false ? 'checked' : ''} onchange="State.accessAdmin.sel['${key(p)}']=this.checked">`}</td>
+            <td><span class="cell-title">${esc(p.u.name)}</span><span class="cell-sub">${esc(p.u.customRole || p.u.role || '')}</span></td>
+            <td>${esc(p.curso)}</td><td class="t-num num">${p.n}</td><td>${this.accessLabel(p.u, p.curso)}</td></tr>`; }).join('')}</tbody></table></div>
+          ${sinAcceso.length ? `<div class="form-foot"><span class="muted small">Se agrega el curso a los cursos asignados del funcionario. Quien no tiene cursos asignados ya ve todos y no se modifica.</span><button class="btn btn--primary" onclick="app.grantContributors()">${ico('user-check')}Dar acceso a los seleccionados</button></div>` : ''}`
+          : empty('check-circle', 'Todos los funcionarios que registraron información ya tienen acceso a sus cursos.', 'conv')}
+      </div>
+
+      <div class="panel">
+        <div class="panel__head"><h2>${ico('key-round')}Acceso por curso</h2>
+          ${fieldHtml('Curso', `<select class="input" onchange="State.accessAdmin.course=this.value; app.renderAdmin()">${options(ALL_COURSES.map(c => [c, c]), a.course)}</select>`, 'field--inline')}</div>
+        <p class="muted">Marque o desmarque para dar o quitar acceso a <strong>${esc(a.course)}</strong>. El cambio se guarda al instante.</p>
+        <div class="table-wrap"><table class="table table--dense">
+          <thead><tr><th>Acceso</th><th>Funcionario</th><th>Perfil</th><th class="t-num">Registros en el curso</th><th>Estado</th></tr></thead>
+          <tbody>${users.map(u => { const total = (u.functions || []).includes('acceso_total'), todos = !(u.assignedCourses || []).length; const fijo = total || todos; return `<tr>
+            <td><input type="checkbox" aria-label="Acceso de ${esc(u.name)} a ${esc(a.course)}" ${this.hasCourseAccess(u, a.course) ? 'checked' : ''} ${fijo ? `disabled title="${total ? 'Tiene acceso total' : 'Sin cursos asignados: ve todos los cursos'}"` : ''} onchange="app.toggleAccessAdmin(${jsq(u.id)}, this.checked)"></td>
+            <td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.email || '')}</span></td>
+            <td class="small">${esc(u.customRole || u.role || '')}</td>
+            <td class="t-num num">${n[`${u.id}|${a.course}`] || 0}</td>
+            <td>${this.accessLabel(u, a.course)}${!fijo ? `<span class="cell-sub">${(u.assignedCourses || []).length} curso(s) asignado(s)</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
+        <p class="note">${ico('info')}Un funcionario sin cursos asignados ve todos los cursos que su perfil permite. Para limitarlo a algunos cursos, asígnele cursos desde su perfil en "Funcionarios".</p>
+      </div>
+    </section>`;
+  },
+  async toggleAccessAdmin(userId, add) {
+    const u = State.users.find(x => sameId(x.id, userId));
+    const course = State.accessAdmin.course;
+    const list = new Set(u.assignedCourses || []);
+    if (add) list.add(course); else list.delete(course);
+    if (!list.size && !add && !window.confirm(`${u.name} quedará sin cursos asignados y por eso verá TODOS los cursos. ¿Continuar?`)) { this.renderAdmin(); return; }
+    try { await DB.patch('users', u.id, { assignedCourses: [...list] }); toast(add ? `${u.name} ahora tiene acceso a ${course}` : `Se quitó el acceso de ${u.name} a ${course}`); }
+    catch (e) { toast(e.message, 'error'); }
+    this.renderAdmin();
+  },
+  async grantContributors() {
+    const a = State.accessAdmin;
+    const contrib = this.contributionsByCourse();
+    const porUsuario = {};
+    Object.keys(contrib).forEach(k => {
+      const [uid, curso] = k.split('|');
+      const u = State.users.find(x => sameId(x.id, uid));
+      if (!u || u.eliminado || this.hasCourseAccess(u, curso) || a.sel[k] === false) return;
+      (porUsuario[uid] = porUsuario[uid] || new Set(u.assignedCourses || [])).add(curso);
+    });
+    const ops = Object.entries(porUsuario).map(([uid, set]) => ({ col: 'users', id: uid, data: { assignedCourses: [...set] }, merge: true }));
+    if (!ops.length) return toast('No hay accesos seleccionados', 'error');
+    try { await DB.batch(ops); toast(`Accesos actualizados para ${ops.length} funcionario(s)`); }
+    catch (e) { toast(e.message, 'error'); }
+    this.renderAdmin();
+  },
   async setCourseAccess(userId, course, add) {
     const u = State.users.find(x => sameId(x.id, userId));
     if (!u) return toast('Elija un funcionario', 'error');

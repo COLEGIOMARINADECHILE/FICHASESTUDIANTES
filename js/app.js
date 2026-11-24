@@ -332,7 +332,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -369,7 +369,9 @@ window.app = {
     const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']]] : [
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
-      ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail', 'traspaso']],
+      ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
+      ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso']],
+      ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk']],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
@@ -378,7 +380,7 @@ window.app = {
       ['admin', 'settings', 'Administración', hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'), ['admin']]
     ];
     el('nav-menu').innerHTML = items.filter(i => i[3]).map(([id, icon, label, , views]) =>
-      `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'report' ? 'app.openStaffReportModal()' : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
+      `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'report' ? 'app.openStaffReportModal()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
   },
 
   // ---------------- DATOS DE ESTUDIANTES ----------------
@@ -554,6 +556,7 @@ window.app = {
       this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('puzzle')}Cargar planes PIE</button>` : '',
       this.canUploadActas() ? `<button class="btn" onclick="app.openActasImport()">${ico('file-check')}Subir actas firmadas (PDF)</button>` : '',
       course ? `<button class="btn" onclick="app.openTraspaso(${jsq(course)})">${ico('file-stack')}Ficha de traspaso</button>` : '',
+      course ? `<button class="btn" onclick="app.openCourseRisk(${jsq(course)})">${ico('shield-alert')}Riesgos del curso</button>` : '',
       course ? `<button class="btn" onclick="app.openExportModal('course_full_report')">${ico('file-text')}Reporte del curso</button>` : '',
       course ? `<button class="btn" onclick="app.exportActivePlansPDF()">${ico('file-output')}Reporte planes</button>` : '',
       course ? `<button class="btn" onclick="app.openCoursePlans()">${ico('clipboard-list')}Planes del curso</button>` : '',
@@ -1183,6 +1186,7 @@ window.app = {
   setAdminTab(t) { State.adminTab = t; this.renderAdmin(); icons(); },
   renderAdmin() {
     const tabs = [['users', 'users', 'Funcionarios'], ['students', 'file-check', 'Carga masiva'], ['variables', 'list', 'Variables'], ['logo', 'image', 'Nombre, logos e IA'], ['knowledge', 'library-big', 'Normativas IA']];
+    if (hasAccess('gestionar_usuarios')) tabs.splice(1, 0, ['access', 'key-round', 'Acceso a cursos']);
     if (hasAccess('gestionar_usuarios')) tabs.push(['migration', 'database', 'Traspasar datos']);
     const t = State.adminTab;
     el('admin-tabs').innerHTML = tabs.map(([id, icon, label]) => `<button type="button" role="tab" class="tab" aria-selected="${t === id}" onclick="app.setAdminTab('${id}')">${ico(icon)}${label}</button>`).join('');

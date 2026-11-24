@@ -276,6 +276,52 @@ Object.assign(app, {
     });
     return doc.body.firstChild.innerHTML;
   },
+  /**
+   * Word -> HTML conservando lo que define el formato del colegio: imágenes y logos del cuerpo,
+   * líneas en blanco y alineación de cada párrafo (títulos centrados, textos justificados).
+   */
+  async docxToHtml(bytes) {
+    await this.loadMammoth();
+    const { value } = await mammoth.convertToHtml({ arrayBuffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) }, { ignoreEmptyParagraphs: false });
+    let html = this.safeHtml(value);
+    try {
+      if (!window.JSZip) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+      const zip = await JSZip.loadAsync(bytes);
+      const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const parse = x => new DOMParser().parseFromString(x, 'application/xml');
+      const jcDe = p => { const ppr = [...p.childNodes].find(n => n.localName === 'pPr'); const jc = ppr && [...ppr.childNodes].find(n => n.localName === 'jc'); return jc ? jc.getAttributeNS(W, 'val') || jc.getAttribute('w:val') : ''; };
+      // Alineación definida por los estilos (por ejemplo, un título centrado por estilo)
+      const porEstilo = {};
+      const sx = zip.file('word/styles.xml');
+      if (sx) [...parse(await sx.async('string')).getElementsByTagNameNS(W, 'style')].forEach(s => { const v = jcDe(s); if (v) porEstilo[s.getAttributeNS(W, 'styleId') || s.getAttribute('w:styleId')] = v; });
+      const body = parse(await zip.file('word/document.xml').async('string')).getElementsByTagNameNS(W, 'body')[0];
+      // Párrafos del cuerpo en orden (sin los de cuadros de texto, que el lector de Word no incluye)
+      const enCuadro = p => { for (let n = p.parentNode; n && n.nodeType === 1; n = n.parentNode) if (n.localName === 'txbxContent') return true; return false; };
+      const ps = [...body.getElementsByTagNameNS(W, 'p')].filter(p => !enCuadro(p));
+      const alin = ps.map(p => { let v = jcDe(p); if (!v) { const ppr = [...p.childNodes].find(n => n.localName === 'pPr'); const st = ppr && [...ppr.childNodes].find(n => n.localName === 'pStyle'); if (st) v = porEstilo[st.getAttributeNS(W, 'val') || st.getAttribute('w:val')] || ''; } return v; });
+      const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+      const els = [...doc.body.firstChild.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li')];
+      if (els.length === alin.length) {
+        const css = { center: 'center', right: 'right', end: 'right', both: 'justify', distribute: 'justify', left: 'left', start: 'left' };
+        els.forEach((e, i) => { const a = css[alin[i]]; if (a) e.style.textAlign = a; });
+        html = doc.body.firstChild.innerHTML;
+      }
+    } catch (e) { console.warn('Alineación del documento no disponible:', e); }
+    return html;
+  },
+  /** Vista fiel: el documento tal como se subió (encabezado, logos, pie), convertido a PDF por el servidor. */
+  async loadFaithful() {
+    const v = State.viewer;
+    if (v.pdfUrl || v.cargandoFiel) return;
+    v.cargandoFiel = true;
+    try {
+      const out = await API.call('exportarDocumento', { id: v.id, formato: 'pdf' });
+      v.pdfUrl = URL.createObjectURL(new Blob([Uint8Array.from(atob(out.base64), c => c.charCodeAt(0))], { type: 'application/pdf' }));
+    } catch (e) { v.vista = 'texto'; toast('No se pudo generar la vista fiel: ' + e.message, 'error'); }
+    finally { v.cargandoFiel = false; }
+    if (State.viewer === v && el('doc-viewer') && !el('doc-edit')) this.renderViewer();
+  },
+  setVista(vista) { State.viewer.vista = vista; this.renderViewer(); },
   async openEvidence(id, editar = false, comoWord = false) {
     const ev = State.rawEvidences.find(x => sameId(x.id, id)) || { id };
     const done = ui.busy(comoWord ? 'Convirtiendo a Word' : 'Abriendo documento', comoWord ? 'Se reconoce el texto del PDF para poder editarlo...' : 'Descargando el archivo de forma segura...');
@@ -286,9 +332,9 @@ Object.assign(app, {
     if (State.viewer?.url) URL.revokeObjectURL(State.viewer.url);
     const kind = this.docKind(f.mimeType, f.fileName);
     const url = URL.createObjectURL(new Blob([bytes], { type: kind === 'pdf' ? 'application/pdf' : (f.mimeType || 'application/octet-stream') }));
-    State.viewer = { id, ev, f, kind, url, bytes, html: '', convertido: !!f.convertido };
+    State.viewer = { id, ev, f, kind, url, bytes, html: '', convertido: !!f.convertido, vista: kind === 'docx' && !API.demo && ev.storage === 'drive' ? 'fiel' : 'texto' };
     try {
-      if (kind === 'docx') { await this.loadMammoth(); State.viewer.html = this.safeHtml((await mammoth.convertToHtml({ arrayBuffer: bytes.buffer })).value); }
+      if (kind === 'docx') State.viewer.html = await this.docxToHtml(bytes);
       else if (kind === 'html') State.viewer.html = this.safeHtml(new TextDecoder().decode(bytes));
       else if (kind === 'sheet' && window.XLSX) { const wb = XLSX.read(bytes, { type: 'array' }); State.viewer.html = wb.SheetNames.map(n => `<h3>${esc(n)}</h3>${this.safeHtml(XLSX.utils.sheet_to_html(wb.Sheets[n], { header: '', footer: '' }))}`).join(''); }
       else if (kind === 'text') State.viewer.text = new TextDecoder().decode(bytes);
@@ -305,6 +351,7 @@ Object.assign(app, {
     const pdfEditable = can && v.kind === 'pdf' && ev.storage === 'drive' && !API.demo;
     return `<div class="doc-viewer__bar">
       <div class="chips">${ev.type ? chip(ev.type, AREAS[this.evArea(ev)]?.tone || 'neutral') : ''}${ev.esModelo ? chip('Modelo', 'obs', 'stamp') : ''}${ev.archivado ? chip('En el archivo de la plataforma', 'conv', 'archive') : ev.storage === 'drive' ? chip('Vinculado desde Drive', 'neutral', 'link') : ''}${(ev.versiones || []).length ? chip(`${ev.versiones.length + 1} versiones`, 'obs', 'history') : ''}${!can && this.evArea(ev) === 'PIE' ? chip('Solo lectura', 'neutral', 'eye') : ''}</div>
+      ${v.kind === 'docx' && !API.demo && ev.storage === 'drive' ? `<div class="segs" role="group" aria-label="Vista del documento"><button type="button" class="seg" aria-pressed="${v.vista === 'fiel'}" onclick="app.setVista('fiel')">${ico('file-image')}Como se subió</button><button type="button" class="seg" aria-pressed="${v.vista !== 'fiel'}" onclick="app.setVista('texto')">${ico('text')}Texto</button></div>` : ''}
       <div class="row-actions">
         ${editable ? `<button class="btn btn--sm btn--primary" onclick="app.editDocument()">${ico('pencil')}Editar</button>` : ''}
         ${pdfEditable ? `<button class="btn btn--sm btn--primary" onclick="app.openEvidence(${jsq(ev.id)}, true, true)" title="Reconoce el texto del PDF y lo abre como Word editable">${ico('pencil')}Convertir a Word y editar</button>` : ''}
@@ -323,6 +370,7 @@ Object.assign(app, {
     let body;
     if (v.error) body = `<p class="note">${ico('alert-triangle')}${esc(v.error)}</p>`;
     else if (v.kind === 'pdf') body = `<iframe class="doc-frame" src="${v.url}" title="${esc(v.f.fileName || 'Documento PDF')}"></iframe>`;
+    else if (v.vista === 'fiel' && v.kind === 'docx') { body = v.pdfUrl ? `<iframe class="doc-frame" src="${v.pdfUrl}" title="Documento tal como se subió"></iframe>` : `<div class="doc-loading">${ico('loader')}Preparando la vista del documento tal como se subió (con encabezado y logos)...</div>`; this.loadFaithful(); }
     else if (v.kind === 'image') body = `<div class="doc-paper doc-paper--img"><img src="${v.url}" alt="${esc(v.f.fileName || 'Imagen del documento')}"></div>`;
     else if (v.html) body = `${v.convertido ? `<p class="note">${ico('info')}Documento convertido a Word para verlo y editarlo. Revise el formato antes de guardar.</p>` : ''}${/[☐☒☑]/.test(v.html) && this.canEditEv(v.ev) ? `<p class="note">${ico('square-check')}Este documento tiene casillas. Presione "Editar" para marcarlas.</p>` : ''}<div class="doc-paper">${v.html}</div>`;
     else if (v.text !== undefined) body = `<pre class="doc-paper prewrap">${esc(v.text)}</pre>`;
@@ -407,7 +455,7 @@ Object.assign(app, {
           <button type="button" class="btn btn--sm btn--primary" onclick="app.saveDocument()">${ico('save')}${nuevo ? 'Guardar documento' : 'Guardar nueva versión'}</button>
         </div>
       </div>
-      <p class="note">${ico('info')}${nuevo ? `Documento nuevo para <strong>${esc(v.ev.studentName || '')}</strong> basado en el modelo elegido. Complete los campos y guarde: queda en Word en la ficha y en el archivo de la plataforma.` : 'Complete o mejore el texto directamente en el documento. Al guardar se crea una nueva versión en Word; la anterior se conserva.'} Pinche una casilla ☐ para marcarla (en una misma fila queda marcada solo una). Para mejorar la redacción, seleccione un párrafo: a la IA no se envía el nombre ni el RUN del estudiante.</p>
+      <p class="note">${ico('info')}${nuevo ? `Documento nuevo para <strong>${esc(v.ev.studentName || '')}</strong> basado en el modelo elegido. Complete los campos y guarde: queda en Word, con el encabezado, logos y pie de página del modelo, en la ficha y en el archivo de la plataforma.` : 'Complete o mejore el texto directamente en el documento. Al guardar se crea una nueva versión en Word que conserva el encabezado, los logos y el pie de página del original; la versión anterior se conserva.'} Pinche una casilla ☐ para marcarla (en una misma fila queda marcada solo una). Para mejorar la redacción, seleccione un párrafo: a la IA no se envía el nombre ni el RUN del estudiante.</p>
       <div id="doc-edit" class="doc-paper is-editing" contenteditable="true" spellcheck="true" lang="es">${v.html}</div>`;
     const ed = el('doc-edit');
     this.decorateChecks(ed);
@@ -619,7 +667,7 @@ ${anon}` });
         const kind = this.docKind(modelo?.mimeType, modelo?.fileName);
         const f = await API.call('file', { id: c.modelId, comoWord: kind === 'pdf' });
         const bytes = Uint8Array.from(atob(f.base64 || ''), ch => ch.charCodeAt(0));
-        if (this.docKind(f.mimeType, f.fileName) === 'docx') { await this.loadMammoth(); html = this.safeHtml((await mammoth.convertToHtml({ arrayBuffer: bytes.buffer })).value); }
+        if (this.docKind(f.mimeType, f.fileName) === 'docx') html = await this.docxToHtml(bytes);
         else if (/html/.test(f.mimeType || '')) html = this.safeHtml(new TextDecoder().decode(bytes));
         else throw new Error('Este modelo no se puede usar. Elija un documento Word.');
       } else html = this.safeHtml(this.baseTemplate(c.area, c.type));
@@ -729,7 +777,7 @@ ${anon}` });
     const v = State.viewer, n = v.nuevo, s = this.getStudent(v.ev.studentId);
     const done = ui.busy('Guardando el documento', 'Creando el Word en la carpeta del estudiante...');
     try {
-      const out = await API.call('crearDocumento', { studentId: s.id, studentName: s.name, curso: s.curso, html, nombre: n.nombre, area: n.area });
+      const out = await API.call('crearDocumento', { studentId: s.id, studentName: s.name, curso: s.curso, html, nombre: n.nombre, area: n.area, modeloId: n.modelId || '' });
       const evId = 'drv_' + out.fileId, anio = today().slice(0, 4);
       const ev = { id: evId, studentId: String(s.id), studentName: s.name, course: s.curso, date: today(), anio, area: n.area, areaFija: true, type: n.type, description: `Creado en la plataforma desde ${n.modeloNombre}`, fileName: out.fileName, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: out.fileId, url: out.url, archivado: true, modeloId: n.modelId || '', ...(API.demo ? { demoHtml: html } : {}) };
       await DB.save('evidences', ev);
