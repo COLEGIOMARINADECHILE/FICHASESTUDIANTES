@@ -180,7 +180,7 @@ Object.assign(app, {
     if (movidos) partes.push(`Cambiados de curso: ${movidos}`);
     if (retirados) partes.push(`Retirados: ${retirados}`);
     if (omitidos) partes.push(`Omitidos: ${omitidos}`);
-    toast(`Nómina e inasistencias guardadas. ${partes.join(', ')}`);
+    notice({ type: 'success', title: 'Nómina e inasistencias guardadas', items: partes });
     State.attendanceImport = null;
     State.filterCourse = curso;
     setTimeout(() => this.navigate('students'), 0);
@@ -234,7 +234,7 @@ Object.assign(app, {
       if (Object.keys(up).length) { ops.push({ col: 'students', id: String(ex.id), data: up, merge: true }); updated++; }
     });
     await DB.batch(ops);
-    toast(`Operación finalizada. Creados: ${added}, actualizados: ${updated}`);
+    notice({ type: 'success', title: 'Carga de estudiantes finalizada', items: [`Estudiantes nuevos: ${added}`, `Estudiantes actualizados: ${updated}`] });
     this.renderAdmin();
   },
 
@@ -353,10 +353,10 @@ Object.assign(app, {
         } else omitidos++;
       });
       await DB.batch(ops);
-      toast(`Notas guardadas. Actualizados: ${actualizados}${creados ? `, estudiantes creados: ${creados}` : ''}${omitidos ? `, omitidos: ${omitidos}` : ''}`);
+      notice({ type: omitidos ? 'warn' : 'success', title: 'Notas guardadas', items: [`Estudiantes actualizados: ${actualizados}`, creados ? `Estudiantes nuevos creados: ${creados}` : '', omitidos ? `Omitidos: ${omitidos}` : ''].filter(Boolean) });
       State.gradesImport = null;
       this.render();
-    } catch (e) { toast('Error al guardar las notas: ' + e.message, 'error'); }
+    } catch (e) { notice({ type: 'error', title: 'No se guardaron las notas', msg: e.message }); }
     finally { done(); }
   },
 
@@ -437,8 +437,8 @@ Object.assign(app, {
       }
       await DB.load();
       State.loginOptions = await API.call('bootstrap');
-      toast('Traspaso completado. Los funcionarios ya pueden ingresar con su clave de siempre.');
-    } catch (e) { console.error(e); toast('La migración se detuvo: ' + e.message, 'error'); }
+      notice({ type: 'success', title: 'Traspaso de datos completado', msg: 'Los funcionarios ya pueden ingresar con su clave de siempre.' });
+    } catch (e) { console.error(e); notice({ type: 'error', title: 'El traspaso de datos se detuvo', msg: e.message }); }
     finally { done(); this.renderAdmin(); }
   }
 });

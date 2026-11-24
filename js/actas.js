@@ -190,8 +190,8 @@ Object.assign(app, {
         await DB.save('evidences', { id: newId(), studentId: String(s.id), studentName: s.name, course: s.curso, date: fecha, type: ACTA_TIPO, cartaId: carta ? String(carta.id) : '', description: carta ? `Acta firmada de ${carta.type} del ${fmtDate(carta.date)}` : 'Acta firmada de carta de compromiso', fileName: nombre, mimeType: 'application/pdf', uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: up.fileId, url: up.url, archivado: true, paginas: g.pages.length });
         ok++;
       }
-      toast(`${ok} acta(s) firmada(s) guardada(s) en las fichas`);
-    } catch (e) { console.error(e); toast(`Se guardaron ${ok}. Se detuvo: ${e.message}`, 'error'); }
+      notice({ type: 'success', title: 'Actas firmadas guardadas', msg: `${ok} acta(s) quedaron en la ficha de cada estudiante, vinculadas a su carta.` });
+    } catch (e) { console.error(e); notice({ type: ok ? 'warn' : 'error', title: ok ? 'Se guardó solo una parte de las actas' : 'No se guardaron las actas', msg: e.message, items: [`Guardadas: ${ok} de ${groups.length}.`, 'Puede volver a subir el PDF: las actas ya guardadas no se pierden.'] }); }
     finally { done(); State.actas = null; this.render(); }
   }
 });

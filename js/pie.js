@@ -19,7 +19,10 @@ Object.assign(app, {
   courseFromText(t) {
     const N = s => this.normalizarTexto(s);
     let s = N(t).replace(/\bNT1\b/, 'PRE KINDER').replace(/\bNT2\b/, 'KINDER')
-      .replace(/^IV\b/, '4').replace(/^III\b/, '3').replace(/^II\b/, '2').replace(/^I\b/, '1');
+      .replace(/\b(PRIMERO|PRIMER|1ERO|1RO|1ER)\b/, '1').replace(/\b(SEGUNDO|2DO)\b/, '2').replace(/\b(TERCERO|TERCER|3ERO|3RO|3ER)\b/, '3').replace(/\b(CUARTO|4TO)\b/, '4')
+      .replace(/\b(QUINTO|5TO)\b/, '5').replace(/\b(SEXTO|6TO)\b/, '6').replace(/\b(SEPTIMO|7MO)\b/, '7').replace(/\b(OCTAVO|8VO)\b/, '8')
+      .replace(/^IV\b/, '4').replace(/^III\b/, '3').replace(/^II\b/, '2').replace(/^I\b/, '1')
+      .replace(/^(\d) ?M\b/, '$1 MEDIO').replace(/^(\d) ?(MEDIOS|EM)\b/, '$1 MEDIO').replace(/\bBASICOS\b/, 'BASICO').replace(/^(\d) ?(MEDIO|BASICO) ?([ABC])$/, '$1 $2 $3').replace(/^(\d)(MEDIO|BASICO)/, '$1 $2');
     return ALL_COURSES.find(c => N(c) === s) || ALL_COURSES.find(c => s.length > 3 && (s.startsWith(N(c)) || N(c) === s.replace(/ (A|B|C)$/, ' $1'))) || '';
   },
   /** Busca un estudiante por RUN o por las palabras de su nombre (de preferencia dentro del curso). */
@@ -175,8 +178,8 @@ Object.assign(app, {
         });
         ok++;
       }
-      toast(`${ok} plan(es) PIE cargados en las fichas`);
-    } catch (e) { toast(`Se cargaron ${ok}. Se detuvo: ${e.message}`, 'error'); }
+      notice({ type: 'success', title: 'Planes cargados', msg: `${ok} plan(es) quedaron en la ficha de cada estudiante y en el archivo de la plataforma.` });
+    } catch (e) { notice({ type: ok ? 'warn' : 'error', title: ok ? 'Se cargó solo una parte de los planes' : 'No se cargaron los planes', msg: e.message, items: [`Cargados: ${ok} de ${list.length}.`] }); }
     finally { done(); this.render(); }
   },
 
@@ -200,31 +203,48 @@ Object.assign(app, {
         ui.close();
         const done = ui.busy('Leyendo la carpeta de Drive', 'Puede tardar uno o dos minutos con muchas carpetas...');
         try {
+          // La carpeta se lee por tandas: mientras queden subcarpetas, se sigue leyendo
           const out = await API.call('indexarCarpeta', { carpeta });
+          let vuelta = 1, totalCarpetas = out.carpetas || 0;
+          while (out.cola && out.cola.length) {
+            vuelta++;
+            el('busy-msg').textContent = `Carpeta grande: ${out.files.length} archivos y ${totalCarpetas} carpetas leídas hasta ahora. Siguiendo con ${out.cola.length} carpetas pendientes (tanda ${vuelta})...`;
+            const mas = await API.call('indexarCarpeta', { carpeta, cola: out.cola, nombre: out.carpeta });
+            out.files.push(...mas.files);
+            totalCarpetas += mas.carpetas || 0;
+            out.cola = mas.cola || [];
+          }
+          Object.assign(out, { carpetas: totalCarpetas, incompleto: false, pendientes: 0 });
           done();
           this.reviewDriveFiles(out, filtro);
-        } catch (e) { done(); toast(e.message, 'error'); }
+        } catch (e) {
+          done();
+          notice({ type: 'error', title: 'No se pudo leer la carpeta de Drive', msg: e.message, items: e.code === 'SIN_ACCESO' ? ['La carpeta debe estar compartida con la cuenta del sistema (al menos como lector).', 'Si está en una unidad compartida, agregue esa cuenta como miembro de la unidad.', 'Después vuelva a pegar el enlace.'] : ['Revise que el enlace sea de una carpeta y vuelva a intentarlo.'] });
+        }
         return false;
       }
     });
   },
   reviewDriveFiles(out, filtro) {
     const groups = {};
-    let fuera = 0;
+    let fueraAnio = 0, fueraUbicacion = 0;
     out.files.forEach(f => {
-      const segs = f.path.split('/');
+      const segs = f.path ? f.path.split('/') : [];
       const ci = segs.findIndex(s => this.courseFromText(s));
       const course = ci >= 0 ? this.courseFromText(segs[ci]) : '';
       const carpeta = ci >= 0 ? (segs[ci + 1] || '') : (segs[segs.length - 1] || '');
       const anio = this.yearOf(`${f.path} ${f.name}`);
       const pasa = filtro === 'todos' || (filtro === '2026' ? anio === '2026' : (anio === '2026' || !anio));
-      if (!pasa || !carpeta) { fuera++; return; }
+      if (!carpeta) { fueraUbicacion++; return; }
+      if (!pasa) { fueraAnio++; return; }
       const key = `${course}|${carpeta}`;
       (groups[key] = groups[key] || { course, carpeta, files: [] }).files.push({ ...f, anio: anio || '2026' });
     });
     const list = Object.values(groups).map(g => { const s = this.findStudentByRun(g.carpeta).student || this.findStudentByName(g.carpeta, g.course); return { ...g, studentId: s ? String(s.id) : '' }; })
       .sort((a, b) => (ALL_COURSES.indexOf(a.course) - ALL_COURSES.indexOf(b.course)) || a.carpeta.localeCompare(b.carpeta));
-    State.driveImport = { carpeta: out.carpeta, groups: list, fuera };
+    const anios = [...new Set(out.files.map(f => this.yearOf(`${f.path} ${f.name}`)).filter(Boolean))].sort();
+    State.driveImport = { out, filtro, carpeta: out.carpeta, groups: list, fuera: fueraAnio + fueraUbicacion, fueraAnio, fueraUbicacion, anios, total: out.files.length };
+    if (el('drive-import-content')) return this.renderDriveImport();
     ui.modal({ title: `Vincular documentos: ${out.carpeta}`, icon: 'folder-sync', tone: 'pie', size: 'xl', okText: 'Vincular a las fichas', body: '<div id="drive-import-content"></div>', onOk: () => this.saveDriveLinks() });
     this.renderDriveImport();
   },
@@ -233,12 +253,19 @@ Object.assign(app, {
     const total = d.groups.reduce((a, g) => a + g.files.length, 0);
     const ok = d.groups.filter(g => g.studentId);
     const yaVinculados = new Set(State.rawEvidences.map(e => String(e.driveId || '')));
+    const filtroTxt = { '2026': 'solo 2026', '2026+': '2026 y sin año', todos: 'todos los años' }[d.filtro] || '';
     el('drive-import-content').innerHTML = `
+      <div class="row-actions">
+        ${chip(`${d.total} archivos leídos en la carpeta`, 'neutral', 'folder-open')}${d.out?.incompleto ? chip(`Lectura parcial: faltaron ${d.out.pendientes} subcarpetas`, 'warn', 'alert-triangle') : ''}
+        ${fieldHtml('Años a vincular', `<select class="input" onchange="app.reviewDriveFiles(State.driveImport.out, this.value)">${options([['2026', 'Solo los que indican 2026'], ['2026+', '2026 y los que no indican año'], ['todos', 'Todos los años']], d.filtro)}</select>`, 'field--inline')}
+      </div>
+      ${d.out?.incompleto ? `<p class="note">${ico('alert-triangle')}La carpeta es muy grande y no se alcanzó a leer completa. Vincule lo encontrado y luego repita con la carpeta de cada curso.</p>` : ''}
+      ${!d.groups.length ? `<div class="tr-review">${ico('alert-triangle')}<span><strong>No hay documentos para vincular con el filtro "${filtroTxt}".</strong> ${d.fueraAnio ? `${d.fueraAnio} archivo(s) quedaron fuera por el año${d.anios.length ? ` (años encontrados en los nombres: ${d.anios.join(', ')})` : ''}: elija "Todos los años" arriba. ` : ''}${d.fueraUbicacion ? `${d.fueraUbicacion} archivo(s) están sueltos en la carpeta principal, sin carpeta de curso o de estudiante. ` : ''}${!d.total ? 'La carpeta está vacía o la cuenta del sistema no puede ver sus archivos.' : ''}</span></div>` : ''}
       <div class="stats stats--4">
         <div class="stat"><span class="stat__num num">${total}</span><span class="stat__label">Documentos a vincular</span></div>
         <div class="stat" data-tone="conv"><span class="stat__num num">${ok.length}</span><span class="stat__label">Estudiantes identificados</span></div>
         <div class="stat" data-tone="warn"><span class="stat__num num">${d.groups.length - ok.length}</span><span class="stat__label">Carpetas sin identificar</span></div>
-        <div class="stat"><span class="stat__num num">${d.fuera}</span><span class="stat__label">Omitidos por año o ubicación</span></div>
+        <div class="stat"><span class="stat__num num">${d.fuera}</span><span class="stat__label">Omitidos (${d.fueraAnio} por año, ${d.fueraUbicacion} sin carpeta)</span></div>
       </div>
       <div class="table-wrap"><table class="table table--dense">
         <thead><tr><th>Curso</th><th>Carpeta del estudiante</th><th>Ficha a la que se vincula</th><th class="t-num">Documentos</th><th>Tipos</th></tr></thead>
@@ -263,12 +290,18 @@ Object.assign(app, {
         uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: f.id, url: f.url
       } }));
     });
-    if (!ops.length) { toast('No hay documentos nuevos para vincular', 'error'); return false; }
+    const sinFicha = d.groups.filter(g => !g.studentId).length;
+    if (!ops.length) {
+      notice({ type: 'warn', title: 'No se vinculó ningún documento', msg: d.groups.some(g => g.studentId) ? 'Todos los documentos de las carpetas identificadas ya estaban vinculados.' : 'Ninguna carpeta tiene una ficha de estudiante asignada.', items: [sinFicha ? `${sinFicha} carpeta(s) sin estudiante: elíjalo en la columna "Ficha a la que se vincula".` : '', d.fueraAnio ? `${d.fueraAnio} archivo(s) omitidos por el año: pruebe con "Todos los años".` : ''].filter(Boolean) });
+      return false;
+    }
+    const estudiantes = new Set(ops.map(o => o.data.studentId)).size;
     const done = ui.busy('Vinculando documentos', `${ops.length} documentos...`);
-    try { await DB.batch(ops); toast(`${ops.length} documentos vinculados a las fichas`); }
-    catch (e) { toast(e.message, 'error'); return false; }
-    finally { done(); }
+    try { await DB.batch(ops); }
+    catch (e) { done(); notice({ type: 'error', title: 'No se vincularon los documentos', msg: e.message, items: ['No se guardó ningún cambio de este lote. Corrija el problema y vuelva a intentarlo.'] }); return false; }
+    done();
     ui.close();
+    notice({ type: sinFicha ? 'warn' : 'success', title: `Carpeta "${d.carpeta}" vinculada`, msg: `${ops.length} documento(s) quedaron en la ficha de ${estudiantes} estudiante(s).`, items: [sinFicha ? `${sinFicha} carpeta(s) no se vincularon porque no tienen estudiante asignado.` : '', d.fueraAnio ? `${d.fueraAnio} archivo(s) se omitieron por el año.` : ''].filter(Boolean), actions: [['Ver Programa PIE', () => this.navigate('pie')]] });
     this.navigate('pie');
   },
 

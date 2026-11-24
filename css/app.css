@@ -1112,3 +1112,27 @@ body.has-iv-panel .main { padding-right: min(400px, 40vw); }
 .mine-course__tipos { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-left: auto; font-weight: 400; }
 .mine-course .table-wrap { margin: 0; border: 0; border-radius: 0; }
 .table tr.is-alert td { background: var(--tone-proto-soft); }
+/* Avisos que quedan visibles hasta cerrarlos con la X */
+.toast { display: grid; grid-template-columns: auto 1fr auto auto; align-items: start; gap: 0.5rem; }
+.toast__icon svg { width: 1.1rem; height: 1.1rem; color: var(--tone-conv-soft); }
+.toast--error .toast__icon svg { color: #ff9b9b; }
+.toast__time { font-size: 0.72rem; opacity: 0.7; margin-top: 0.15rem; }
+.toast__close, .notice__close { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.toast__close:hover { background: rgb(255 255 255 / 0.14); }
+.toast__close svg, .notice__close svg { width: 1rem; height: 1rem; }
+#notice-layer { position: fixed; top: var(--space-md); left: 50%; transform: translateX(-50%); z-index: 320; display: grid; gap: 0.6rem; width: min(36rem, calc(100vw - 2rem)); pointer-events: none; }
+.notice { pointer-events: auto; display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: start; padding: 0.95rem 1rem; border-radius: 14px; background: var(--color-paper); border: 1px solid var(--color-rule); border-left: 6px solid var(--tone-conv-ink); box-shadow: 0 18px 44px rgb(15 30 60 / 0.25); animation: toast-in var(--dur-short) var(--ease-out); }
+.notice--error { border-left-color: var(--color-danger, #c0392b); }
+.notice--warn { border-left-color: var(--tone-warn-ink); }
+.notice__icon svg { width: 1.6rem; height: 1.6rem; color: var(--tone-conv-ink); }
+.notice--error .notice__icon svg { color: var(--color-danger, #c0392b); }
+.notice--warn .notice__icon svg { color: var(--tone-warn-ink); }
+.notice__estado { font-size: 0.78rem; font-weight: 700; color: var(--tone-conv-ink); }
+.notice--error .notice__estado { color: var(--color-danger, #c0392b); }
+.notice--warn .notice__estado { color: var(--tone-warn-ink); }
+.notice h3 { margin: 0.1rem 0 0.25rem; font-size: 1rem; color: var(--color-heading); }
+.notice p { margin: 0 0 0.35rem; font-size: 0.9rem; }
+.notice ul { margin: 0.2rem 0 0.4rem 1.1rem; padding: 0; font-size: 0.86rem; }
+.notice__close:hover { background: var(--tone-obs-soft); }
+@media (prefers-reduced-motion: reduce) { .notice, .toast { animation: none; } }
+@media print { #notice-layer { display: none !important; } }

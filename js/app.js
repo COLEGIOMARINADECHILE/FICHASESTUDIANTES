@@ -1131,9 +1131,9 @@ window.app = {
       data.driveId = out.fileId;
       data.url = out.url;
       await DB.save('evidences', data);
-      toast('Respaldo cargado correctamente');
+      notice({ type: 'success', title: 'Respaldo cargado', msg: `${file.name} quedó en la ficha de ${s.name} y en la carpeta privada de Drive.` });
       this.renderEvidences();
-    } catch (e) { toast('Error al subir el respaldo: ' + e.message, 'error'); }
+    } catch (e) { notice({ type: 'error', title: 'No se cargó el respaldo', msg: e.message }); }
     finally { done(); }
   },
   deleteEvidence(id) {

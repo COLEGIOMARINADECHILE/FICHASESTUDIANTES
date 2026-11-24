@@ -122,13 +122,46 @@ const hasAccess = f => { const fn = State.currentUser?.functions || []; return f
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const readFileAsDataURL = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('No se pudo leer el archivo')); r.readAsDataURL(file); });
 
+/** Aviso breve: queda visible hasta que el funcionario lo cierra con la X (se muestran los 4 más recientes). */
 function toast(msg, type = 'success') {
   const t = document.createElement('div');
   t.className = `toast toast--${type}`;
   t.setAttribute('role', type === 'error' ? 'alert' : 'status');
-  t.textContent = msg;
-  el('toast-container').appendChild(t);
-  setTimeout(() => t.remove(), 4000);
+  const hora = new Date().toTimeString().slice(0, 5);
+  t.innerHTML = `<span class="toast__icon">${ico(type === 'error' ? 'x-circle' : 'check-circle')}</span><span class="toast__msg"></span><span class="toast__time num">${hora}</span><button type="button" class="toast__close" aria-label="Cerrar aviso">${ico('x')}</button>`;
+  t.querySelector('.toast__msg').textContent = msg;
+  t.querySelector('.toast__close').onclick = () => t.remove();
+  const box = el('toast-container');
+  box.appendChild(t);
+  while (box.children.length > 4) box.firstElementChild.remove();
+  icons();
+}
+
+/**
+ * Resultado de una acción importante (subir, vincular, cargar...): ventana que queda abierta
+ * hasta cerrarla con la X, indicando claramente si se realizó o no y qué cambió.
+ * type: 'success' | 'error' | 'warn'. items: lista de detalles. actions: [[texto, función]].
+ */
+function notice({ type = 'success', title, msg = '', items = [], actions = [] }) {
+  let layer = el('notice-layer');
+  if (!layer) { layer = document.createElement('div'); layer.id = 'notice-layer'; document.body.appendChild(layer); }
+  const card = document.createElement('section');
+  card.className = `notice notice--${type}`;
+  card.setAttribute('role', type === 'error' ? 'alertdialog' : 'status');
+  card.setAttribute('aria-label', title);
+  const icon = { success: 'check-circle-2', error: 'x-circle', warn: 'alert-triangle' }[type] || 'info';
+  const estado = { success: 'Se realizó correctamente', error: 'No se realizó', warn: 'Se realizó con observaciones' }[type] || '';
+  card.innerHTML = `<div class="notice__icon">${ico(icon)}</div>
+    <div class="notice__body"><span class="notice__estado">${estado} · ${new Date().toTimeString().slice(0, 5)}</span><h3>${esc(title)}</h3>${msg ? `<p>${esc(msg)}</p>` : ''}
+      ${items.length ? `<ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
+      ${actions.length ? `<div class="row-actions">${actions.map((a, i) => `<button type="button" class="btn btn--sm" data-act="${i}">${esc(a[0])}</button>`).join('')}</div>` : ''}</div>
+    <button type="button" class="notice__close" aria-label="Cerrar aviso">${ico('x')}</button>`;
+  card.querySelector('.notice__close').onclick = () => card.remove();
+  card.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => { card.remove(); actions[+b.dataset.act][1](); }; });
+  layer.prepend(card);
+  while (layer.children.length > 3) layer.lastElementChild.remove();
+  icons();
+  card.querySelector('.notice__close').focus({ preventScroll: true });
 }
 
 // Etiquetas reutilizables

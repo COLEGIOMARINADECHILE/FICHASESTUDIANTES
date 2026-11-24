@@ -607,10 +607,10 @@ ${anon}` });
         if (est.length) await DB.save('reports', { id: plan.id, actualizado: today(), estrategias: est }, true);
       }
       ui.guard = null;
-      toast('Nueva versión guardada en el archivo de la plataforma');
+      notice({ type: 'success', title: 'Nueva versión guardada', msg: `${doc.fileName} quedó en el archivo de la plataforma. La versión anterior se conserva.` });
       this.renderViewer();
       if (State.currentView === 'student_detail') this.changeDetailTab(State.detailTab);
-    } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
+    } catch (e) { notice({ type: 'error', title: 'No se guardó el documento', msg: e.message, items: ['Sus cambios siguen en pantalla: puede intentar guardar de nuevo.'] }); }
     finally { done(); }
   },
 
@@ -785,10 +785,10 @@ ${anon}` });
       State.areaVer = (State.areaVer || 0) + 1;
       ui.guard = null;
       State.viewer = { ...v, nuevo: null, id: evId, ev, html, kind: 'docx', bytes: null, f: { fileName: out.fileName, url: out.url, mimeType: ev.mimeType } };
-      toast('Documento creado y guardado en la ficha');
+      notice({ type: 'success', title: 'Documento creado', msg: `${out.fileName} quedó en la ficha de ${s.name}.` });
       this.renderViewer();
       if (State.currentView === 'student_detail') this.changeDetailTab(State.detailTab);
-    } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
+    } catch (e) { notice({ type: 'error', title: 'No se guardó el documento', msg: e.message, items: ['Sus cambios siguen en pantalla: puede intentar guardar de nuevo.'] }); }
     finally { done(); }
   },
 
@@ -805,7 +805,7 @@ ${anon}` });
         ok += r.archivados; err += (r.errores || []).length;
       }
       await this.refresh?.(true);
-      toast(`${ok} documento(s) guardados en el archivo${err ? `, ${err} con error (revise que la cuenta del sistema tenga acceso)` : ''}`, err ? 'error' : undefined);
+      notice({ type: err ? (ok ? 'warn' : 'error') : 'success', title: 'Guardar documentos en el archivo', msg: `${ok} documento(s) copiados al archivo de la plataforma.`, items: err ? [`${err} no se pudieron copiar: revise que la cuenta del sistema tenga acceso a esos archivos.`] : [] });
     } catch (e) { toast(e.message, 'error'); }
     finally { done(); }
     if (desdeVisor && State.viewer) { State.viewer.ev = State.rawEvidences.find(x => sameId(x.id, State.viewer.id)) || { ...State.viewer.ev, archivado: true }; this.renderViewer(); }
