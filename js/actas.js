@@ -149,6 +149,7 @@ Object.assign(app, {
         delete pg.page; delete pg.text;
       });
       State.actas = { files: sources, pages, preset, porCarta: 1 };
+      State.actasDocs = {};
       this.groupActas(true);
       done();
       ui.modal({ title: preset.studentId ? 'Subir acta firmada' : `Separar y subir actas firmadas (${pages.length} página${pages.length === 1 ? '' : 's'})`, icon: 'file-check', tone: 'warn', size: 'xl', okText: 'Guardar actas en las fichas', body: '<div id="actas-content"></div>', onOk: () => this.saveActas() });
@@ -195,6 +196,137 @@ Object.assign(app, {
     g.first.incluir = !!id;
     this.renderActas();
   },
+  /** Estudiante a partir de lo escrito: etiqueta de la lista, RUN o palabras del nombre (en cualquier orden). */
+  resolveStudentText(v) {
+    const t = String(v || '').trim();
+    if (!t) return { s: null };
+    const exacto = this.studentByLabel(t);
+    if (exacto) return { s: exacto };
+    const run = this.findStudentByRun(t).student;
+    if (run) return { s: run };
+    const N = x => this.normalizarTexto(x).toLowerCase();
+    const palabras = N(t).split(/\s+/).filter(w => w.length > 1);
+    if (!palabras.length) return { s: null };
+    const pool = this.getStudents().filter(s => s.status !== 'blocked');
+    const hits = pool.filter(s => { const n = ` ${N(s.name)} `; return palabras.every(w => n.includes(` ${w}`)); });
+    return hits.length === 1 ? { s: hits[0] } : { s: null, varios: hits.length };
+  },
+  setActaStudentText(gi, v) {
+    const r = this.resolveStudentText(v);
+    if (!String(v || '').trim()) { this.setActaStudent(gi, ''); return true; }
+    if (!r.s) { toast(r.varios ? `Hay ${r.varios} estudiantes que coinciden. Escriba también el apellido o elija de la lista.` : 'No se encontró ese estudiante. Escriba nombre y apellido, o el RUN.', 'error'); this.renderActas(); return false; }
+    this.setActaStudent(gi, String(r.s.id));
+    return true;
+  },
+
+  // ---------------- VISTA GRANDE DE UNA ACTA ----------------
+  async actaPdf(fi) {
+    State.actasDocs = State.actasDocs || {};
+    if (!State.actasDocs[fi]) State.actasDocs[fi] = await this.pdfjs().getDocument({ data: new Uint8Array(State.actas.files[fi].bytes) }).promise;
+    return State.actasDocs[fi];
+  },
+  viewActa(gi, pagina = 0) {
+    const groups = this.actaGroups();
+    if (gi < 0 || gi >= groups.length) return;
+    State.actaView = { gi, pagina };
+    let v = el('acta-viewer');
+    if (!v) {
+      v = document.createElement('div');
+      v.id = 'acta-viewer';
+      v.className = 'acta-viewer';
+      v.setAttribute('role', 'dialog');
+      v.setAttribute('aria-modal', 'true');
+      v.setAttribute('aria-label', 'Acta en grande');
+      v.onkeydown = e => {
+        if (e.key === 'Escape') { e.stopPropagation(); this.closeActaViewer(); }
+        else if (e.target.tagName !== 'INPUT' && e.key === 'ArrowRight') this.actaViewerGo(1);
+        else if (e.target.tagName !== 'INPUT' && e.key === 'ArrowLeft') this.actaViewerGo(-1);
+      };
+      document.body.appendChild(v);
+    }
+    v.hidden = false;
+    this.renderActaViewer();
+  },
+  closeActaViewer() {
+    const v = el('acta-viewer');
+    if (v) v.hidden = true;
+    State.actaView = null;
+    if (el('actas-content')) this.renderActas();
+  },
+  actaViewerGo(paso) {
+    const n = this.actaGroups().length, gi = State.actaView.gi + paso;
+    if (gi >= 0 && gi < n) this.viewActa(gi);
+  },
+  actaViewerNextPending() {
+    const groups = this.actaGroups(), from = State.actaView.gi;
+    const orden = [...groups.keys()].slice(from + 1).concat([...groups.keys()].slice(0, from + 1));
+    const gi = orden.find(i => groups[i].first.incluir && !groups[i].first.studentId);
+    if (gi === undefined) { this.closeActaViewer(); notice({ type: 'success', title: 'Todas las actas tienen estudiante', msg: 'Revise el resumen y presione "Guardar actas en las fichas".' }); return; }
+    this.viewActa(gi);
+  },
+  /** Asigna lo escrito y pasa a la siguiente acta sin estudiante. */
+  actaViewerAssign() {
+    const inp = el('av-student');
+    if (!String(inp.value || '').trim()) { inp.focus(); return; }
+    if (this.setActaStudentText(State.actaView.gi, inp.value)) this.actaViewerNextPending();
+    else { this.renderActaViewer(); }
+  },
+  actaViewerSkip(incluir) {
+    const g = this.actaGroups()[State.actaView.gi];
+    g.first.incluir = incluir;
+    this.renderActas();
+    incluir ? this.renderActaViewer() : this.actaViewerNextPending();
+  },
+  async renderActaViewer() {
+    const v = el('acta-viewer'), st = State.actaView;
+    if (!v || !st) return;
+    const groups = this.actaGroups(), g = groups[st.gi], f = g.first, a = State.actas;
+    const s = f.studentId ? State.rawStudents.find(x => sameId(x.id, f.studentId)) : null;
+    const pend = groups.filter(x => x.first.incluir && !x.first.studentId).length;
+    v.innerHTML = `
+      <div class="av-pages" id="av-pages">${g.pages.map((pg, k) => `<figure class="av-page" id="av-p${k}"><div class="av-loading">${ico('loader')}Cargando página ${pg.p + 1}…</div><figcaption>${esc(a.files[pg.fi].name)} · página ${pg.p + 1}</figcaption></figure>`).join('')}</div>
+      <aside class="av-side">
+        <div class="av-head"><strong>Acta ${st.gi + 1} de ${groups.length}</strong><button type="button" class="icon-btn" aria-label="Cerrar la vista grande" title="Cerrar (Esc)" onclick="app.closeActaViewer()">${ico('x')}</button></div>
+        <p class="small muted">${g.pages.length} página(s) · ${pend ? `${pend} acta(s) sin estudiante` : 'todas tienen estudiante'}</p>
+        ${s ? `<p class="av-who" data-ok="true">${ico('user-check')}<span><strong>${esc(s.name)}</strong><br>${esc(s.curso || '')}${f.detected && sameId(f.detected, f.studentId) ? ' · reconocido en el documento' : ''}</span></p>` : `<p class="av-who">${ico('user-x')}<span>Sin estudiante asignado</span></p>`}
+        ${!f.incluir ? `<p class="note">${ico('ban')}Esta acta no se guardará.</p>` : ''}
+        <label class="field"><span class="field__label">¿De quién es esta carta?</span>
+          <input id="av-student" class="input" list="actas-students" value="${esc(s ? this.studentLabel(s) : '')}" placeholder="Escriba nombre, apellido o RUN" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault(); app.actaViewerAssign();}">
+        </label>
+        <button type="button" class="btn btn--primary" onclick="app.actaViewerAssign()">${ico('check')}Asignar y pasar a la siguiente</button>
+        <p class="small muted">Presione Enter para asignar. Flechas ← → para moverse entre actas (fuera del campo).</p>
+        <div class="av-nav">
+          <button type="button" class="btn btn--sm" ${st.gi === 0 ? 'disabled' : ''} onclick="app.actaViewerGo(-1)">${ico('chevron-left')}Anterior</button>
+          <button type="button" class="btn btn--sm" ${st.gi === groups.length - 1 ? 'disabled' : ''} onclick="app.actaViewerGo(1)">Siguiente${ico('chevron-right')}</button>
+        </div>
+        ${pend ? `<button type="button" class="btn btn--sm btn--ghost" onclick="app.actaViewerNextPending()">${ico('skip-forward')}Ir a la siguiente sin estudiante</button>` : ''}
+        ${f.incluir ? `<button type="button" class="btn btn--sm btn--ghost" onclick="app.actaViewerSkip(false)">${ico('ban')}No guardar esta acta</button>` : `<button type="button" class="btn btn--sm" onclick="app.actaViewerSkip(true)">${ico('rotate-ccw')}Volver a incluirla</button>`}
+      </aside>`;
+    icons();
+    const inp = el('av-student');
+    if (inp && !s) inp.focus();
+    // Páginas en alta resolución
+    const ancho = Math.min(1100, el('av-pages').clientWidth - 24) * Math.min(2, window.devicePixelRatio || 1);
+    for (const [k, pg] of g.pages.entries()) {
+      if (State.actaView !== st) return;
+      try {
+        const doc = await this.actaPdf(pg.fi);
+        const page = await doc.getPage(pg.p + 1);
+        const vp = page.getViewport({ scale: 1 });
+        const view = page.getViewport({ scale: ancho / vp.width });
+        const c = document.createElement('canvas');
+        c.width = view.width; c.height = view.height;
+        await page.render({ canvasContext: c.getContext('2d'), viewport: view }).promise;
+        const fig = el(`av-p${k}`);
+        if (!fig || State.actaView !== st) return;
+        fig.querySelector('.av-loading').replaceWith(c);
+        if (k === st.pagina && k > 0) fig.scrollIntoView({ block: 'start' });
+      } catch (e) {
+        const fig = el(`av-p${k}`);
+        if (fig) fig.querySelector('.av-loading').innerHTML = `<img src="${pg.thumb}" alt="Página ${pg.p + 1}">`;
+      }
+    }
+  },
   toggleActaSplit(pi) {
     const pg = State.actas.pages[pi];
     pg.start = !pg.start; pg.manual = true;
@@ -206,7 +338,8 @@ Object.assign(app, {
     const listos = groups.filter(g => g.first.incluir && g.first.studentId).length;
     const escaneadas = a.pages.some(p => !p.hasText);
     const students = this.getStudents().filter(s => s.status !== 'blocked').sort((x, y) => (ALL_COURSES.indexOf(x.curso) - ALL_COURSES.indexOf(y.curso)) || x.name.localeCompare(y.name));
-    const optsAlumnos = sel => `<option value="">Elegir estudiante...</option>${students.map(s => `<option value="${esc(s.id)}" ${sameId(s.id, sel) ? 'selected' : ''}>${esc(s.name)} (${esc(s.curso)})</option>`).join('')}`;
+    const etiqueta = id => { const s = id ? State.rawStudents.find(x => sameId(x.id, id)) : null; return s ? this.studentLabel(s) : ''; };
+    const sinAsignar = groups.filter(g => g.first.incluir && !g.first.studentId).length;
     el('actas-content').innerHTML = `
       <div class="stats stats--4">
         <div class="stat"><span class="stat__num num">${a.pages.length}</span><span class="stat__label">Páginas leídas</span></div>
@@ -216,17 +349,21 @@ Object.assign(app, {
       </div>
       ${State.actasOcr ? `<p class="note">${ico('scan')}Se leyeron con reconocimiento de texto ${State.actasOcr.leidas} de ${State.actasOcr.total} página(s) escaneadas.${State.actasOcr.leidas < State.actasOcr.total ? ' En las demás, elija al estudiante.' : ''}</p>` : ''}
       ${escaneadas && !a.preset.studentId ? `<div class="subpanel"><p class="small">${ico('scan')}Algunas páginas son escaneadas (imagen sin texto), así que el estudiante no se puede leer: elíjalo en cada acta. ${fieldHtml('Páginas por acta en los PDF escaneados', `<select class="input" onchange="State.actas.porCarta=+this.value; app.groupActas(); app.renderActas()">${options([[1, '1 página'], [2, '2 páginas'], [3, '3 páginas'], [4, '4 páginas']], a.porCarta)}</select>`, 'field--inline')}</p></div>` : ''}
-      <p class="muted small">Revise cada acta. Pinche "Separar aquí" en una página para que comience una acta nueva, o "Unir" para juntarla con la anterior.</p>
+      <datalist id="actas-students">${students.map(s => `<option value="${esc(this.studentLabel(s))}">`).join('')}</datalist>
+      <div class="actas-bar">
+        <p class="muted small">Pinche una página para verla en grande. Escriba el nombre o RUN del estudiante en cada acta (aparecen sugerencias). "Separar aquí" comienza una acta nueva; "Unir" la junta con la anterior.</p>
+        ${sinAsignar ? `<button type="button" class="btn btn--primary btn--sm" onclick="app.viewActa(app.actaGroups().findIndex(g => g.first.incluir && !g.first.studentId))">${ico('maximize-2')}Asignar las ${sinAsignar} sin estudiante, en grande</button>` : `<span class="chip" data-tone="conv">${ico('check')}Todas las actas tienen estudiante</span>`}
+      </div>
       <div class="stack">${groups.map((g, gi) => {
         const f = g.first;
         const cartas = f.studentId ? this.cartasOf(f.studentId) : [];
         return `<article class="acta-group" data-ok="${!!(f.incluir && f.studentId)}">
           <div class="acta-group__pages">${g.pages.map(pg => { const pi = a.pages.indexOf(pg); const primeraDelArchivo = pi === 0 || a.pages[pi - 1].fi !== pg.fi; return `
-            <figure class="acta-page"><img src="${pg.thumb}" alt="Página ${pg.p + 1} de ${esc(a.files[pg.fi].name)}"><figcaption>${esc(a.files[pg.fi].name.length > 18 ? a.files[pg.fi].name.slice(0, 16) + '…' : a.files[pg.fi].name)} · p. ${pg.p + 1}</figcaption>
+            <figure class="acta-page"><button type="button" class="acta-thumb" title="Ver en grande" onclick="app.viewActa(${gi}, ${g.pages.indexOf(pg)})"><img src="${pg.thumb}" alt="Página ${pg.p + 1} de ${esc(a.files[pg.fi].name)}. Ver en grande"><span class="acta-zoom">${ico('zoom-in')}</span></button><figcaption>${esc(a.files[pg.fi].name.length > 18 ? a.files[pg.fi].name.slice(0, 16) + '…' : a.files[pg.fi].name)} · p. ${pg.p + 1}</figcaption>
               ${primeraDelArchivo ? '' : `<button type="button" class="btn btn--sm" onclick="app.toggleActaSplit(${pi})">${pg.start ? `${ico('merge')}Unir con la anterior` : `${ico('scissors')}Separar aquí`}</button>`}</figure>`; }).join('')}</div>
           <div class="acta-group__form">
             <label class="check"><input type="checkbox" ${f.incluir ? 'checked' : ''} onchange="app.actaGroups()[${gi}].first.incluir=this.checked; app.renderActas()"><span><strong>Acta ${gi + 1}</strong> · ${g.pages.length} página(s)${f.detected && sameId(f.detected, f.studentId) ? ' · estudiante reconocido en el documento' : ''}</span></label>
-            ${fieldHtml('Estudiante', `<select class="input" onchange="app.setActaStudent(${gi}, this.value)">${optsAlumnos(f.studentId)}</select>`)}
+            ${fieldHtml('Estudiante', `<input class="input" list="actas-students" value="${esc(etiqueta(f.studentId))}" placeholder="Escriba nombre o RUN..." autocomplete="off" onchange="app.setActaStudentText(${gi}, this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">`)}
             ${fieldHtml('Carta de compromiso a la que corresponde', `<select class="input" ${f.studentId ? '' : 'disabled'} onchange="app.actaGroups()[${gi}].first.cartaId=this.value; app.renderActas()">${options([['__new', 'Registrar como carta nueva en la ficha'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${this.actaOf(c.id) ? ' (ya tiene acta)' : ''}`]), ['', 'Solo guardar el PDF, sin carta']], f.cartaId)}</select>`)}
             ${f.cartaId === '__new' && f.studentId ? `<div class="grid-2">
               ${fieldHtml('Fecha de la carta', `<input type="date" class="input" value="${esc(f.fechaCarta)}" max="${today()}" onchange="app.actaGroups()[${gi}].first.fechaCarta=this.value">`)}
@@ -271,6 +408,6 @@ Object.assign(app, {
       }
       notice({ type: 'success', title: 'Actas firmadas guardadas', msg: `${ok} acta(s) quedaron en la ficha de cada estudiante, vinculadas a su carta.` });
     } catch (e) { console.error(e); notice({ type: ok ? 'warn' : 'error', title: ok ? 'Se guardó solo una parte de las actas' : 'No se guardaron las actas', msg: e.message, items: [`Guardadas: ${ok} de ${groups.length}.`, 'Puede volver a subir el PDF: las actas ya guardadas no se pierden.'] }); }
-    finally { done(); State.actas = null; this.render(); }
+    finally { done(); State.actas = null; State.actasDocs = null; const v = el('acta-viewer'); if (v) v.hidden = true; State.actaView = null; this.render(); }
   }
 });

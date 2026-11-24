@@ -1248,3 +1248,26 @@ body.has-iv-panel .main { padding-right: min(400px, 40vw); }
 .hub-h { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.95rem; }
 .hub-h svg { width: 1rem; height: 1rem; }
 .hub-sep { border: 0; border-top: 1px solid var(--color-rule); margin: 0.4rem 0; }
+/* Revisión de actas: miniaturas que se agrandan y vista grande */
+.actas-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.actas-bar p { flex: 1 1 20rem; margin: 0; }
+.acta-thumb { position: relative; display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.acta-thumb img { display: block; }
+.acta-zoom { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: rgb(15 30 60 / 0.75); color: #fff; opacity: 0.85; }
+.acta-zoom svg { width: 0.9rem; height: 0.9rem; }
+.acta-thumb:hover .acta-zoom, .acta-thumb:focus-visible .acta-zoom { opacity: 1; }
+.acta-viewer { position: fixed; inset: 0; z-index: 260; display: grid; grid-template-columns: 1fr minmax(260px, 340px); background: rgb(10 18 35 / 0.92); }
+.acta-viewer[hidden] { display: none; }
+.av-pages { overflow-y: auto; padding: 1rem; display: grid; gap: 1rem; justify-items: center; align-content: start; }
+.av-page { margin: 0; display: grid; gap: 0.3rem; justify-items: center; }
+.av-page canvas, .av-page img { max-width: 100%; height: auto; background: #fff; box-shadow: 0 6px 24px rgb(0 0 0 / 0.4); }
+.av-page figcaption { color: #cfd6e4; font-size: 0.78rem; }
+.av-loading { display: flex; align-items: center; gap: 0.4rem; color: #cfd6e4; padding: 3rem; }
+.av-side { background: var(--color-paper); padding: 1rem; display: flex; flex-direction: column; gap: 0.7rem; overflow-y: auto; }
+.av-head { display: flex; justify-content: space-between; align-items: center; }
+.av-who { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.6rem; border-radius: 10px; background: #fdecea; color: #8a1c13; margin: 0; }
+.av-who[data-ok="true"] { background: #e3f3ea; color: #155c39; }
+.av-who svg { flex: none; width: 1.1rem; height: 1.1rem; margin-top: 0.1rem; }
+.av-nav { display: flex; gap: 0.4rem; }
+.av-nav .btn { flex: 1; justify-content: center; }
+@media (max-width: 760px) { .acta-viewer { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .av-side { max-height: 46vh; } }

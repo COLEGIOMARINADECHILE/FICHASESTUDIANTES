@@ -62,9 +62,20 @@ Object.assign(app, {
     const pregs = [];
     let ejeTitulo = '';
     pages.forEach(pg => {
-      const head = pg.filas.find(f => f.items.some(i => /^%\s*respuestas/i.test(i.s)) && f.items.some(i => /indicador|habilidad|eje|OA/i.test(i.s)));
+      // Encabezado de la tabla. "% respuestas" puede venir en una sola celda o partido en dos líneas
+      // ("%" arriba y "respuestas" abajo, como en los informes de enseñanza media).
+      const pctCerca = f => {
+        const mismo = f.items.find(i => /^%\s*respuestas/i.test(i.s));
+        if (mismo) return mismo;
+        const cerca = pg.items.filter(i => Math.abs(i.y - f.y) < 12 && /^(%|respuestas)$/i.test(i.s));
+        if (!cerca.some(i => i.s === '%') || !cerca.some(i => /respuestas/i.test(i.s))) return null;
+        const x = Math.min(...cerca.map(i => i.x)), x2 = Math.max(...cerca.map(i => i.x + i.w));
+        return { s: '% respuestas', x, w: x2 - x, y: f.y };
+      };
+      const head = pg.filas.find(f => f.items.some(i => /^(indicador|eje)\b/i.test(i.s)) && pctCerca(f));
       if (!head) return;
-      const cols = head.items.slice().sort((a, b) => a.x - b.x);
+      const pctItem = pctCerca(head);
+      const cols = head.items.filter(i => i !== pctItem).concat(pctItem).sort((a, b) => a.x - b.x);
       const iEje = cols.findIndex(i => /^eje\b/i.test(i.s));
       if (iEje >= 0 && !ejeTitulo) ejeTitulo = cols[iEje].s;
       // Los títulos van centrados sobre su columna: cada texto se asigna a la columna con el centro más cercano
@@ -216,7 +227,11 @@ Object.assign(app, {
       return { nombre: c, pct: Math.round(pct * 100) / 100 };
     });
     const areas = this.diaEjes(d).map(e => { const sub = e.cols.map(j => ind[j]); return { nombre: e.nombre, pct: Math.round(sub.reduce((t, x) => t + x.pct, 0) / (sub.length || 1) * 100) / 100, sub: sub.length > 1 || sub[0]?.nombre !== e.nombre ? sub : [] }; });
-    const pr = d.preguntas || [];
+    // Los % de cada pregunta vienen redondeados a 2 decimales; se llevan a la fracción exacta del curso
+    // (respuestas correctas / estudiantes, con medias por RPC) para que el promedio coincida con el DIA.
+    const nCurso = +d.nInforme || (d.estudiantes || []).length || 0;
+    const exacto = v => { if (!nCurso) return v; const x = Math.round(v * nCurso * 2 / 100) / (nCurso * 2) * 100; return Math.abs(x - v) < 0.02 ? x : v; };
+    const pr = (d.preguntas || []).map(p => ({ ...p, pct: exacto(+p.pct || 0) }));
     if (pr.length && pr.some(p => p.eje)) {
       const porEje = [];
       pr.forEach(p => { const k = p.eje || 'Sin eje'; let e = porEje.find(x => x.nombre === k); if (!e) porEje.push(e = { nombre: k, ps: [] }); e.ps.push(p); });
