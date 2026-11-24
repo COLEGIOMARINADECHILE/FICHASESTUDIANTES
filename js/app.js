@@ -843,11 +843,7 @@ window.app = {
             : `<button class="btn btn--sm" onclick="State.export.tempIntId=${jsq(r.id)}; app.openExportModal('protocolo_informe')">${ico('file-output')}Generar informe PDF</button>`}</div>` : ''}
         </div>` : '';
       const agreements = (r.agreements || []).length ? `
-        <div class="agreements"><h4>${ico('check-circle')}Medidas y acuerdos ${this.agreementTally(r)}</h4>${r.agreements.map((a, i) => `
-          <div class="agreement" data-falta="${esc(a.falta || '')}" data-estado="${this.agreementState(a)}">
-            ${a.falta || !this.canMarkAgreement(r, canEdit) ? `<div class="agreement__head">${a.falta ? chip(`Falta ${a.falta.toLowerCase()}`, { LEVE: 'warn', GRAVE: 'warn', 'GRAVÍSIMA': 'proto' }[a.falta] || 'neutral') : '<span></span>'}${this.canMarkAgreement(r, canEdit) ? '' : `<span class="muted small">Estado: ${esc(this.agreementStatusText(a))}</span>`}</div>` : ''}
-            <p class="prewrap">${esc(a.text)}</p>${a.responsable || a.plazo ? `<p class="agreement__meta">${a.responsable ? `${ico('user')}Responsable: <strong>${esc(a.responsable)}</strong>` : ''}${a.plazo ? `${ico('calendar')}Plazo: <strong>${esc(this.fmtPlazo(a))}</strong>` : ''}</p>` : ''}
-            ${this.canMarkAgreement(r, canEdit) ? `<div class="agr-foot">${this.agreementMarksHtml(r, a, i)}</div>` : ''}</div>`).join('')}</div>` : '';
+        <div class="agreements"><h4>${ico('check-circle')}Medidas y acuerdos <span data-agr-tally="${esc(String(r.id))}">${this.agreementTally(r)}</span></h4>${r.agreements.map((a, i) => this.agreementCardHtml(r, a, i, 'ficha')).join('')}</div>` : '';
       return `
         <article class="record" data-tone="${isProt ? 'proto' : r.isPrivate ? 'pie' : 'neutral'}">
           <header class="record__head">
@@ -864,7 +860,7 @@ window.app = {
     }).join('');
 
     this.panel(`
-      ${this.panelHead('Intervenciones y protocolos', 'clipboard-list', `<div class="row-actions"><button class="btn btn--sm" onclick="app.openInterviewPanel()">${ico('panel-right-open')}Resumen del estudiante</button><button class="btn btn--sm" onclick="app.openExportModal('ficha_entrevistas')">${ico('file-output')}Ficha de entrevistas</button>${canAdd && !formOpen ? `<button class="btn btn--sm" onclick="app.openInterventionForm()">${ico('plus')}Otro registro o protocolo</button><button class="btn btn--primary" onclick="app.startInterview()">${ico('messages-square')}Iniciar entrevista</button>` : ''}</div>`)}
+      ${this.panelHead('Intervenciones y protocolos', 'clipboard-list', `<div class="row-actions">${this.agreementsButtonHtml ? this.agreementsButtonHtml(s) : ''}<button class="btn btn--sm" onclick="app.openInterviewPanel()">${ico('panel-right-open')}Resumen del estudiante</button><button class="btn btn--sm" onclick="app.openExportModal('ficha_entrevistas')">${ico('file-output')}Ficha de entrevistas</button>${canAdd && !formOpen ? `<button class="btn btn--sm" onclick="app.openInterventionForm()">${ico('plus')}Otro registro o protocolo</button><button class="btn btn--primary" onclick="app.startInterview()">${ico('messages-square')}Iniciar entrevista</button>` : ''}</div>`)}
       ${formOpen ? '' : filtros}
       ${formOpen ? this.interventionFormHtml() : ''}
       <div class="stack">${list || empty('clipboard-list', 'No hay intervenciones registradas.')}</div>`);
@@ -879,7 +875,7 @@ window.app = {
     if (/proceso|modific/i.test(p)) return 'proceso';
     return 'pendiente';
   },
-  canMarkAgreement(r, canEdit) {
+  canMarkAgreement(r, canEdit = hasAccess('editar_fichas')) {
     const u = State.currentUser;
     if (canEdit || hasAccess('agregar_entrevistas')) return true;
     if (sameId(r.professionalId, u.id) || (r.sharedWith || []).some(x => sameId(x, u.id))) return true;
@@ -918,41 +914,6 @@ window.app = {
     const tm = this.agreementTiming(a);
     const extra = (st === 'si' && a.plazo) || ((st === 'pendiente' || st === 'proceso') && tm.k === 'late') ? ` · ${tm.t.toLowerCase()}` : '';
     return `${nombre}${fecha}${extra}`;
-  },
-  agreementMarksHtml(r, a, i) {
-    const st = this.agreementState(a);
-    const b = (k, label, icon, valor) => `<button type="button" class="agr-mark agr-mark--${k}" aria-pressed="${st === k}" title="Marcar como ${label.toLowerCase()}" onclick="app.markAgreement(${jsq(r.id)}, ${i}, ${jsq(st === k ? 'No Iniciado' : valor)})">${ico(icon)}${label}</button>`;
-    const tm = this.agreementTiming(a);
-    const chipT = (a.plazo || st !== 'pendiente') ? `<span class="agr-time agr-time--${tm.k}">${esc(tm.t)}</span>` : '';
-    const fecha = a.marcadoFecha ? `<label class="agr-date" title="Fecha en que se cumplió o revisó. Puede cambiarla si lo marca después.">${ico('calendar')}<span>Marcado el</span><input type="date" class="input input--sm" value="${esc(a.marcadoFecha)}" max="${today()}" onchange="app.setAgreementDate(${jsq(r.id)}, ${i}, this.value)"></label>${a.marcadoPor ? `<span class="agr-who">por ${esc(a.marcadoPor)}</span>` : ''}` : '';
-    return `<div class="agr-marks" role="group" aria-label="Estado del acuerdo">${chipT}${b('si', 'Realizado', 'check', 'Logrado')}${b('proceso', 'En proceso', 'clock', 'En Proceso')}${b('no', 'No realizado', 'x', 'No Logrado')}</div>${fecha ? `<div class="agr-dateline">${fecha}</div>` : ''}`;
-  },
-  async markAgreement(id, i, valor) {
-    const r = this.current().history.find(x => sameId(x.id, id));
-    if (!r || !r.agreements || !r.agreements[i]) return;
-    const antes = r.agreements.map(a => ({ ...a }));
-    const agreements = r.agreements.map((a, k) => k !== i ? a : (valor === 'No Iniciado'
-      ? (({ marcadoPor, marcadoFecha, marcadoRegistro, ...rest }) => ({ ...rest, progress: valor }))(a)
-      : { ...a, progress: valor, marcadoPor: State.currentUser.name, marcadoFecha: a.marcadoFecha || today(), marcadoRegistro: new Date().toISOString() }));
-    r.agreements = agreements;
-    this.renderInterventions();
-    try {
-      await DB.patch('interventions', id, { agreements });
-      toast(valor === 'No Iniciado' ? 'Marca quitada' : `Acuerdo marcado: ${valor === 'Logrado' ? 'realizado' : valor === 'No Logrado' ? 'no realizado' : 'en proceso'}. Si ocurrió otro día, cambie la fecha bajo el acuerdo.`);
-    } catch (e) { r.agreements = antes; this.renderInterventions(); toast(e.message, 'error'); }
-  },
-  /** Cambia la fecha de la marca (por ejemplo, si se registra después por falta de internet). */
-  async setAgreementDate(id, i, fecha) {
-    if (!fecha) return;
-    if (fecha > today()) { toast('La fecha no puede ser posterior a hoy', 'error'); return this.renderInterventions(); }
-    const r = this.current().history.find(x => sameId(x.id, id));
-    if (!r || !r.agreements || !r.agreements[i]) return;
-    const antes = r.agreements.map(a => ({ ...a }));
-    const agreements = r.agreements.map((a, k) => k !== i ? a : { ...a, marcadoFecha: fecha, fechaEditadaPor: State.currentUser.name });
-    r.agreements = agreements;
-    this.renderInterventions();
-    try { await DB.patch('interventions', id, { agreements }); toast(`Fecha actualizada: ${fmtDate(fecha)}`); }
-    catch (e) { r.agreements = antes; this.renderInterventions(); toast(e.message, 'error'); }
   },
 
   openInterventionForm(r = null) {

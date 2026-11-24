@@ -91,11 +91,11 @@ Object.assign(app, {
           <div class="iv-kpi"><span class="num">${g.entrevistas.length}</span><small>Entrevistas</small></div>
         </div>
         ${s.riesgoRepitencia?.activo ? `<p class="iv-alert">${ico('alert-triangle')}<span>Riesgo de repitencia${s.riesgoRepitencia.motivo ? `: ${esc(s.riesgoRepitencia.motivo)}` : ''}</span></p>` : ''}
-        ${g.acuerdos.length ? `<p class="iv-alert iv-alert--info">${ico('list-checks')}<span>${g.acuerdos.length} acuerdo(s) pendiente(s) de revisar en esta entrevista</span></p>` : ''}
+        ${g.acuerdos.length ? `<button type="button" class="iv-alert iv-alert--info iv-alert--btn" onclick="app.openAgreementsModal(${jsq(s.id)})">${ico('list-checks')}<span><strong data-agr-pend>${g.acuerdos.length}</strong> acuerdo(s) pendiente(s). Clic para revisarlos y marcarlos.</span></button>` : ''}
 
         ${sec('contacto', 'contact', 'Apoderado y contacto', '', `<dl class="iv-dl"><dt>Apoderado(a)</dt><dd>${esc(c.apoderado || 'Sin registrar')}${c.parentesco ? ` (${esc(c.parentesco)})` : ''}</dd><dt>Teléfono</dt><dd>${esc(c.telefono || '-')}${c.telefono2 ? ` / ${esc(c.telefono2)}` : ''}</dd><dt>Correo</dt><dd>${esc(c.email || '-')}</dd><dt>Profesor(a) jefe</dt><dd>${esc(this.profJefeOf(s.curso) || '-')}</dd>${this.edadDe(s) ? `<dt>Edad</dt><dd>${this.edadDe(s)}</dd>` : ''}</dl>`, true)}
 
-        ${sec('acuerdos', 'list-checks', 'Acuerdos pendientes', g.acuerdos.length, g.acuerdos.length ? `<ul class="iv-list">${g.acuerdos.map(a => `<li><strong>${esc(corto(a.text, 160))}</strong><span>${a.responsable ? `Responsable: ${esc(a.responsable)} · ` : ''}${a.plazo ? `Plazo: ${esc(this.fmtPlazo(a))} · ` : ''}${esc(a.progress || 'No iniciado')}</span><em>${fecha(a.fecha)} · ${esc(a.tipo)}</em></li>`).join('')}</ul>` : vacio('No hay acuerdos pendientes.'), g.acuerdos.length > 0)}
+        ${sec('acuerdos', 'list-checks', 'Acuerdos pendientes', g.acuerdos.length, `<div id="iv-agr-body">${this.ivAgreementsHtml(s)}</div>`, g.acuerdos.length > 0)}
 
         ${sec('entrevistas', 'messages-square', 'Entrevistas e intervenciones', g.entrevistas.length, g.entrevistas.length ? `<ul class="iv-list">${g.entrevistas.slice(0, 10).map(h => `<li><strong>${fecha(h.date)} · ${esc(h.type)}</strong>${this.interviewWho && this.interviewWho(h) ? `<em>${esc(this.interviewWho(h))}</em>` : ''}<span>${esc(corto(h.entrevista?.motivo ? `Motivo: ${h.entrevista.motivo}` : h.background))}</span><em>${esc(h.professional || '')}</em></li>`).join('')}</ul>${g.entrevistas.length > 10 ? vacio(`Y ${g.entrevistas.length - 10} más en la pestaña Intervenciones.`) : ''}` : vacio('Sin entrevistas registradas.'), true)}
 
