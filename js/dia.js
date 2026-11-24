@@ -20,18 +20,84 @@ Object.assign(app, {
   diaOf(course) { return (State.dia || []).filter(d => d.course === course).sort((a, b) => String(b.anio).localeCompare(String(a.anio)) || DIA_PERIODOS.indexOf(b.periodo) - DIA_PERIODOS.indexOf(a.periodo) || String(a.asignatura).localeCompare(String(b.asignatura))); },
 
   // ---------------- LECTURA DEL PDF ----------------
-  /** Páginas del PDF con cada texto y su posición (x, y, ancho), más las líneas reconstruidas. */
+  /**
+   * Páginas del PDF con cada texto y su posición (x, y, ancho), más las líneas reconstruidas.
+   * Además marca las alternativas en negrita (respuesta correcta): el DIA las dibuja con relleno y trazo.
+   */
   async pdfPages(file) {
-    const pdf = await this.pdfjs().getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const lib = this.pdfjs();
+    const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
     const pages = [], lines = [];
+    const esOpcion = s => /^(A|B|C|D|E|N|RC|RPC|RI)\s*:\s*[\d.,]+\s*%$/.test(s);
     for (let p = 1; p <= pdf.numPages; p++) {
-      const items = (await (await pdf.getPage(p)).getTextContent()).items.filter(i => i.str.trim()).map(i => ({ s: i.str.trim(), x: i.transform[4], y: i.transform[5], w: i.width || 0 }));
+      const page = await pdf.getPage(p);
+      const items = (await page.getTextContent()).items.filter(i => i.str.trim()).map(i => ({ s: i.str.trim(), x: i.transform[4], y: i.transform[5], w: i.width || 0 }));
+      // Negritas: alternativas dibujadas con modo de texto 2 (relleno + trazo)
+      try {
+        const ops = await page.getOperatorList();
+        const O = lib.OPS;
+        let modo = 0;
+        const orden = [];
+        ops.fnArray.forEach((fn, k) => {
+          if (fn === O.setTextRenderingMode) modo = ops.argsArray[k][0];
+          else if (fn === O.showText) { const s = (ops.argsArray[k][0] || []).map(g => (g && g.unicode) || '').join('').trim(); if (esOpcion(s)) orden.push({ s, bold: modo === 2 || modo === 1 }); }
+        });
+        const opts = items.filter(i => esOpcion(i.s));
+        if (opts.length === orden.length) opts.forEach((it, k) => { it.bold = orden[k].bold; });
+        else { const usados = new Set(); opts.forEach(it => { const k = orden.findIndex((o, j) => !usados.has(j) && o.s === it.s); if (k >= 0) { usados.add(k); it.bold = orden[k].bold; } }); }
+      } catch (e) { /* sin información de negritas */ }
       const filas = [];
       items.forEach(i => { let f = filas.find(r => Math.abs(r.y - i.y) < 3); if (!f) filas.push(f = { y: i.y, items: [] }); f.items.push(i); });
       filas.sort((a, b) => b.y - a.y).forEach(f => { f.items.sort((a, b) => a.x - b.x); lines.push(f.items.map(i => i.s).join(' ').replace(/\s+/g, ' ').trim()); });
       pages.push({ items, filas });
     }
     return { pages, lines };
+  },
+  /**
+   * Tabla de preguntas ("Resultados del curso en cada pregunta"), leída por columnas:
+   * número, eje (si el encabezado dice "Eje ..."), y % de respuestas. La correcta es la alternativa en
+   * negrita; en preguntas abiertas cuenta RC. Así cada eje se calcula como lo hace el DIA.
+   */
+  diaPreguntas(pages) {
+    const pregs = [];
+    let ejeTitulo = '';
+    pages.forEach(pg => {
+      const head = pg.filas.find(f => f.items.some(i => /^%\s*respuestas/i.test(i.s)) && f.items.some(i => /indicador|habilidad|eje|OA/i.test(i.s)));
+      if (!head) return;
+      const cols = head.items.slice().sort((a, b) => a.x - b.x);
+      const iEje = cols.findIndex(i => /^eje\b/i.test(i.s));
+      if (iEje >= 0 && !ejeTitulo) ejeTitulo = cols[iEje].s;
+      // Los títulos van centrados sobre su columna: cada texto se asigna a la columna con el centro más cercano
+      const centros = cols.map(i => i.x + i.w / 2);
+      const colDe = it => { const cx = it.x + it.w / 2; let best = 0; centros.forEach((c, j) => { if (Math.abs(c - cx) < Math.abs(centros[best] - cx)) best = j; }); return best; };
+      const pctX = cols.find(i => /^%\s*respuestas/i.test(i.s)).x - 30;
+      const primeraX = cols[0].x;
+      // Filas de preguntas: empiezan con un número a la izquierda de la primera columna con título
+      const debajo = pg.items.filter(i => i.y < head.y - 2);
+      const inicios = debajo.filter(i => /^\d{1,3}$/.test(i.s) && i.x < primeraX - 2)
+        .sort((a, b) => b.y - a.y)
+        .filter((it, k, arr) => !arr.slice(0, k).some(o => Math.abs(o.y - it.y) < 3));
+      inicios.forEach((ini, k) => {
+        const fin = debajo.filter(i => i.y < ini.y - 2 && /^(Gr[aá]fico|Preguntas gu|\[?Contin|•|Tabla \d|Informe de Resultados)/i.test(i.s)).sort((a, b) => b.y - a.y)[0];
+        const yTop = ini.y + 6, yBot = k + 1 < inicios.length ? inicios[k + 1].y + 6 : Math.max(fin ? fin.y + 2 : -1, ini.y - 90);
+        const banda = debajo.filter(i => i.y <= yTop && i.y > yBot && !/^\[?contin/i.test(i.s));
+        const opts = banda.filter(i => i.x >= pctX && /^(A|B|C|D|E|N|RC|RPC|RI)\s*:/.test(i.s));
+        if (!opts.length) return;
+        const op = {}, bold = [];
+        opts.forEach(o => { const m = o.s.match(/^(\w+)\s*:\s*([\d.,]+)/); op[m[1]] = parseFloat(m[2].replace(',', '.')); if (o.bold) bold.push(m[1]); });
+        let correcta = '', pct = 0, exacta = true;
+        // Preguntas abiertas: la respuesta parcialmente correcta (RPC) vale la mitad, como en los gráficos del DIA
+        if ('RC' in op) { correcta = 'RC'; pct = Math.round((op.RC + (op.RPC || 0) / 2) * 100) / 100; }
+        else if (bold.length) { correcta = bold[0]; pct = op[correcta]; }
+        else { const alts = Object.entries(op).filter(([o]) => o !== 'N').sort((a, b) => b[1] - a[1]); [correcta, pct] = alts[0] || ['', 0]; exacta = false; }
+        // Celda del eje: el texto de la primera línea en esa columna y las líneas siguientes alineadas a su borde izquierdo
+        const primeraEje = banda.filter(i => Math.abs(i.y - ini.y) < 3 && i.x < pctX && colDe(i) === iEje)[0];
+        const anchoMax = iEje >= 0 && cols[iEje + 1] ? (centros[iEje + 1] - centros[iEje]) * 1.3 : 160;
+        const eje = iEje >= 0 ? banda.filter(i => i.x < pctX && i.w <= anchoMax && !/^(Gr[aá]fico|Tabla|•|¿|Considerando|Preguntas)/i.test(i.s) && (primeraEje ? Math.abs(i.x - primeraEje.x) < 6 : colDe(i) === iEje)).sort((a, b) => b.y - a.y || a.x - b.x).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim() : '';
+        pregs.push({ n: +ini.s, eje, opciones: op, correcta, pct, exacta });
+      });
+    });
+    return { preguntas: pregs.sort((a, b) => a.n - b.n), ejeTitulo };
   },
   async pdfLines(file) { return (await this.pdfPages(file)).lines; },
   /**
@@ -94,13 +160,21 @@ Object.assign(app, {
     const anio = titulo ? titulo[1] : (String(fileName).match(/20\d\d/) || [today().slice(0, 4)])[0];
     let asignatura = titulo ? titulo[2].replace(/\s*·.*$/, '').replace(/Diagn.*$/i, '').trim() : '';
     if (!asignatura) asignatura = (String(fileName).match(/DIA_([A-ZÁÉÍÓÚ]+)/i) || [, 'Sin asignatura'])[1];
+    asignatura = asignatura.replace(/^prueba (de|del)\s+/i, '').trim();
     asignatura = asignatura.charAt(0).toUpperCase() + asignatura.slice(1).toLowerCase();
-    const periodo = /monitoreo/i.test(t) ? 'Monitoreo Intermedio' : /cierre/i.test(t) ? 'Evaluación de Cierre' : /diagn[oó]stico\s+(?!integral)/i.test(t) ? 'Diagnóstico' : (/MONITOREO/i.test(fileName) ? 'Monitoreo Intermedio' : /CIERRE/i.test(fileName) ? 'Evaluación de Cierre' : 'Diagnóstico');
+    // Periodo: primero el nombre del archivo del DIA; si no, la primera mención en el informe
+    const fn = String(fileName);
+    const porNombre = /cierre/i.test(fn) ? 'Evaluación de Cierre' : /monitoreo/i.test(fn) ? 'Monitoreo Intermedio' : /diagn[oó]stico/i.test(fn) ? 'Diagnóstico' : '';
+    const menciones = [[/Evaluaci[oó]n de Cierre|\bCierre\b/i, 'Evaluación de Cierre'], [/Monitoreo Intermedio/i, 'Monitoreo Intermedio'], [/\bDiagn[oó]stico\b(?!\s+Integral)/i, 'Diagnóstico']]
+      .map(([re, p]) => { const m = t.search(re); return [m < 0 ? Infinity : m, p]; }).sort((a, b) => a[0] - b[0]);
+    const periodo = porNombre || (menciones[0][0] < Infinity ? menciones[0][1] : 'Diagnóstico');
     // Curso: "Curso: 1 A" + el nivel que menciona el informe ("en 1° básico")
     const cursoTxt = val(/Curso:\s*([^\n]+)/i);
     const nivel = (t.match(/(\d{1,2}|I{1,3}V?|IV)\s*°?\s*(b[aá]sico|medio)/i) || [])[2] || (/medio/i.test(cursoTxt) ? 'medio' : 'básico');
     const mc = cursoTxt.match(/^(\d{1,2}|I{1,3}V?|IV)\s*°?\s*(?:b[aá]sico|medio|B|M)?\s*([A-Z])\b/i);
-    const course = mc ? this.courseFromText(`${mc[1]} ${/medio/i.test(nivel) ? 'MEDIO' : 'BASICO'} ${mc[2]}`) : '';
+    // Números romanos (I, II, III, IV) son enseñanza media
+    const esMedio = mc && (/^(I{1,3}|IV)$/i.test(mc[1]) || /medio/i.test(nivel));
+    const course = mc ? this.courseFromText(`${mc[1]} ${esMedio ? 'MEDIO' : 'BASICO'} ${mc[2]}`) : '';
     // Tabla por estudiante con sus propios ejes
     const tabla = doc.pages ? this.diaTabla(doc.pages) : { filas: [], columnas: [], ejeDe: [] };
     // Preguntas: bloques "A: 12.50%  B: 56.25%  C: ..  N: .." (la respuesta correcta se estima como la más elegida)
@@ -109,7 +183,8 @@ Object.assign(app, {
     let actual = null;
     opciones.forEach(([o, v]) => { if (o === 'A' || !actual) { actual = {}; preguntas.push(actual); } actual[o] = v; });
     const nums = lines.map(l => l.match(/^(\d{1,2})\s+(\d{1,2})\s+(Narraci[oó]n|Texto no literario|Texto|Poema|Noticia|Instructivo|[A-ZÁÉÍÓÚ][a-záéíóú]+)\b/)).filter(Boolean);
-    const pregs = preguntas.filter(p => Object.keys(p).length >= 3).map((p, i) => {
+    const pos = doc.pages ? this.diaPreguntas(doc.pages) : { preguntas: [] };
+    const pregs = pos.preguntas.length ? pos.preguntas : preguntas.filter(p => Object.keys(p).length >= 3).map((p, i) => {
       const alts = Object.entries(p).filter(([k]) => k !== 'N');
       const [correcta, pct] = alts.sort((a, b) => b[1] - a[1])[0] || ['', 0];
       return { n: nums[i] ? +nums[i][1] : i + 1, oa: nums[i] ? nums[i][2] : '', tipo: nums[i] ? nums[i][3] : '', opciones: p, correcta, pct };
@@ -120,7 +195,7 @@ Object.assign(app, {
     const ejePreg = (lines.map(l => l.match(/Resultados del curso en cada pregunta (?:de|del|en) ([A-Za-zÁÉÍÓÚÑáéíóúñ ,]{3,60})$/i)).find(Boolean) || [])[1]
       || (iTabla > 0 && lines[iTabla - 1].length < 50 && !/\d/.test(lines[iTabla - 1]) ? lines[iTabla - 1] : '');
     return { anio, asignatura, periodo, course, cursoTxt, docente: val(/docente de la asignatura:\s*([^\n]+)/i), director: val(/director[a]?:\s*([^\n]+)/i), nInforme: +val(/considera este informe:\s*(\d+)/i) || tabla.filas.length, fechaInforme: val(/generaci[oó]n de este informe:\s*([\d\/]+)/i),
-      filas: tabla.filas, columnas: tabla.columnas, ejeDe: tabla.ejeDe, grupos: [], preguntas: pregs, ejePreguntas: ejePreg ? ejePreg.trim().charAt(0).toUpperCase() + ejePreg.trim().slice(1) : '', conocido: tabla.filas.length > 0 };
+      filas: tabla.filas, columnas: tabla.columnas, ejeDe: tabla.ejeDe, grupos: [], preguntas: pregs, ejeTitulo: pos.ejeTitulo || '', ejePreguntas: ejePreg ? ejePreg.trim().charAt(0).toUpperCase() + ejePreg.trim().slice(1) : '', conocido: tabla.filas.length > 0 };
   },
   /** Ejes del informe: cada eje agrupa sus columnas (aunque no estén juntas). Compatible con informes guardados antes. */
   diaEjes(d) {
@@ -141,7 +216,12 @@ Object.assign(app, {
       return { nombre: c, pct: Math.round(pct * 100) / 100 };
     });
     const areas = this.diaEjes(d).map(e => { const sub = e.cols.map(j => ind[j]); return { nombre: e.nombre, pct: Math.round(sub.reduce((t, x) => t + x.pct, 0) / (sub.length || 1) * 100) / 100, sub: sub.length > 1 || sub[0]?.nombre !== e.nombre ? sub : [] }; });
-    if ((d.preguntas || []).length) areas.push({ nombre: d.ejePreguntas || (/lectura/i.test(d.asignatura) ? 'Comprensión oral' : 'Preguntas del instrumento'), pct: Math.round(d.preguntas.reduce((t, p) => t + p.pct, 0) / d.preguntas.length * 100) / 100, sub: [], estimado: true });
+    const pr = d.preguntas || [];
+    if (pr.length && pr.some(p => p.eje)) {
+      const porEje = [];
+      pr.forEach(p => { const k = p.eje || 'Sin eje'; let e = porEje.find(x => x.nombre === k); if (!e) porEje.push(e = { nombre: k, ps: [] }); e.ps.push(p); });
+      porEje.forEach(e => areas.push({ nombre: e.nombre, pct: Math.round(e.ps.reduce((t, p) => t + p.pct, 0) / e.ps.length * 100) / 100, sub: [], preguntas: e.ps.length, estimado: e.ps.some(p => p.exacta === false) }));
+    } else if (pr.length) areas.push({ nombre: d.ejePreguntas || (/lectura/i.test(d.asignatura) ? 'Comprensión oral' : 'Preguntas del instrumento'), pct: Math.round(pr.reduce((t, p) => t + p.pct, 0) / pr.length * 100) / 100, sub: [], preguntas: pr.length, estimado: pr.some(p => p.exacta === false) });
     (d.areasManual || []).forEach(a => { if (a.nombre && !areas.some(x => x.nombre === a.nombre)) areas.push({ nombre: a.nombre, pct: +a.pct || 0, sub: [], manual: true }); });
     const noLogra = e => e.valores.filter(v => v && !esLogro(v) && !(num(v) !== null && num(v) >= 50)).length;
     const apoyo = d.estudiantes.filter(e => noLogra(e) >= Math.ceil(d.columnas.length / 2));

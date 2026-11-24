@@ -1183,3 +1183,14 @@ body.has-iv-panel .main { padding-right: min(400px, 40vw); }
 .dia-ejes { margin-top: 0.4rem; }
 .dia-ejes > summary { cursor: pointer; display: flex; align-items: center; gap: 0.35rem; font-weight: 600; }
 .dia-ejes > summary svg { width: 1rem; height: 1rem; }
+/* Estudiantes retirados: color propio en las listas */
+.table tr.is-retirado > td { background: repeating-linear-gradient(135deg, var(--tone-proto-soft) 0 10px, color-mix(in oklab, var(--tone-proto-soft) 70%, var(--color-paper)) 10px 20px); color: var(--color-muted, #666); }
+.table tr.is-retirado > td:first-child { box-shadow: inset 5px 0 0 var(--tone-proto-ink); }
+.table tr.is-retirado .cell-title { text-decoration: line-through; text-decoration-color: var(--tone-proto-ink); color: var(--tone-proto-ink); }
+/* Revisión de listas del SIGE */
+.sige-sec { padding: 0.6rem 0.75rem; border-radius: 10px; border: 1px solid var(--color-rule); display: grid; gap: 0.3rem; }
+.sige-sec[data-tone="proto"] { border-color: var(--tone-proto-ink); background: var(--tone-proto-soft); }
+.sige-sec[data-tone="warn"] { border-color: var(--tone-warn-ink); background: var(--tone-warn-soft); }
+.sige-sec h4 { display: flex; align-items: center; gap: 0.35rem; margin: 0; }
+.sige-sec h4 svg { width: 1rem; height: 1rem; }
+.option-block--destacado { border-color: var(--tone-conv-ink); background: var(--tone-conv-soft); }

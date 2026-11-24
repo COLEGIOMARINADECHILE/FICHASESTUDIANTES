@@ -556,6 +556,7 @@ window.app = {
 
     el('students-title').textContent = course || 'Todos los estudiantes';
     el('students-actions').innerHTML = [
+      this.canSige() ? `<button class="btn" onclick="app.openSigeImport()">${ico('list-checks')}Actualizar con lista SIGE</button>` : '',
       course && canImport ? `<button class="btn" onclick="app.openAttendanceImport()">${ico('file-spreadsheet')}Cargar inasistencias</button>` : '',
       canImport ? `<button class="btn" onclick="app.openGradesImport()">${ico('file-badge')}Cargar notas (PDF)</button>` : '',
       this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('puzzle')}Cargar planes PIE</button>` : '',
@@ -607,7 +608,7 @@ window.app = {
       <thead><tr><th>Estudiante</th><th class="t-num">Asistencia</th><th class="t-num">Inasistencias</th><th class="t-num">Atrasos</th><th class="t-num">Días justificados</th><th class="t-actions">Acciones</th></tr></thead>
       <tbody>${f.map(s => {
         const plans = State.studentPlans.filter(p => sameId(p.studentId, s.id)).map(p => chip(p.type || 'Plan activo', 'plan', 'bookmark')).join('');
-        return `<tr class="${s.status === 'blocked' ? 'is-muted' : ''}"${this.highlightAttrs(s)}>
+        return `<tr class="${s.status === 'blocked' ? 'is-retirado' : ''}"${s.status === 'blocked' ? '' : this.highlightAttrs(s)}>
           <td><span class="cell-title">${esc(s.name)} ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
             <span class="chips">${this.recordChips([s.id], this.countRecords(s))}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
           <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></td>
@@ -1293,6 +1294,7 @@ window.app = {
       <div class="panel__head"><h2>Carga masiva de estudiantes</h2></div>
       <p class="muted">Seleccione un curso y use una de las opciones para cargar la matrícula. Estructura esperada: N/L, RUN, nombre, edad, fecha, comuna.</p>
       ${fieldHtml('1. Curso de destino', `<select id="upload-course-select" class="input"><option value="">Elija un curso</option>${options(ALL_COURSES)}</select>`)}
+      <div class="option-block option-block--destacado"><h3>${ico('list-checks')}Listas de curso del SIGE (recomendado)</h3><p class="muted small">Suba una o varias "Lista de Curso" del SIGE: se detecta el curso, se agregan los nuevos, se registran cambios de curso y se le muestran los retirados para que los confirme. Se puede deshacer.</p><button class="btn btn--primary" onclick="app.openSigeImport()">${ico('upload')}Actualizar con listas del SIGE</button></div>
       <div class="option-block"><h3>${ico('file-text')}Opción 1: subir PDF (sistema SIGE)</h3><p class="muted small">El sistema extrae automáticamente el RUN y el nombre.</p><input type="file" id="pdf-upload" class="file" accept="application/pdf" onchange="app.handlePDFUpload(event)"></div>
       <div class="option-block"><h3>${ico('clipboard-paste')}Opción 2: pegar desde Excel</h3><textarea id="excel-paste-data" class="input num" rows="4" placeholder="Pegue aquí los datos copiados desde Excel..."></textarea><button class="btn" onclick="app.handleExcelPaste()">${ico('check')}Procesar texto pegado</button></div>
       <div class="option-block"><h3>${ico('file-spreadsheet')}Opción 3: inasistencias por mes (Excel del curso)</h3><p class="muted small">Suba el informe de inasistencias por curso. Se detecta el curso, se leen marzo a diciembre y el total, y se muestra el resultado antes de guardar. El porcentaje no se utiliza.</p><button class="btn" onclick="app.openAttendanceImport()">${ico('upload')}Seleccionar Excel de inasistencias</button></div>
