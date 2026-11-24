@@ -332,7 +332,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { mine: 'renderMine', course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -366,8 +366,9 @@ window.app = {
   renderNav() {
     const v = State.currentView;
     const quick = this.isQuickOnly();
-    const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']]] : [
+    const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']], ['mine', 'list-todo', 'Mis acciones', true, ['mine']]] : [
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
+      ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso']],

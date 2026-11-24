@@ -413,7 +413,7 @@ Object.assign(app, {
 
     const header = `<table class="doc-header"><tr>
       <td class="doc-header__l"><img src="${esc(v.schoolLogo)}" alt="" crossorigin="anonymous"></td>
-      <td class="doc-header__c"><h2>Colegio Marina de Chile</h2><p>Unidad de Convivencia e Inclusión</p></td>
+      <td class="doc-header__c"><h2>COLEGIO MARINA DE CHILE</h2></td>
       <td class="doc-header__r"><img src="${esc(v.slepLogo)}" alt="" crossorigin="anonymous"></td></tr></table>`;
     const info = s ? docKv([[['Estudiante', esc(this.formatStudentName(s.name))], ['RUT', esc(s.rut)]], [['Curso', esc(s.curso)], ['Fecha', fmtDate(today())]]]) : '';
 
