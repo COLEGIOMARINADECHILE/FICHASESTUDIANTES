@@ -515,15 +515,17 @@ window.app = {
     const all = this.getStudents();
     const ac = State.currentUser.assignedCourses || [];
     const open = hasAccess('acceso_total') || ac.length === 0;
+    const area = this.highlightArea(), mark = this.highlightOn();
     const html = Object.entries(CYCLES).map(([cycle, data]) => {
       const cards = data.courses.filter(c => open || ac.includes(c)).map(c => {
         const enCurso = all.filter(s => s.curso === c && s.status !== 'blocked');
         const n = enCurso.length, np = enCurso.filter(s => this.isPie(s)).length, nr = enCurso.filter(s => this.isRep(s)).length;
-        return `<button type="button" class="course" data-tone="${data.tone}" onclick="app.openCourse(${jsq(c)})"><span class="course__name">${esc(c)}</span><span class="course__count"><span class="num">${n}</span> estudiantes</span>${np || nr ? `<span class="course__badges">${np ? `<span class="pie-badge pie-badge--sm">${ico('puzzle')}${np} PIE</span>` : ''}${nr ? `<span class="pie-badge pie-badge--sm pie-badge--rep">${ico('alert-triangle')}${nr} riesgo rep.</span>` : ''}</span>` : ''}</button>`;
+        const nm = mark ? enCurso.filter(s => this.highlightCount(s, area)).length : 0;
+        return `<button type="button" class="course" data-tone="${data.tone}" ${nm ? `data-mark="${area}"` : ''} onclick="app.openCourse(${jsq(c)})"><span class="course__name">${esc(c)}</span><span class="course__count"><span class="num">${n}</span> estudiantes</span>${mark ? (nm ? `<span class="mark-count" data-mark="${area}">${ico(RESALTE[area].icon)}${nm} ${RESALTE[area].corto}</span>` : '<span class="mark-count mark-count--none">Sin acciones</span>') : ''}${np || nr ? `<span class="course__badges">${np ? `<span class="pie-badge pie-badge--sm">${ico('puzzle')}${np} PIE</span>` : ''}${nr ? `<span class="pie-badge pie-badge--sm pie-badge--rep">${ico('alert-triangle')}${nr} riesgo rep.</span>` : ''}</span>` : ''}</button>`;
       }).join('');
       return cards ? `<section class="cycle"><h2 class="cycle__title">${ico(data.icon)}${esc(cycle)}</h2><div class="course-grid">${cards}</div></section>` : '';
     }).join('');
-    el('cycles-container').innerHTML = html || empty('folder-x', 'No tiene cursos asignados.');
+    el('cycles-container').innerHTML = (html ? this.highlightLegendHtml() : '') + (html || empty('folder-x', 'No tiene cursos asignados.'));
   },
   openCourse(name) { State.filterCourse = name; this.navigate('students'); },
   setFilter(c) { State.filterCourse = c; this.renderStudents(); icons(); },
@@ -544,6 +546,7 @@ window.app = {
     let f = all.filter(s => (!course || s.curso === course) && (State.showWithdrawn || s.status !== 'blocked'));
     if (State.onlyPie) f = f.filter(s => this.isPie(s));
     if (State.onlyRep) f = f.filter(s => this.isRep(s));
+    if (State.onlyMarked) f = f.filter(s => this.highlightCount(s));
     const q = (el('student-search').value || '').toLowerCase();
     if (q) f = f.filter(s => s.name.toLowerCase().includes(q) || s.rut.includes(q));
     f.sort((a, b) => a.name.localeCompare(b.name));
@@ -565,7 +568,7 @@ window.app = {
     ].join('');
 
     const courses = Array.from(new Set(all.map(s => s.curso))).sort();
-    el('student-course-filters').innerHTML = `
+    el('student-course-filters').innerHTML = this.highlightLegendHtml() + `
       ${course ? `<label class="field field--inline"><span class="field__label">Profesor jefe</span><input class="input" value="${esc(this.profJefeOf(course))}" placeholder="Escriba el nombre y presione Enter" onchange="app.updateProfJefe(${jsq(course)}, this.value)"></label>` : ''}
       ${course && hasAccess('gestionar_usuarios') ? this.courseAccessHtml(course) : ''}
       <div class="filters">
@@ -575,6 +578,7 @@ window.app = {
         </div>`}
         <label class="check"><input type="checkbox" ${State.showWithdrawn ? 'checked' : ''} onchange="app.toggleShowWithdrawn(this.checked)"><span>Ver retirados</span></label>
         <label class="check"><input type="checkbox" ${State.onlyPie ? 'checked' : ''} onchange="app.toggleOnlyPie(this.checked)"><span>Solo estudiantes PIE (${all.filter(s => (!course || s.curso === course) && s.status !== 'blocked' && this.isPie(s)).length})</span></label>
+        <label class="check"><input type="checkbox" ${State.onlyMarked ? 'checked' : ''} onchange="State.onlyMarked=this.checked; app.renderStudents(); icons()"><span>Solo ${RESALTE[this.highlightArea()].corto.replace('con ', 'con ')} (${all.filter(s => (!course || s.curso === course) && s.status !== 'blocked' && this.highlightCount(s)).length})</span></label>
         <label class="check"><input type="checkbox" ${State.onlyRep ? 'checked' : ''} onchange="app.toggleOnlyRep(this.checked)"><span>Solo en riesgo de repitencia (${all.filter(s => (!course || s.curso === course) && s.status !== 'blocked' && this.isRep(s)).length})</span></label>
       </div>`;
 
@@ -599,9 +603,9 @@ window.app = {
       <thead><tr><th>Estudiante</th><th class="t-num">Asistencia</th><th class="t-num">Inasistencias</th><th class="t-num">Atrasos</th><th class="t-num">Días justificados</th><th class="t-actions">Acciones</th></tr></thead>
       <tbody>${f.map(s => {
         const plans = State.studentPlans.filter(p => sameId(p.studentId, s.id)).map(p => chip(p.type || 'Plan activo', 'plan', 'bookmark')).join('');
-        return `<tr class="${s.status === 'blocked' ? 'is-muted' : ''}">
+        return `<tr class="${s.status === 'blocked' ? 'is-muted' : ''}"${this.highlightAttrs(s)}>
           <td><span class="cell-title">${esc(s.name)} ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
-            <span class="chips">${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
+            <span class="chips">${this.recordChips([s.id], this.countRecords(s))}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
           <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Inasistencias de ${esc(s.name)}" value="${s.asistencia.inasistencias}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'inasistencias', this.value)"></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Atrasos de ${esc(s.name)}" value="${s.asistencia.atrasos}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'atrasos', this.value)"></td>
@@ -1199,7 +1203,8 @@ window.app = {
   },
   admin_users() {
     const vigentes = State.users.filter(u => !u.eliminado);
-    const bajas = State.users.filter(u => u.eliminado);
+    const bajas = State.users.filter(u => u.eliminado).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const lista = this.staffSorted(vigentes);
     const sinCorreo = vigentes.filter(u => !u.email).length;
     const pendientes = vigentes.filter(u => u.email && !u.accesoNotificado && u.active !== false).length;
     const solo = !!State.variables.soloGoogle;
@@ -1222,8 +1227,13 @@ window.app = {
         <button class="btn" ${pendientes ? '' : 'disabled'} onclick="app.notifyPending()">${ico('send')}Enviar avisos pendientes (${pendientes})</button>
         <button class="btn btn--primary" onclick="app.openUserModal()">${ico('user-plus')}Nuevo funcionario</button></div></div>
       <p class="muted small">El correo institucional permite ingresar con la cuenta de Google @${this.domain()}. Edítelo directamente en la tabla: se guarda al salir del campo.</p>
+      <div class="filters">
+        ${fieldHtml('Buscar funcionario', `<input type="search" class="input" id="staff-q" value="${esc(State.staffQ || '')}" placeholder="Nombre, cargo, perfil o correo" oninput="State.staffQ=this.value; clearTimeout(app._staffT); app._staffT=setTimeout(() => { app.renderAdmin(); const i = el('staff-q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250)">`)}
+        ${fieldHtml('Ordenar', `<select class="input" onchange="State.staffSort=this.value; app.renderAdmin()">${options([['az', 'Nombre: A a la Z'], ['za', 'Nombre: Z a la A'], ['perfil', 'Por perfil y nombre'], ['cargo', 'Por cargo y nombre'], ['estado', 'Primero los que falta aviso']], State.staffSort || 'az')}</select>`)}
+        <span class="muted small field-end">${lista.length} de ${vigentes.length} funcionario(s)</span>
+      </div>
       <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Perfil</th><th>Correo institucional</th><th>Estado</th><th class="t-actions">Acciones</th></tr></thead><tbody>
-      ${vigentes.map(u => `<tr><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, ROLE_TONE[u.role] || 'neutral')}</td>
+      ${lista.length ? '' : `<tr><td colspan="5">${empty('search-x', 'Ningún funcionario coincide con la búsqueda.')}</td></tr>`}${lista.map(u => `<tr><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, ROLE_TONE[u.role] || 'neutral')}</td>
         <td><input type="email" class="input input--email" aria-label="Correo de ${esc(u.name)}" value="${esc(u.email || '')}" placeholder="nombre.apellido@${this.domain()}" onchange="app.saveUserEmail(${jsq(u.id)}, this)"><span class="cell-sub">${u.accesoNotificado ? `Aviso enviado el ${fmtDate(u.accesoNotificado)}` : 'Sin aviso enviado'}</span></td>
         <td>${u.active === false ? chip('Inactivo', 'neutral') : chip('Activo', 'conv')}</td>
         <td class="t-actions"><div class="row-actions"><button class="icon-btn" aria-label="Enviar aviso de acceso" title="Enviar aviso de acceso" onclick="app.openNotifyModal(${jsq(u.id)})">${ico('send')}</button><button class="icon-btn" aria-label="Cambiar clave" title="Cambiar clave" onclick="app.resetUserPassword(${jsq(u.id)})">${ico('key')}</button><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.openUserModal(${jsq(u.id)})">${ico('edit')}</button><button class="icon-btn icon-btn--danger" aria-label="Dar de baja" title="Dar de baja (sus registros se conservan)" onclick="app.deleteUser(${jsq(u.id)})">${ico('user-x')}</button></div></td></tr>`).join('')}
@@ -1235,6 +1245,19 @@ window.app = {
         ${bajas.map(u => `<tr class="is-muted"><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, 'neutral')}</td><td class="small">${esc(u.email || '-')}</td><td class="num small">${fmtDate(u.fechaBaja) || '-'}</td>
           <td class="t-actions"><button class="btn btn--sm" onclick="app.restoreUser(${jsq(u.id)})">${ico('user-check')}Reactivar</button></td></tr>`).join('')}
         </tbody></table></div></section>` : ''}`;
+  },
+  /** Directorio de personal ordenado (A a la Z por defecto) y filtrado por la búsqueda. */
+  staffSorted(list) {
+    const N = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const q = N(State.staffQ || '').trim();
+    const out = q ? list.filter(u => N(`${u.name} ${u.customRole || ''} ${u.role || ''} ${u.email || ''}`).includes(q)) : list.slice();
+    const nombre = (a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+    const modo = State.staffSort || 'az';
+    return out.sort((a, b) => modo === 'za' ? nombre(b, a)
+      : modo === 'perfil' ? String(a.role || '').localeCompare(String(b.role || ''), 'es') || nombre(a, b)
+      : modo === 'cargo' ? String(a.customRole || a.role || '').localeCompare(String(b.customRole || b.role || ''), 'es') || nombre(a, b)
+      : modo === 'estado' ? (!!a.accesoNotificado - !!b.accesoNotificado) || nombre(a, b)
+      : nombre(a, b));
   },
   setGoogleOnly(on) {
     const vigentes = State.users.filter(u => !u.eliminado && u.active !== false);
