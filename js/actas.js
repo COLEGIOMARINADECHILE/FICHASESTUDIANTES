@@ -50,6 +50,53 @@ Object.assign(app, {
   openActasImport(preset = {}) {
     this.pickFiles({ accept: '.pdf,application/pdf', onPick: files => this.handleActas(files, preset) });
   },
+  /** Acceso directo desde el menú: cartas masivas (se separan solas) o la de un estudiante. */
+  openCartasHub() {
+    ui.modal({
+      title: 'Cartas de compromiso firmadas', icon: 'file-check', tone: 'warn', size: 'md', hideOk: true, cancelText: 'Cerrar',
+      body: `<div class="stack">
+        <h4 class="hub-h">${ico('files')}Varias cartas juntas</h4>
+        <p class="modal__msg">Suba uno o varios PDF con todas las cartas firmadas (por ejemplo, el escaneo completo de un curso). El sistema lee cada página, reconoce al estudiante por su RUN o nombre, <strong>separa el PDF por estudiante</strong> y le muestra el resultado para revisarlo antes de guardar.</p>
+        <div id="cartas-drop" class="drop-zone" tabindex="0" role="button" aria-label="Arrastre aquí los PDF de cartas o presione para elegirlos">${ico('file-up')}<strong>Arrastre aquí los PDF de las cartas</strong><span class="muted small">o presione para elegir los archivos</span></div>
+        <p class="note">${ico('scan')}Si el PDF es escaneado (foto o imagen), se usa el reconocimiento de texto de Google para leer el nombre. Si no se reconoce, usted elige al estudiante en la revisión.</p>
+        <hr class="hub-sep">
+        <h4 class="hub-h">${ico('user')}La carta de un estudiante</h4>
+        ${this.studentDatalist('cartas-students')}
+        <div class="row-field">
+          <input id="cartas-student" class="input input--grow" list="cartas-students" placeholder="Escriba el nombre o RUN del estudiante" autocomplete="off">
+          <button type="button" class="btn btn--primary" onclick="app.cartaIndividual()">${ico('upload')}Elegir PDF</button>
+        </div>
+      </div>`
+    });
+    const z = el('cartas-drop'), pick = () => { ui.close(); this.openActasImport(); };
+    z.onclick = pick;
+    z.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    z.ondragover = e => { e.preventDefault(); z.classList.add('is-over'); };
+    z.ondragleave = () => z.classList.remove('is-over');
+    z.ondrop = e => { e.preventDefault(); const f = [...(e.dataTransfer.files || [])]; ui.close(); this.handleActas(f); };
+  },
+  cartaIndividual() {
+    const s = this.studentByLabel(el('cartas-student').value);
+    if (!s) { toast('Elija un estudiante de la lista', 'error'); return el('cartas-student').focus(); }
+    ui.close();
+    this.openActasImport({ studentId: String(s.id) });
+  },
+  /** Fecha escrita en la carta (dd/mm/aaaa o "12 de marzo de 2026"). */
+  fechaEnTexto(text) {
+    const t = String(text || '');
+    let m = t.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2})\b/);
+    if (m) return `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+    const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    m = this.normalizarTexto(t).toLowerCase().match(/\b(\d{1,2}) de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre) (?:de |del )?(20\d{2})\b/);
+    if (m) { const mi = m[2] === 'setiembre' ? 8 : meses.indexOf(m[2]); return `${m[3]}-${String(mi + 1).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`; }
+    return '';
+  },
+  /** Carta por defecto para un acta: la primera sin acta; si no hay, se registra una nueva. */
+  cartaPorDefecto(studentId, preset) {
+    if (preset && preset.cartaId) return String(preset.cartaId);
+    const libre = this.cartasOf(studentId).find(c => !this.actaOf(c.id));
+    return libre ? String(libre.id) : '__new';
+  },
   async handleActas(files, preset = {}) {
     files = files.filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
     if (!files.length) return toast('Seleccione archivos PDF', 'error');
@@ -73,10 +120,34 @@ Object.assign(app, {
           const v2 = page.getViewport({ scale });
           canvas.width = v2.width; canvas.height = v2.height;
           await page.render({ canvasContext: canvas.getContext('2d'), viewport: v2 }).promise;
-          const det = preset.studentId ? null : (text.trim() ? this.studentInText(text, pool) : null);
-          pages.push({ fi, p: p - 1, thumb: canvas.toDataURL('image/jpeg', 0.7), hasText: text.replace(/\s/g, '').length > 30, detected: det ? String(det.id) : '' });
+          pages.push({ fi, p: p - 1, page, text, thumb: canvas.toDataURL('image/jpeg', 0.7), hasText: text.replace(/\s/g, '').length > 30 });
         }
       }
+      // Páginas escaneadas: se leen con el reconocimiento de texto de Google (en el servidor)
+      const escaneadas = pages.filter(pg => !pg.hasText);
+      if (escaneadas.length && !preset.studentId && window.APP_CONFIG?.API_URL) {
+        let leidas = 0;
+        for (const [k, pg] of escaneadas.entries()) {
+          el('busy-title').textContent = 'Reconociendo texto en páginas escaneadas';
+          el('busy-msg').textContent = `Página ${k + 1} de ${escaneadas.length}. Puede tardar unos segundos por página.`;
+          try {
+            const vp = pg.page.getViewport({ scale: 1 });
+            const v2 = pg.page.getViewport({ scale: Math.min(2.5, 1600 / vp.width) });
+            const c = document.createElement('canvas');
+            c.width = v2.width; c.height = v2.height;
+            await pg.page.render({ canvasContext: c.getContext('2d'), viewport: v2 }).promise;
+            const r = await API.call('ocrPagina', { base64: c.toDataURL('image/jpeg', 0.8).split(',')[1] });
+            if (r && r.texto && r.texto.replace(/\s/g, '').length > 30) { pg.text = r.texto; pg.hasText = true; pg.ocr = true; leidas++; }
+          } catch (e) { console.warn('OCR', e); }
+        }
+        State.actasOcr = { total: escaneadas.length, leidas };
+      } else State.actasOcr = null;
+      pages.forEach(pg => {
+        const det = preset.studentId ? null : (pg.text.trim() ? this.studentInText(pg.text, pool) : null);
+        pg.detected = det ? String(det.id) : '';
+        pg.fechaDoc = this.fechaEnTexto(pg.text);
+        delete pg.page; delete pg.text;
+      });
       State.actas = { files: sources, pages, preset, porCarta: 1 };
       this.groupActas(true);
       done();
@@ -110,10 +181,9 @@ Object.assign(app, {
     groups.forEach(g => {
       const f = g.first;
       if (f.studentId === undefined) f.studentId = a.preset.studentId ? String(a.preset.studentId) : (g.pages.find(p => p.detected)?.detected || '');
-      if (f.cartaId === undefined && f.studentId) {
-        const cartas = this.cartasOf(f.studentId);
-        f.cartaId = a.preset.cartaId ? String(a.preset.cartaId) : String((cartas.find(c => !this.actaOf(c.id)) || cartas[0] || {}).id || '');
-      }
+      if (f.cartaId === undefined && f.studentId) f.cartaId = this.cartaPorDefecto(f.studentId, a.preset);
+      if (f.fechaCarta === undefined) f.fechaCarta = (g.pages.find(p => p.fechaDoc && p.fechaDoc <= today()) || {}).fechaDoc || today();
+      if (f.tipoCarta === undefined) f.tipoCarta = 'Carta Compromiso';
       if (f.incluir === undefined) f.incluir = true;
     });
     return groups;
@@ -121,8 +191,7 @@ Object.assign(app, {
   setActaStudent(i, id) {
     const g = this.actaGroups()[i];
     g.first.studentId = id;
-    const cartas = id ? this.cartasOf(id) : [];
-    g.first.cartaId = String((cartas.find(c => !this.actaOf(c.id)) || cartas[0] || {}).id || '');
+    g.first.cartaId = id ? this.cartaPorDefecto(id, State.actas.preset) : '';
     g.first.incluir = !!id;
     this.renderActas();
   },
@@ -145,6 +214,7 @@ Object.assign(app, {
         <div class="stat" data-tone="conv"><span class="stat__num num">${listos}</span><span class="stat__label">Con estudiante asignado</span></div>
         <div class="stat"><span class="stat__num num">${groups.length - listos}</span><span class="stat__label">Por revisar</span></div>
       </div>
+      ${State.actasOcr ? `<p class="note">${ico('scan')}Se leyeron con reconocimiento de texto ${State.actasOcr.leidas} de ${State.actasOcr.total} página(s) escaneadas.${State.actasOcr.leidas < State.actasOcr.total ? ' En las demás, elija al estudiante.' : ''}</p>` : ''}
       ${escaneadas && !a.preset.studentId ? `<div class="subpanel"><p class="small">${ico('scan')}Algunas páginas son escaneadas (imagen sin texto), así que el estudiante no se puede leer: elíjalo en cada acta. ${fieldHtml('Páginas por acta en los PDF escaneados', `<select class="input" onchange="State.actas.porCarta=+this.value; app.groupActas(); app.renderActas()">${options([[1, '1 página'], [2, '2 páginas'], [3, '3 páginas'], [4, '4 páginas']], a.porCarta)}</select>`, 'field--inline')}</p></div>` : ''}
       <p class="muted small">Revise cada acta. Pinche "Separar aquí" en una página para que comience una acta nueva, o "Unir" para juntarla con la anterior.</p>
       <div class="stack">${groups.map((g, gi) => {
@@ -157,7 +227,11 @@ Object.assign(app, {
           <div class="acta-group__form">
             <label class="check"><input type="checkbox" ${f.incluir ? 'checked' : ''} onchange="app.actaGroups()[${gi}].first.incluir=this.checked; app.renderActas()"><span><strong>Acta ${gi + 1}</strong> · ${g.pages.length} página(s)${f.detected && sameId(f.detected, f.studentId) ? ' · estudiante reconocido en el documento' : ''}</span></label>
             ${fieldHtml('Estudiante', `<select class="input" onchange="app.setActaStudent(${gi}, this.value)">${optsAlumnos(f.studentId)}</select>`)}
-            ${fieldHtml('Carta de compromiso a la que corresponde', `<select class="input" ${f.studentId ? '' : 'disabled'} onchange="app.actaGroups()[${gi}].first.cartaId=this.value">${options([['', 'Sin vincular a una carta'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${this.actaOf(c.id) ? ' (ya tiene acta)' : ''}`])], f.cartaId)}</select>`)}
+            ${fieldHtml('Carta de compromiso a la que corresponde', `<select class="input" ${f.studentId ? '' : 'disabled'} onchange="app.actaGroups()[${gi}].first.cartaId=this.value; app.renderActas()">${options([['__new', 'Registrar como carta nueva en la ficha'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${this.actaOf(c.id) ? ' (ya tiene acta)' : ''}`]), ['', 'Solo guardar el PDF, sin carta']], f.cartaId)}</select>`)}
+            ${f.cartaId === '__new' && f.studentId ? `<div class="grid-2">
+              ${fieldHtml('Fecha de la carta', `<input type="date" class="input" value="${esc(f.fechaCarta)}" max="${today()}" onchange="app.actaGroups()[${gi}].first.fechaCarta=this.value">`)}
+              ${fieldHtml('Tipo', `<select class="input" onchange="app.actaGroups()[${gi}].first.tipoCarta=this.value">${options(['Carta Compromiso', 'Carta Compromiso Familiar', 'Carta Compromiso Estudiante', 'Carta de Condicionalidad'], f.tipoCarta)}</select>`)}
+            </div>` : ''}
           </div>
         </article>`;
       }).join('')}</div>`;
@@ -183,7 +257,12 @@ Object.assign(app, {
         const out = await PDFDocument.create();
         (await out.copyPages(src[fi], g.pages.map(p => p.p))).forEach(p => out.addPage(p));
         const bytes = await out.save();
-        const carta = g.first.cartaId ? s.history.find(h => sameId(h.id, g.first.cartaId)) : null;
+        let carta = g.first.cartaId && g.first.cartaId !== '__new' ? s.history.find(h => sameId(h.id, g.first.cartaId)) : null;
+        if (g.first.cartaId === '__new') {
+          // La carta no estaba en la plataforma: se registra en la ficha con la fecha indicada
+          carta = { id: Date.now() + n, studentId: String(s.id), studentName: s.name, date: g.first.fechaCarta || today(), type: g.first.tipoCarta || 'Carta Compromiso', professional: State.currentUser.name, professionalId: State.currentUser.id, background: `**DOCUMENTO OFICIAL:**\n\n${g.first.tipoCarta || 'Carta Compromiso'} firmada en papel. El documento escaneado está guardado como acta firmada.`, isPrivate: false, sharedWith: [], agreements: [], cartaEscaneada: true };
+          await DB.save('interventions', carta);
+        }
         const fecha = today();
         const nombre = `${fecha}_Acta_firmada_${this.clean(s.name).replace(/\s+/g, '_')}.pdf`;
         const up = await API.call('upload', { folderName: `${s.curso} - ${s.name}`, fileName: nombre, mimeType: 'application/pdf', base64: this.u8ToBase64(bytes) });

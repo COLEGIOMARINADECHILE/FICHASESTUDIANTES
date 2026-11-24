@@ -374,6 +374,7 @@ window.app = {
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
       ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk', 'ov_riesgos']],
       ['pick_dia', 'bar-chart-3', 'Resultados DIA', hasAccess('ver_fichas'), ['dia']],
+      ['cartas', 'file-check', 'Cartas de compromiso', !!(this.canUploadActas && this.canUploadActas()), []],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
@@ -382,7 +383,7 @@ window.app = {
       ['admin', 'settings', 'Administración', hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'), ['admin']]
     ];
     el('nav-menu').innerHTML = items.filter(i => i[3]).map(([id, icon, label, , views]) =>
-      `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'report' ? 'app.openStaffReportModal()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
+      `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'report' ? 'app.openStaffReportModal()' : id === 'cartas' ? 'app.openCartasHub()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
   },
 
   // ---------------- DATOS DE ESTUDIANTES ----------------
