@@ -23,7 +23,7 @@ Object.assign(app, {
     const add = (role, name, checked) => ex.customSignatures.push({ id: newId(), role, name: String(name || '').toUpperCase(), checked: !!checked });
 
     if (['course_plan_final', 'student_plan_final'].includes(ctx) && State.plan) (State.plan.responsibles || []).forEach(r => { if (r.name) add((r.cargo || 'RESPONSABLE').toUpperCase(), r.name, true); });
-    const studentDoc = ['student_plan_final', 'single_carta', 'student_internal', 'protocolo_informe'].includes(ctx);
+    const studentDoc = ['student_plan_final', 'single_carta', 'student_internal', 'protocolo_informe', 'ficha_entrevistas'].includes(ctx);
     if (studentDoc) {
       const st = this.current();
       add('ESTUDIANTE', st ? this.formatStudentName(st.name) : '', true);

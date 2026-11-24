@@ -851,7 +851,7 @@ window.app = {
     }).join('');
 
     this.panel(`
-      ${this.panelHead('Intervenciones y protocolos', 'clipboard-list', canAdd && !formOpen ? `<button class="btn btn--primary" onclick="app.openInterventionForm()">${ico('plus')}Nueva intervención</button>` : '')}
+      ${this.panelHead('Intervenciones y protocolos', 'clipboard-list', `<div class="row-actions"><button class="btn btn--sm" onclick="app.openInterviewPanel()">${ico('panel-right-open')}Resumen del estudiante</button><button class="btn btn--sm" onclick="app.openExportModal('ficha_entrevistas')">${ico('file-output')}Ficha de entrevistas</button>${canAdd && !formOpen ? `<button class="btn btn--primary" onclick="app.startInterview()">${ico('messages-square')}Iniciar entrevista</button>` : ''}</div>`)}
       ${formOpen ? '' : filtros}
       ${formOpen ? this.interventionFormHtml() : ''}
       <div class="stack">${list || empty('clipboard-list', 'No hay intervenciones registradas.')}</div>`);
