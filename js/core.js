@@ -91,7 +91,7 @@ const txtNormativoPlano = () => `MEDIDA EN CASO DE INCUMPLIMIENTO:\n${TXT_INCUMP
 window.State = {
   loading: true, currentUser: null, showWithdrawn: false, demo: false, lastSync: 0,
   users: [], rawStudents: [], rawInterventions: [], rawNursings: [], rawObservations: [], rawCoursesDB: [],
-  rawInclusionReports: [], knowledgeDocs: [], coursePlans: [], studentPlans: [], rawEvidences: [], traspasos: [], riesgos: [],
+  rawInclusionReports: [], knowledgeDocs: [], coursePlans: [], studentPlans: [], rawEvidences: [], traspasos: [], riesgos: [], dia: [],
   loginOptions: { roles: INIT_VARS.roles, users: [] },
   variables: { ...INIT_VARS },
   currentView: 'dashboard', selectedStudentId: null, detailTab: 'entrevistas', filterCourse: '',
@@ -250,7 +250,7 @@ const API = {
 };
 
 // Colección del servidor → arreglo en State
-const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences', traspasos: 'traspasos', riesgos: 'riesgos' };
+const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences', traspasos: 'traspasos', riesgos: 'riesgos', dia: 'dia' };
 
 const DB = {
   async load() {
@@ -356,6 +356,9 @@ const Demo = {
         return clone(ev);
       }
       case 'crearDocumento': { const id = 'demo' + Date.now(); return { fileId: id, url: '#', fileName: String(p.nombre).replace(/\.docx$/i, '') + '.docx' }; }
+      case 'subirCertificado': { const id = 'cert_demo' + Date.now() + Math.random().toString(36).slice(2, 5); const ev = { id, studentId: '', pendiente: true, categoria: 'certificado', type: p.tipo || 'Certificado médico', fileName: p.fileName || 'certificado_drive.pdf', mimeType: p.mimeType || 'application/pdf', date: today(), uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: id, url: '#', archivado: !!p.base64 }; this.db.evidences.push(ev); return { evidence: clone(ev), texto: '' }; }
+      case 'asignarCertificado': { const ev = this.db.evidences.find(x => sameId(x.id, p.id)); const s = this.db.students.find(x => sameId(x.id, p.studentId)); if (ev.studentId && !sameId(ev.studentId, s.id)) { const prev = this.db.students.find(x => sameId(x.id, ev.studentId)); if (prev) prev.justificativos = (prev.justificativos || []).filter(j => j.evidenceId !== ev.id); } Object.assign(ev, { studentId: s.id, studentName: s.name, course: s.curso, pendiente: false, inicio: p.inicio, termino: p.termino, diasReposo: p.diasReposo, diasHabiles: p.diasHabiles, type: p.tipo || ev.type, observacion: p.observacion || '' }); s.justificativos = [...(s.justificativos || []).filter(j => j.evidenceId !== ev.id), { fecha: p.inicio, inicio: p.inicio, termino: p.termino, tipo: ev.type, dias: p.diasHabiles, evidenceId: ev.id, por: State.currentUser.name }]; return { evidence: clone(ev), justificativos: clone(s.justificativos) }; }
+      case 'registrarSuspension': { const s = this.db.students.find(x => sameId(x.id, p.studentId)); const l = s.suspensiones = s.suspensiones || []; const i = p.id ? l.findIndex(x => sameId(x.id, p.id)) : -1; if (p.anular) Object.assign(l[i], { estado: 'anulada', motivoAnulacion: p.motivoAnulacion }); else { const d = { id: i >= 0 ? l[i].id : String(Date.now()), inicio: p.inicio, termino: p.termino, dias: p.dias, tipo: p.tipo, motivo: p.motivo, interventionId: p.interventionId, estado: 'vigente', por: State.currentUser.name, fecha: today() }; if (i >= 0) l[i] = d; else l.push(d); } return { suspensiones: clone(l) }; }
       case 'upload': { const id = 'demo' + Date.now() + Math.random().toString(36).slice(2, 6); return { fileId: id, url: '#' }; }
       case 'archivarDocumentos': { const ids = (p.ids || []).filter(id => { const e = this.db.evidences.find(x => sameId(x.id, id)); if (e) e.archivado = true; return !!e; }); return { archivados: ids.length, errores: [], ids }; }
       case 'iaClaves': return { keys: (this.keys = this.keys || []).map((k, i) => ({ ...k, label: k.label || `Clave ${i + 1}`, usos: 0, estado: 'disponible' })) };

@@ -1151,3 +1151,24 @@ body.has-iv-panel .main { padding-right: min(400px, 40vw); }
 .mark-legend__item { display: inline-flex; align-items: center; gap: 0.4rem; }
 .mark-swatch { display: inline-block; width: 0.95rem; height: 0.95rem; border-radius: 3px; border: 1px solid var(--color-rule); background: var(--color-paper); }
 .mark-swatch[data-mark] { background: var(--mark-bg); border-color: var(--mark-ink); box-shadow: inset 3px 0 0 var(--mark-ink); }
+/* Certificados médicos: tabla de revisión y accesos en registro rápido */
+.cert-table .input { min-width: 0; }
+.cert-table td:nth-child(3) { min-width: 15rem; }
+.cert-table td:nth-child(4), .cert-table td:nth-child(5) { min-width: 9.5rem; }
+.cert-table .input--num { width: 4.5rem; }
+.quick-certs { margin-bottom: 0.75rem; flex-wrap: wrap; }
+/* Resultados DIA */
+.dia-card details > summary { cursor: pointer; display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0; font-weight: 600; color: var(--color-heading); }
+.dia-card details > summary svg { width: 1rem; height: 1rem; }
+.dia-table td.dia-cell { text-align: center; font-weight: 700; font-size: 0.8rem; }
+.dia-table td.dia-cell[data-v="L"] { background: var(--tone-conv-soft); color: var(--tone-conv-ink); }
+.dia-table td.dia-cell[data-v="NL"] { background: var(--tone-proto-soft); color: var(--tone-proto-ink); }
+.dia-table th { font-size: 0.72rem; white-space: normal; min-width: 4.5rem; }
+.dia-pct { display: inline-block; min-width: 4.5rem; padding: 0.1rem 0.45rem; border-radius: 999px; font-weight: 700; text-align: center; }
+.dia-pct[data-level="bajo"] { background: var(--tone-proto-soft); color: var(--tone-proto-ink); }
+.dia-pct[data-level="medio"] { background: var(--tone-warn-soft); color: var(--tone-warn-ink); }
+.dia-pct[data-level="alto"] { background: var(--tone-conv-soft); color: var(--tone-conv-ink); }
+.tr-dia { padding: 0.5rem 0; border-bottom: 1px dashed var(--color-rule); }
+.tr-dia h4 { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.35rem; }
+.tr-dia h4 svg { width: 1rem; height: 1rem; }
+.tr-dia .chips { gap: 0.35rem; }

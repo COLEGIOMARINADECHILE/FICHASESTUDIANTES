@@ -8,6 +8,7 @@
 const TRASPASO_SECCIONES = [
   ['matricula', 'Matrícula', 'users', 'Incorporaciones, retiros y su contexto.'],
   ['rendimiento', 'Rendimiento por asignatura', 'bar-chart-3', 'Observaciones sobre el rendimiento del curso.'],
+  ['dia', 'Resultados DIA (Diagnóstico Integral de Aprendizajes)', 'bar-chart-big', 'Lectura de los resultados DIA del curso y apoyos que requiere el próximo año.'],
   ['riesgo', 'Riesgo de repitencia y repitentes', 'alert-triangle', 'Estudiantes que repiten o están en riesgo, y antecedentes.'],
   ['asistencia', 'Asistencia (bajo 85 %)', 'calendar-x', 'Causas de las inasistencias y apoyos realizados.'],
   ['disciplina', 'Disciplina', 'shield-alert', 'Estudiantes que requieren advertencia y monitoreo permanente.'],
@@ -106,7 +107,8 @@ Object.assign(app, {
     const promAsis = activos.length ? Math.round(activos.reduce((a, s) => a + s.asistencia.real, 0) / activos.length) : 0;
     const promCurso = promedios.length ? (promedios.reduce((a, p) => a + p.pg, 0) / promedios.length).toFixed(1) : '-';
     const convivencia = this.convivenciaStats(activos, anio);
-    return { activos, retirados, incorporados, matriculaInicial: activos.length + retirados.length - incorporados.length, rendimiento, riesgo, asistencia, disciplina, socio, pie, talleres, registros, asisDist, promAsis, promCurso, conNotas: promedios.length, convivencia };
+    const dia = this.diaOf ? this.diaOf(course).filter(d => String(d.anio) === String(anio)) : [];
+    return { activos, retirados, incorporados, matriculaInicial: activos.length + retirados.length - incorporados.length, rendimiento, riesgo, asistencia, disciplina, socio, pie, talleres, registros, asisDist, promAsis, promCurso, conNotas: promedios.length, convivencia, dia };
   },
   /** Indicadores de convivencia del curso (sin nombres): tipos de registro, faltas, meses, concentración. */
   convivenciaStats(activos, anio) {
@@ -160,6 +162,7 @@ Object.assign(app, {
         `\nFaltas: ${v.faltas.LEVE} leves, ${v.faltas.GRAVE} graves, ${v.faltas['GRAVÍSIMA']} gravísimas. Cartas de compromiso: ${v.cartas}. Anotaciones positivas: ${v.anot.positivas}; negativas: ${v.anot.negativas}.` : 'No se registran intervenciones de convivencia este año.'; },
       socioemocional: () => a.socio.length ? `Estudiantes con apoyo socioemocional o planes:\n${a.socio.map(x => `- ${n(x.s)}: ${[x.planes.length && x.planes.join(', '), x.apoyos && `${x.apoyos} intervención(es) de apoyo o derivación`].filter(Boolean).join('. ')}.`).join('\n')}` : '',
       pie: () => a.pie.length ? `${a.pie.length} estudiante(s) con apoyo PIE:\n${a.pie.map(x => `- ${n(x.s)}: ${x.tipos.join(', ') || 'documentos PIE'}; último registro ${fmtDate(x.ultima) || 'sin fecha'}.`).join('\n')}` : '',
+      dia: () => (a.dia || []).length ? (a.dia || []).map(d => { const c = this.diaCalc(d); const bajas = c.areas.filter(x => x.pct < 60).map(x => x.nombre); return `DIA ${d.asignatura} (${d.periodo}): ${c.areas.map(x => `${x.nombre} ${String(x.pct).replace('.', ',')} %`).join('; ')}.${bajas.length ? `\nÁreas descendidas: ${bajas.join(', ')}.` : ''}${c.apoyo.length ? `\n${c.apoyo.length} estudiante(s) no logran la mitad o más de los indicadores: ${c.apoyo.map(e => e.ficha || e.nombre).join(', ')}.` : ''}`; }).join('\n\n') : '',
       talleres: () => a.talleres.length ? `Acciones y talleres de los planes de curso:\n${a.talleres.map(x => `- ${x}`).join('\n')}` : ''
     }[k];
     const txt = t ? t() : '';
@@ -268,6 +271,7 @@ Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del c
       pie: lista(a.pie, x => `<li>${nombre(x.s)} <span class="muted small">${esc(x.tipos.join(', ') || 'Documentos PIE')}. ${x.ambitos} estrategia(s), ${x.docs} documento(s). Último registro: ${fmtDate(x.ultima) || '-'}</span></li>`, 'Sin estudiantes PIE con planes o documentos cargados.'),
       aprendizaje: '',
       ritmo: `${fieldHtml('Evaluación del ritmo de trabajo', `<select class="input" ${this.canEditTrSection('ritmo') ? '' : 'disabled'} onchange="State.trDraft.ritmo=this.value">${options(RITMO_OPCIONES, d.ritmo || '')}</select>`)}`,
+      dia: (a.dia || []).length ? (a.dia || []).map(d => { const c = this.diaCalc(d); return `<div class="tr-dia"><h4>${ico('bar-chart-3')}${esc(d.asignatura)} · ${esc(d.periodo)}</h4><div class="chips">${c.areas.map(x => `<span class="dia-pct" data-level="${x.pct < 50 ? 'bajo' : x.pct < 75 ? 'medio' : 'alto'}">${esc(x.nombre)}: ${String(x.pct).replace('.', ',')} %</span>`).join(' ')}</div>${c.apoyo.length ? `<p class="muted small">${c.apoyo.length} estudiante(s) requieren apoyo: ${c.apoyo.map(e => esc(e.ficha || e.nombre)).join(', ')}.</p>` : ''}</div>`; }).join('') + `<button type="button" class="btn btn--sm" onclick="app.openDia(${jsq(State.traspasoCourse)})">${ico('external-link')}Ver Resultados DIA del curso</button>` : `<p class="muted small">No hay informes DIA ${esc(State.traspasoAnio)} cargados para este curso. <button type="button" class="link-btn" onclick="app.openDia(${jsq(State.traspasoCourse)})">Cargarlos en Resultados DIA</button></p>`,
       talleres: lista(a.talleres, t => `<li>${esc(t)}</li>`, 'No hay acciones de planes de curso registradas este año.'),
       convivencia: (v => `<div class="stats stats--4">
           <div class="stat" data-tone="conv"><span class="stat__num num">${v.total}</span><span class="stat__label">Registros de convivencia</span></div>
@@ -458,6 +462,7 @@ ${b.tagline}`;
     return {
       curso: State.traspasoCourse, anio: State.traspasoAnio,
       matricula: { inicial: a.matriculaInicial, actual: a.activos.length, incorporados: a.incorporados.length, retirados: a.retirados.length, motivos_retiro: a.retirados.map(s => anon(s.motivoRetiro)).filter(Boolean) },
+      dia: (a.dia || []).map(d => { const c = this.diaCalc(d); return { asignatura: d.asignatura, periodo: d.periodo, estudiantes: d.estudiantes.length || d.nInforme, areas: c.areas.map(x => ({ area: x.nombre, porcentaje_curso: x.pct, indicadores: x.sub.map(s => ({ indicador: s.nombre, porcentaje: s.pct })) })), estudiantes_que_requieren_apoyo: c.apoyo.length, conclusiones_equipo: this.anonimizar(Object.values(d.conclusiones || {}).filter(Boolean).join(' | ').slice(0, 800), a.activos) }; }),
       rendimiento: { promedio_curso: a.promCurso, estudiantes_con_notas: a.conNotas, por_asignatura: a.rendimiento.map(r => ({ asignatura: r.nombre, bajo_4: r.bajo, de_4_a_5_9: r.medio, sobre_6: r.alto, promedio: r.promedio })) },
       riesgo: { estudiantes: a.riesgo.length, motivos: cuenta(a.riesgo.flatMap(x => x.motivos.map(m => m.replace(/[\d.,]+/g, '#').trim()))) },
       asistencia: { promedio: a.promAsis, bajo_85: a.asisDist.bajo85, entre_85_y_89: a.asisDist.entre, sobre_90: a.asisDist.sobre, porcentajes_bajo_85: a.asistencia.map(s => s.asistencia.real) },
@@ -492,7 +497,7 @@ DATOS DEL CURSO (JSON):
 ${JSON.stringify(datos).slice(0, 14000)}
 
 Devuelve SOLO un JSON con esta estructura:
-{"interpretaciones": {"matricula": "2 a 4 oraciones", "rendimiento": "...", "riesgo": "...", "asistencia": "...", "disciplina": "...", "socioemocional": "...", "pie": "...", "aprendizaje": "...", "ritmo": "...", "talleres": "...", "otros": "..."},
+{"interpretaciones": {"matricula": "2 a 4 oraciones", "rendimiento": "...", "dia": "Interpreta los resultados DIA: áreas e indicadores más y menos logrados, relación con las notas y la asistencia, y apoyos necesarios (no los uses para calificar ni comparar cursos)", "riesgo": "...", "asistencia": "...", "disciplina": "...", "socioemocional": "...", "pie": "...", "aprendizaje": "...", "ritmo": "...", "talleres": "...", "otros": "..."},
 "conclusion_general": "Conclusión integrada de 6 a 10 líneas que relacione rendimiento, asistencia, convivencia y apoyos, con prioridades para el próximo año",
 "nivel_alerta": "bajo | medio | alto",
 "resumen": "Diagnóstico breve en 2 o 3 líneas",

@@ -147,7 +147,8 @@ Object.assign(app, {
     AI.run('Analizando los riesgos del curso', 'La IA revisa los antecedentes académicos y de convivencia...', async () => {
       const datos = {
         curso: State.riskCourse, nivel: ctx.nivel, matricula: a.activos.length, retirados: a.retirados.length,
-        academico: { promedio_curso: a.promCurso, estudiantes_con_notas: a.conNotas, asignaturas: a.rendimiento.map(r => ({ asignatura: r.nombre, bajo_4: r.bajo, total: r.n, promedio: r.promedio })), en_riesgo_repitencia: a.riesgo.length, asistencia_promedio: a.promAsis, bajo_85: a.asisDist.bajo85, entre_85_89: a.asisDist.entre, estudiantes_pie: a.pie.length },
+        academico: { promedio_curso: a.promCurso, estudiantes_con_notas: a.conNotas, asignaturas: a.rendimiento.map(r => ({ asignatura: r.nombre, bajo_4: r.bajo, total: r.n, promedio: r.promedio })), en_riesgo_repitencia: a.riesgo.length, asistencia_promedio: a.promAsis, bajo_85: a.asisDist.bajo85, entre_85_89: a.asisDist.entre, estudiantes_pie: a.pie.length,
+          resultados_dia: (a.dia || []).map(d => { const c = this.diaCalc(d); return { asignatura: d.asignatura, periodo: d.periodo, areas: c.areas.map(x => ({ area: x.nombre, porcentaje_curso: x.pct })), estudiantes_que_requieren_apoyo: c.apoyo.length }; }) },
         convivencia: a.convivencia, estudiantes_monitoreo_disciplina: a.disciplina.length, apoyos_socioemocionales: a.socio.length,
         textos_ficha_traspaso: tr ? Object.fromEntries(Object.entries(tr.secciones || {}).map(([k, s]) => [k, this.anonimizar(String(s.texto || '').slice(0, 600), a.activos)]).filter(([, t]) => t)) : {}
       };
@@ -178,17 +179,17 @@ Devuelve SOLO un JSON: {"resumen": "Síntesis del riesgo del curso en 4 a 6 lín
   openCoursePicker(destino) {
     const ac = State.currentUser.assignedCourses || [];
     const open = hasAccess('acceso_total') || ac.length === 0;
-    const titulo = destino === 'traspaso' ? 'Ficha de traspaso' : 'Riesgos del curso';
+    const titulo = { traspaso: 'Ficha de traspaso', dia: 'Resultados DIA' }[destino] || 'Riesgos del curso';
     ui.modal({
-      title: `${titulo}: elija el curso`, icon: destino === 'traspaso' ? 'file-stack' : 'shield-alert', tone: 'obs', size: 'md', hideOk: true, cancelText: 'Cerrar',
+      title: `${titulo}: elija el curso`, icon: { traspaso: 'file-stack', dia: 'bar-chart-3' }[destino] || 'shield-alert', tone: 'obs', size: 'md', hideOk: true, cancelText: 'Cerrar',
       body: `<div class="stack">${Object.entries(CYCLES).map(([ciclo, data]) => {
         const cursos = data.courses.filter(c => open || ac.includes(c));
         return cursos.length ? `<div><h4 class="picker__cycle">${esc(ciclo)}</h4><div class="picker">${cursos.map(c => {
-          const hecho = destino === 'traspaso' ? (State.traspasos || []).some(t => t.course === c) : (State.riesgos || []).some(t => t.course === c);
-          return `<button type="button" class="picker__btn ${c === (State.filterCourse || State.traspasoCourse || State.riskCourse) ? 'is-current' : ''}" onclick="ui.close(); app.${destino === 'traspaso' ? 'openTraspaso' : 'openCourseRisk'}(${jsq(c)})">${esc(c)}${hecho ? ico('check') : ''}</button>`;
+          const hecho = destino === 'traspaso' ? (State.traspasos || []).some(t => t.course === c) : destino === 'dia' ? (State.dia || []).some(t => t.course === c) : (State.riesgos || []).some(t => t.course === c);
+          return `<button type="button" class="picker__btn ${c === (State.filterCourse || State.traspasoCourse || State.riskCourse) ? 'is-current' : ''}" onclick="ui.close(); app.${{ traspaso: 'openTraspaso', dia: 'openDia' }[destino] || 'openCourseRisk'}(${jsq(c)})">${esc(c)}${hecho ? ico('check') : ''}</button>`;
         }).join('')}</div></div>` : '';
       }).join('') || empty('folder-x', 'No tiene cursos asignados.')}
-      <p class="muted small">${ico('check')} indica que el curso ya tiene ${destino === 'traspaso' ? 'ficha de traspaso iniciada' : 'riesgos registrados'}.</p></div>`
+      <p class="muted small">${ico('check')} indica que el curso ya tiene ${{ traspaso: 'ficha de traspaso iniciada', dia: 'resultados DIA' }[destino] || 'riesgos registrados'}.</p></div>`
     });
   }
 });

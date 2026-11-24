@@ -332,7 +332,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { mine: 'renderMine', course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { dia: 'renderDia', mine: 'renderMine', course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -373,6 +373,7 @@ window.app = {
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso']],
       ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk']],
+      ['pick_dia', 'bar-chart-3', 'Resultados DIA', hasAccess('ver_fichas'), ['dia']],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
@@ -559,8 +560,11 @@ window.app = {
       canImport ? `<button class="btn" onclick="app.openGradesImport()">${ico('file-badge')}Cargar notas (PDF)</button>` : '',
       this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('puzzle')}Cargar planes PIE</button>` : '',
       this.canUploadActas() ? `<button class="btn" onclick="app.openActasImport()">${ico('file-check')}Subir actas firmadas (PDF)</button>` : '',
+      this.canCert() ? `<button class="btn" onclick="app.openBulkCerts()">${ico('heart-pulse')}Subir certificados médicos</button>` : '',
+      this.canCert() && this.pendingCerts().length ? `<button class="btn" onclick="app.openPendingCerts()">${ico('inbox')}Certificados por asignar (${this.pendingCerts().length})</button>` : '',
       course ? `<button class="btn" onclick="app.openTraspaso(${jsq(course)})">${ico('file-stack')}Ficha de traspaso</button>` : '',
       course ? `<button class="btn" onclick="app.openCourseRisk(${jsq(course)})">${ico('shield-alert')}Riesgos del curso</button>` : '',
+      course ? `<button class="btn" onclick="app.openDia(${jsq(course)})">${ico('bar-chart-3')}Resultados DIA</button>` : '',
       course ? `<button class="btn" onclick="app.openExportModal('course_full_report')">${ico('file-text')}Reporte del curso</button>` : '',
       course ? `<button class="btn" onclick="app.exportActivePlansPDF()">${ico('file-output')}Reporte planes</button>` : '',
       course ? `<button class="btn" onclick="app.openCoursePlans()">${ico('clipboard-list')}Planes del curso</button>` : '',
@@ -704,7 +708,7 @@ window.app = {
         <span class="avatar avatar--lg" aria-hidden="true">${esc(s.name.charAt(0))}</span>
         <div class="entry__id">
           <h1 class="entry__name">${esc(s.name)} ${this.areaBadges(s)}</h1>
-          <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}${this.repToggleHtml(s)}</div>
+          <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}${this.healthChips(s)}${this.repToggleHtml(s)}</div>
           ${s.riesgoRepitencia?.activo && s.riesgoRepitencia.motivo ? `<p class="entry__note">${ico('alert-triangle')}Riesgo de repitencia: ${esc(s.riesgoRepitencia.motivo)} <span class="muted small">(${esc(s.riesgoRepitencia.por || '')}, ${fmtDate(s.riesgoRepitencia.fecha)})</span></p>` : ''}
         </div>
         <div class="chips chips--end">${this.recordChips([s.id], this.countRecords(s))}</div>
@@ -722,12 +726,12 @@ window.app = {
     this.changeDetailTab(State.detailTab);
   },
 
-  TABS: [['entrevistas', 'Intervenciones', 'conv'], ['observaciones', 'Observaciones docentes', 'obs'], ['enfermeria', 'Enfermería', 'enf'], ['pie', 'Trabajo PIE (planes y documentos)', 'pie'], ['repitencia', 'Riesgo de repitencia', 'warn'], ['cartas', 'Cartas y documentos', 'warn'], ['respaldos', 'Respaldos y archivos', 'conv']],
+  TABS: [['entrevistas', 'Intervenciones', 'conv'], ['observaciones', 'Observaciones docentes', 'obs'], ['enfermeria', 'Enfermería', 'enf'], ['salud', 'Certificados y suspensiones', 'enf'], ['pie', 'Trabajo PIE (planes y documentos)', 'pie'], ['repitencia', 'Riesgo de repitencia', 'warn'], ['cartas', 'Cartas y documentos', 'warn'], ['respaldos', 'Respaldos y archivos', 'conv']],
 
   changeDetailTab(tab) {
     State.detailTab = tab;
     el('detail-tabs').innerHTML = this.TABS.map(([id, label, tone]) => `<button type="button" role="tab" class="tab" data-tone="${tone}" aria-selected="${id === tab}" onclick="app.changeDetailTab('${id}')">${label}</button>`).join('');
-    ({ entrevistas: () => this.renderInterventions(), observaciones: () => this.renderSimple('observations'), enfermeria: () => this.renderSimple('nursings'), pie: () => this.renderPiePlans(), repitencia: () => this.renderRepitencia(), cartas: () => this.renderCartas(), respaldos: () => this.renderEvidences() })[tab]();
+    ({ entrevistas: () => this.renderInterventions(), observaciones: () => this.renderSimple('observations'), enfermeria: () => this.renderSimple('nursings'), salud: () => this.renderSalud(), pie: () => this.renderPiePlans(), repitencia: () => this.renderRepitencia(), cartas: () => this.renderCartas(), respaldos: () => this.renderEvidences() })[tab]();
     icons();
   },
   panel(html) { el('detail-panel').innerHTML = html; icons(); },
