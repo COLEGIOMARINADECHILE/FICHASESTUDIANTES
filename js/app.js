@@ -836,22 +836,24 @@ window.app = {
         <div class="agreements"><h4>${ico('check-circle')}Medidas y acuerdos</h4>${r.agreements.map(a => `
           <div class="agreement" data-falta="${esc(a.falta || '')}">
             <div class="agreement__head">${a.falta ? chip(`Falta ${a.falta.toLowerCase()}`, { LEVE: 'warn', GRAVE: 'warn', 'GRAVÍSIMA': 'proto' }[a.falta] || 'neutral') : '<span></span>'}<span class="muted small">Estado: ${esc(a.progress)}</span></div>
-            <p class="prewrap">${esc(a.text)}</p></div>`).join('')}</div>` : '';
+            <p class="prewrap">${esc(a.text)}</p>${a.responsable || a.plazo ? `<p class="agreement__meta">${a.responsable ? `${ico('user')}Responsable: <strong>${esc(a.responsable)}</strong>` : ''}${a.plazo ? `${ico('calendar')}Plazo: <strong>${esc(this.fmtPlazo(a))}</strong>` : ''}</p>` : ''}</div>`).join('')}</div>` : '';
       return `
         <article class="record" data-tone="${isProt ? 'proto' : r.isPrivate ? 'pie' : 'neutral'}">
           <header class="record__head">
             <span class="record__icon">${ico(isProt ? 'alert-triangle' : r.isPrivate ? 'lock' : 'clipboard-list')}</span>
-            <div><span class="record__date num">${fmtDate(r.date)}</span><h3>${esc(r.type)} ${r.isPrivate && !isProt ? chip('Confidencial', 'neutral') : ''}</h3></div>
-            ${canEdit ? `<div class="row-actions"><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.editIntervention(${jsq(r.id)})">${ico('edit-2')}</button><button class="icon-btn icon-btn--danger" aria-label="Eliminar" title="Eliminar" onclick="app.deleteIntervention(${jsq(r.id)})">${ico('trash-2')}</button></div>` : ''}
+            <div><span class="record__date num">${fmtDate(r.date)}${r.entrevista?.hora ? ` · ${esc(r.entrevista.hora)}` : ''}</span><h3>${esc(r.type)} ${r.isPrivate && !isProt ? chip('Confidencial', 'neutral') : ''}</h3>${this.interviewWho(r) ? `<span class="record__who">${esc(this.interviewWho(r))}</span>` : ''}</div>
+            ${!isProt && !this.isCarta(r) ? `<button class="icon-btn" aria-label="Imprimir acta para firmar" title="Imprimir acta para firmar" onclick="app.printInterview(${jsq(r.id)})">${ico('printer')}</button>` : ''}
+            ${canEdit || (r.entrevista && sameId(r.professionalId, State.currentUser.id)) ? `<div class="row-actions"><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.editIntervention(${jsq(r.id)})">${ico('edit-2')}</button><button class="icon-btn icon-btn--danger" aria-label="Eliminar" title="Eliminar" onclick="app.deleteIntervention(${jsq(r.id)})">${ico('trash-2')}</button></div>` : ''}
           </header>
           <p class="prewrap">${esc(r.background)}</p>
           ${prot}${agreements}
+          ${r.entrevista?.proxima?.fecha ? `<p class="agreement__meta">${ico('calendar-plus')}Próxima entrevista: <strong>${fmtDate(r.entrevista.proxima.fecha)}${r.entrevista.proxima.hora ? ` a las ${esc(r.entrevista.proxima.hora)}` : ''}</strong>${r.entrevista.proxima.con ? ` con ${esc(r.entrevista.proxima.con)}` : ''}</p>` : ''}
           <footer class="record__foot">${ico('user')}Registrado por ${esc(r.professional)}</footer>
         </article>`;
     }).join('');
 
     this.panel(`
-      ${this.panelHead('Intervenciones y protocolos', 'clipboard-list', `<div class="row-actions"><button class="btn btn--sm" onclick="app.openInterviewPanel()">${ico('panel-right-open')}Resumen del estudiante</button><button class="btn btn--sm" onclick="app.openExportModal('ficha_entrevistas')">${ico('file-output')}Ficha de entrevistas</button>${canAdd && !formOpen ? `<button class="btn btn--primary" onclick="app.startInterview()">${ico('messages-square')}Iniciar entrevista</button>` : ''}</div>`)}
+      ${this.panelHead('Intervenciones y protocolos', 'clipboard-list', `<div class="row-actions"><button class="btn btn--sm" onclick="app.openInterviewPanel()">${ico('panel-right-open')}Resumen del estudiante</button><button class="btn btn--sm" onclick="app.openExportModal('ficha_entrevistas')">${ico('file-output')}Ficha de entrevistas</button>${canAdd && !formOpen ? `<button class="btn btn--sm" onclick="app.openInterventionForm()">${ico('plus')}Otro registro o protocolo</button><button class="btn btn--primary" onclick="app.startInterview()">${ico('messages-square')}Iniciar entrevista</button>` : ''}</div>`)}
       ${formOpen ? '' : filtros}
       ${formOpen ? this.interventionFormHtml() : ''}
       <div class="stack">${list || empty('clipboard-list', 'No hay intervenciones registradas.')}</div>`);
