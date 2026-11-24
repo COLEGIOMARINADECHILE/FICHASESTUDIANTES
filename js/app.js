@@ -845,8 +845,9 @@ window.app = {
       const agreements = (r.agreements || []).length ? `
         <div class="agreements"><h4>${ico('check-circle')}Medidas y acuerdos ${this.agreementTally(r)}</h4>${r.agreements.map((a, i) => `
           <div class="agreement" data-falta="${esc(a.falta || '')}" data-estado="${this.agreementState(a)}">
-            <div class="agreement__head">${a.falta ? chip(`Falta ${a.falta.toLowerCase()}`, { LEVE: 'warn', GRAVE: 'warn', 'GRAVÍSIMA': 'proto' }[a.falta] || 'neutral') : '<span></span>'}${this.canMarkAgreement(r, canEdit) ? this.agreementMarksHtml(r, a, i) : `<span class="muted small">Estado: ${esc(a.progress || 'No Iniciado')}</span>`}</div>
-            <p class="prewrap">${esc(a.text)}</p>${a.responsable || a.plazo ? `<p class="agreement__meta">${a.responsable ? `${ico('user')}Responsable: <strong>${esc(a.responsable)}</strong>` : ''}${a.plazo ? `${ico('calendar')}Plazo: <strong>${esc(this.fmtPlazo(a))}</strong>` : ''}</p>` : ''}</div>`).join('')}</div>` : '';
+            ${a.falta || !this.canMarkAgreement(r, canEdit) ? `<div class="agreement__head">${a.falta ? chip(`Falta ${a.falta.toLowerCase()}`, { LEVE: 'warn', GRAVE: 'warn', 'GRAVÍSIMA': 'proto' }[a.falta] || 'neutral') : '<span></span>'}${this.canMarkAgreement(r, canEdit) ? '' : `<span class="muted small">Estado: ${esc(this.agreementStatusText(a))}</span>`}</div>` : ''}
+            <p class="prewrap">${esc(a.text)}</p>${a.responsable || a.plazo ? `<p class="agreement__meta">${a.responsable ? `${ico('user')}Responsable: <strong>${esc(a.responsable)}</strong>` : ''}${a.plazo ? `${ico('calendar')}Plazo: <strong>${esc(this.fmtPlazo(a))}</strong>` : ''}</p>` : ''}
+            ${this.canMarkAgreement(r, canEdit) ? `<div class="agr-foot">${this.agreementMarksHtml(r, a, i)}</div>` : ''}</div>`).join('')}</div>` : '';
       return `
         <article class="record" data-tone="${isProt ? 'proto' : r.isPrivate ? 'pie' : 'neutral'}">
           <header class="record__head">
@@ -890,25 +891,68 @@ window.app = {
     const hechos = ags.filter(a => this.agreementState(a) === 'si').length;
     return `<span class="agr-tally${hechos === ags.length ? ' is-done' : ''}">${hechos} de ${ags.length} realizados</span>`;
   },
+  /** Último día del plazo (si el plazo es un mes, el último día de ese mes). */
+  agreementDeadline(a) {
+    if (!a || !a.plazo) return '';
+    if (a.plazoTipo === 'mes' || /^\d{4}-\d{2}$/.test(a.plazo)) { const [y, m] = a.plazo.split('-').map(Number); const d = new Date(y, m, 0); return `${y}-${String(m).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+    return String(a.plazo).slice(0, 10);
+  },
+  /** Cumplimiento según el plazo: a tiempo, fuera de plazo, vencido o dentro de plazo. */
+  agreementTiming(a) {
+    const st = this.agreementState(a), lim = this.agreementDeadline(a);
+    const dias = (x, y) => Math.round((new Date(x + 'T12:00') - new Date(y + 'T12:00')) / 86400000);
+    if (st === 'si') {
+      if (!lim || !a.marcadoFecha) return { k: 'ok', t: 'Realizado' };
+      const d = dias(a.marcadoFecha, lim);
+      return d <= 0 ? { k: 'ok', t: 'A tiempo' } : { k: 'late', t: `Fuera de plazo (${d} día${d === 1 ? '' : 's'})` };
+    }
+    if (st === 'no') return { k: 'bad', t: 'No realizado' };
+    if (lim && dias(today(), lim) > 0) { const d = dias(today(), lim); return { k: 'late', t: `Vencido hace ${d} día${d === 1 ? '' : 's'}` }; }
+    return lim ? { k: 'wait', t: 'Dentro de plazo' } : { k: 'wait', t: 'Sin plazo' };
+  },
+  /** Texto del estado para actas e informes impresos. */
+  agreementStatusText(a) {
+    const st = this.agreementState(a);
+    const nombre = { si: 'Realizado', no: 'No realizado', proceso: 'En proceso', pendiente: 'Pendiente' }[st];
+    const fecha = a.marcadoFecha && (st === 'si' || st === 'no') ? ` el ${fmtDate(a.marcadoFecha)}` : '';
+    const tm = this.agreementTiming(a);
+    const extra = (st === 'si' && a.plazo) || ((st === 'pendiente' || st === 'proceso') && tm.k === 'late') ? ` · ${tm.t.toLowerCase()}` : '';
+    return `${nombre}${fecha}${extra}`;
+  },
   agreementMarksHtml(r, a, i) {
     const st = this.agreementState(a);
     const b = (k, label, icon, valor) => `<button type="button" class="agr-mark agr-mark--${k}" aria-pressed="${st === k}" title="Marcar como ${label.toLowerCase()}" onclick="app.markAgreement(${jsq(r.id)}, ${i}, ${jsq(st === k ? 'No Iniciado' : valor)})">${ico(icon)}${label}</button>`;
-    const quien = a.marcadoPor ? `<span class="agr-who">${esc(a.marcadoPor)} · ${fmtDate(a.marcadoFecha)}</span>` : '';
-    return `<div class="agr-marks" role="group" aria-label="Estado del acuerdo">${quien}${b('si', 'Realizado', 'check', 'Logrado')}${b('proceso', 'En proceso', 'clock', 'En Proceso')}${b('no', 'No realizado', 'x', 'No Logrado')}</div>`;
+    const tm = this.agreementTiming(a);
+    const chipT = (a.plazo || st !== 'pendiente') ? `<span class="agr-time agr-time--${tm.k}">${esc(tm.t)}</span>` : '';
+    const fecha = a.marcadoFecha ? `<label class="agr-date" title="Fecha en que se cumplió o revisó. Puede cambiarla si lo marca después.">${ico('calendar')}<span>Marcado el</span><input type="date" class="input input--sm" value="${esc(a.marcadoFecha)}" max="${today()}" onchange="app.setAgreementDate(${jsq(r.id)}, ${i}, this.value)"></label>${a.marcadoPor ? `<span class="agr-who">por ${esc(a.marcadoPor)}</span>` : ''}` : '';
+    return `<div class="agr-marks" role="group" aria-label="Estado del acuerdo">${chipT}${b('si', 'Realizado', 'check', 'Logrado')}${b('proceso', 'En proceso', 'clock', 'En Proceso')}${b('no', 'No realizado', 'x', 'No Logrado')}</div>${fecha ? `<div class="agr-dateline">${fecha}</div>` : ''}`;
   },
   async markAgreement(id, i, valor) {
     const r = this.current().history.find(x => sameId(x.id, id));
     if (!r || !r.agreements || !r.agreements[i]) return;
     const antes = r.agreements.map(a => ({ ...a }));
     const agreements = r.agreements.map((a, k) => k !== i ? a : (valor === 'No Iniciado'
-      ? (({ marcadoPor, marcadoFecha, ...rest }) => ({ ...rest, progress: valor }))(a)
-      : { ...a, progress: valor, marcadoPor: State.currentUser.name, marcadoFecha: today() }));
+      ? (({ marcadoPor, marcadoFecha, marcadoRegistro, ...rest }) => ({ ...rest, progress: valor }))(a)
+      : { ...a, progress: valor, marcadoPor: State.currentUser.name, marcadoFecha: a.marcadoFecha || today(), marcadoRegistro: new Date().toISOString() }));
     r.agreements = agreements;
     this.renderInterventions();
     try {
       await DB.patch('interventions', id, { agreements });
-      toast(valor === 'No Iniciado' ? 'Marca quitada' : `Acuerdo marcado: ${valor === 'Logrado' ? 'realizado' : valor === 'No Logrado' ? 'no realizado' : 'en proceso'}`);
+      toast(valor === 'No Iniciado' ? 'Marca quitada' : `Acuerdo marcado: ${valor === 'Logrado' ? 'realizado' : valor === 'No Logrado' ? 'no realizado' : 'en proceso'}. Si ocurrió otro día, cambie la fecha bajo el acuerdo.`);
     } catch (e) { r.agreements = antes; this.renderInterventions(); toast(e.message, 'error'); }
+  },
+  /** Cambia la fecha de la marca (por ejemplo, si se registra después por falta de internet). */
+  async setAgreementDate(id, i, fecha) {
+    if (!fecha) return;
+    if (fecha > today()) { toast('La fecha no puede ser posterior a hoy', 'error'); return this.renderInterventions(); }
+    const r = this.current().history.find(x => sameId(x.id, id));
+    if (!r || !r.agreements || !r.agreements[i]) return;
+    const antes = r.agreements.map(a => ({ ...a }));
+    const agreements = r.agreements.map((a, k) => k !== i ? a : { ...a, marcadoFecha: fecha, fechaEditadaPor: State.currentUser.name });
+    r.agreements = agreements;
+    this.renderInterventions();
+    try { await DB.patch('interventions', id, { agreements }); toast(`Fecha actualizada: ${fmtDate(fecha)}`); }
+    catch (e) { r.agreements = antes; this.renderInterventions(); toast(e.message, 'error'); }
   },
 
   openInterventionForm(r = null) {

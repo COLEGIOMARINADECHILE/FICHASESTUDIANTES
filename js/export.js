@@ -175,7 +175,7 @@ Object.assign(app, {
           ${docH('Antecedentes')}<div class="doc-box doc-pre">${esc(r?.background || 'Sin antecedentes registrados.')}</div>
           ${docH('Medidas formativas y disciplinarias')}<div class="doc-box doc-pre">${esc(p.medidas || '-')}</div>
           ${m.motivo || m.acuerdos ? `${docH('Proceso de mediación')}${docKv([[['Participantes', esc(m.participantes)]], [['Motivo', esc(m.motivo)]], [['Acuerdos', esc(m.acuerdos)]], [['Solución', esc(m.solucion)]]])}` : ''}
-          ${(r?.agreements || []).length ? docH('Medidas y acuerdos') + docTable(['Medida o acuerdo', 'Estado'], r.agreements.map(a => [`<span class="doc-pre">${esc(a.text)}</span>`, esc(a.progress)]), '') : ''}
+          ${(r?.agreements || []).length ? docH('Medidas y acuerdos') + docTable(['Medida o acuerdo', 'Plazo', 'Estado'], r.agreements.map(a => [`<span class="doc-pre">${esc(a.text)}</span>`, esc(a.plazo ? app.fmtPlazo(a) : '-'), esc(app.agreementStatusText ? app.agreementStatusText(a) : a.progress)]), '') : ''}
           <p class="doc-small">Registrado por ${esc(r?.professional || '')}.</p>`
       };
     },

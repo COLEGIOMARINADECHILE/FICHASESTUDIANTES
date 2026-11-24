@@ -443,7 +443,19 @@ select.input { cursor: pointer; }
 .agr-tally { margin-left: auto; font-size: 0.78rem; font-weight: 600; padding: 0.1rem 0.55rem; border-radius: 999px; background: var(--tone-warn-soft); color: var(--tone-warn-ink, #7a5200); }
 .agr-tally.is-done { background: var(--tone-conv-soft); color: var(--tone-conv-ink); }
 .agr-marks { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.3rem; margin-left: auto; }
-.agr-who { font-size: 0.75rem; color: var(--color-muted, #666); margin-right: 0.3rem; }
+.agr-who { font-size: 0.75rem; color: var(--color-muted, #666); }
+.agr-foot { display: grid; gap: 0.35rem; margin-top: 0.35rem; padding-top: 0.45rem; border-top: 1px dashed var(--color-rule); }
+.agr-foot .agr-marks { margin-left: 0; justify-content: flex-start; }
+.agr-dateline { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--color-muted, #555); }
+.agr-date { display: inline-flex; align-items: center; gap: 0.3rem; }
+.agr-date svg { width: 0.85rem; height: 0.85rem; }
+.agr-date input { width: auto; padding: 0.1rem 0.35rem; font-size: 0.78rem; min-height: 0; }
+.agr-time { font-size: 0.74rem; font-weight: 600; padding: 0.12rem 0.5rem; border-radius: 999px; margin-right: 0.2rem; }
+.agr-time--ok { background: #e3f3ea; color: #1f7a4d; }
+.agr-time--late { background: #fdecea; color: #b42318; }
+.agr-time--bad { background: #fdecea; color: #b42318; }
+.agr-time--wait { background: var(--color-paper-2, #f1efe8); color: var(--color-muted, #555); }
+@media (prefers-color-scheme: dark) { .agr-time--ok { background: #16382a; color: #7fd1a6; } .agr-time--late, .agr-time--bad { background: #4a1d19; color: #f4a39b; } }
 .agr-mark { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.6rem; font: inherit; font-size: 0.78rem; border: 1px solid var(--color-rule); border-radius: 999px; background: var(--color-paper); color: var(--color-muted, #555); cursor: pointer; }
 .agr-mark svg { width: 0.85rem; height: 0.85rem; }
 .agr-mark:hover { border-color: currentColor; }

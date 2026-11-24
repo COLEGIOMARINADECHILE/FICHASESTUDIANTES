@@ -164,11 +164,11 @@ app.REPORTS.ficha_entrevistas = function () {
           ['Asignaturas bajo 4,0', g.bajo4.length, esc(g.bajo4.map(a => `${a.nombre} (${String(a.nota).replace('.', ',')})`).join(', '))],
           ['Observaciones docentes', g.observaciones.length, ''], ['Atenciones de enfermería', g.enfermeria.length, '']
         ], '')}</div>
-      ${g.acuerdos.length ? `<div class="doc-avoid">${docH('Acuerdos pendientes')}${docTable(['Fecha', 'Acuerdo', 'Estado'], g.acuerdos.map(a => [fmtDate(a.fecha), esc(a.text), esc(a.progress || 'No iniciado')]), '')}</div>` : ''}
+      ${g.acuerdos.length ? `<div class="doc-avoid">${docH('Acuerdos pendientes')}${docTable(['Fecha', 'Acuerdo', 'Plazo', 'Estado'], g.acuerdos.map(a => [fmtDate(a.fecha), esc(a.text), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '')}</div>` : ''}
       ${docH('Registro de entrevistas')}
       ${filas.length ? filas.map(h => `<div class="doc-block doc-avoid"><div class="doc-block__head">${fmtDate(h.date)} · ${esc(h.type)} · ${esc(h.professional || '')}</div>
         <p class="doc-pre">${esc(String(h.background || '').replace(/\*\*/g, ''))}</p>
-        ${(h.agreements || []).filter(a => a.text).length ? `<p><strong>Acuerdos:</strong></p><ul>${h.agreements.filter(a => a.text).map(a => `<li>${esc(a.text)} <em>(${esc(a.progress || 'No iniciado')})</em></li>`).join('')}</ul>` : ''}</div>`).join('') : '<p class="doc-empty">Sin entrevistas registradas.</p>'}
+        ${(h.agreements || []).filter(a => a.text).length ? `<p><strong>Acuerdos:</strong></p><ul>${h.agreements.filter(a => a.text).map(a => `<li>${esc(a.text)}${a.plazo ? ` · plazo ${esc(app.fmtPlazo(a))}` : ''} <em>(${esc(app.agreementStatusText(a))})</em></li>`).join('')}</ul>` : ''}</div>`).join('') : '<p class="doc-empty">Sin entrevistas registradas.</p>'}
       ${g.ocultas.length ? `<p class="doc-muted">${g.ocultas.length} registro(s) confidencial(es) no se incluyen.</p>` : ''}`
   };
 };
@@ -443,7 +443,17 @@ app.REPORTS.entrevista = function () {
       ${parts.length ? `<div class="doc-avoid">${docH('Personas entrevistadas y asistentes')}${docTable(['Nombre', 'Calidad', 'Relación o cargo', 'Correo', 'Teléfono'], parts.map(p => [esc(p.nombre), esc(p.tipo), esc(p.relacion || ''), esc(p.correo || ''), esc(p.telefono || '')]), '')}</div>` : ''}
       <div class="doc-avoid">${docH('Motivo')}<div class="doc-box doc-pre">${esc(e.motivo || '')}</div></div>
       ${e.desarrollo ? `<div class="doc-avoid">${docH('Desarrollo')}<div class="doc-box doc-pre">${esc(e.desarrollo)}</div></div>` : (!e.motivo ? `<div class="doc-box doc-pre">${esc(String(iv.background || '').replace(/\*\*/g, ''))}</div>` : '')}
-      <div class="doc-avoid">${docH('Acuerdos')}${(iv.agreements || []).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo'], iv.agreements.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>
+      ${(() => {
+        // Seguimiento: acuerdos de entrevistas anteriores del mismo estudiante, con su estado actual
+        const prev = State.rawInterventions
+          .filter(h => sameId(h.studentId, iv.studentId) && !sameId(h.id, iv.id) && String(h.date || '') <= String(iv.date || '9999') && !app.isCarta?.(h) && (!app.canSeeConfidential || app.canSeeConfidential(h)))
+          .sort((x, y) => String(x.date).localeCompare(String(y.date)))
+          .flatMap(h => (h.agreements || []).filter(a => a.text).map(a => ({ ...a, fechaIv: h.date })));
+        if (!prev.length) return '';
+        const hechos = prev.filter(a => app.agreementState(a) === 'si').length;
+        return `<div class="doc-avoid">${docH('Seguimiento de acuerdos anteriores')}<p class="doc-muted">${hechos} de ${prev.length} acuerdo(s) realizados. Estado a la fecha de impresión (${fmtDate(today())}).</p>${docTable(['Entrevista', 'Acuerdo', 'Responsable', 'Plazo', 'Estado y cumplimiento'], prev.map(a => [fmtDate(a.fechaIv), esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '')}</div>`;
+      })()}
+      <div class="doc-avoid">${docH('Acuerdos de esta entrevista')}${(iv.agreements || []).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], iv.agreements.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>
       ${e.proxima ? `<p><strong>Próxima entrevista:</strong> ${fmtDate(e.proxima.fecha)}${e.proxima.hora ? ` a las ${esc(e.proxima.hora)}` : ''}${e.proxima.con ? `, con ${esc(e.proxima.con)}` : ''}${e.proxima.lugar ? `, en ${esc(e.proxima.lugar)}` : ''}.</p>` : ''}
       <p class="doc-muted">Los participantes declaran conocer el contenido de esta acta. Información confidencial, protegida por la Ley N° 21.719 sobre protección de datos personales.</p>`
   };
