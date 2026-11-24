@@ -103,9 +103,17 @@ Object.assign(app, {
   areaBadges(s) { return this.pieBadge(s) + this.repBadge(s); },
 
   /** Pestaña de la ficha: planes y documentos de un área. */
+  /** Equipo PIE: por perfil o cargo. */
+  isPieStaff() { const u = State.currentUser || {}; return /\bPIE\b|inclusi[oó]n|integraci[oó]n/i.test(`${u.role || ''} ${u.customRole || ''}`); },
+  isAdminStaff() { return hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'); },
+  /** PIE: solo el Equipo PIE y los administrativos modifican. Riesgo de repitencia: también quienes editan fichas. */
+  canEditArea(area) {
+    if (area === 'PIE') return this.isPieStaff() || this.isAdminStaff();
+    return this.isPieStaff() || this.isAdminStaff() || hasAccess('editar_fichas');
+  },
   renderAreaPlans(area) {
     const A = AREAS[area];
-    const can = this.canImportPie();
+    const can = this.canEditArea(area);
     const otra = area === 'PIE' ? 'Repitencia' : 'PIE';
     const reports = State.rawInclusionReports.filter(r => sameId(r.studentId, State.selectedStudentId) && this.planArea(r) === area);
     const mover = (kind, id) => can ? `<button class="btn btn--sm" onclick="app.moveArea('${kind}', ${jsq(id)}, '${otra}')">${ico('arrow-right-left')}Mover a ${AREAS[otra].corto}</button>` : '';
@@ -141,7 +149,8 @@ Object.assign(app, {
         </span></td></tr>`).join('')}
       </tbody></table></div></div>`).join('');
     const sinArchivar = docs.filter(d => !d.archivado && d.storage === 'drive');
-    const acciones = can ? `<div class="row-actions"><button class="btn btn--sm" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes (Word)</button><button class="btn btn--sm" onclick="app.openDriveLink()">${ico('folder-sync')}Vincular carpeta de Drive</button></div>` : '';
+    const acciones = can ? `<div class="row-actions"><button class="btn btn--sm btn--primary" onclick="app.openCreateDoc('${area}')">${ico('file-plus')}${area === 'PIE' ? 'Crear documento PIE' : 'Crear plan de riesgo'}</button><button class="btn btn--sm" onclick="app.openPiePlansImport()">${ico('file-up')}Cargar planes (Word)</button><button class="btn btn--sm" onclick="app.openDriveLink()">${ico('folder-sync')}Vincular carpeta de Drive</button></div>`
+      : chip(area === 'PIE' ? 'Solo lectura: edita el Equipo PIE' : 'Solo lectura', 'neutral', 'eye');
     const archivar = can && sinArchivar.length ? `<button class="btn btn--sm" onclick="app.archiveDocs(${jsq(sinArchivar.map(d => d.id))})">${ico('archive')}Guardar ${sinArchivar.length} en el archivo</button>` : '';
     this.panel(`${this.panelHead(area === 'PIE' ? 'Planes PIE' : 'Planes por riesgo de repitencia', A.icon, acciones)}<div class="stack">${html || empty('network', area === 'PIE' ? 'No hay planes PIE cargados para este estudiante.' : 'No hay planes por riesgo de repitencia para este estudiante.', A.tone)}</div>
       ${this.panelHead(`Documentos ${area === 'PIE' ? 'PIE' : 'de riesgo de repitencia'} (${docs.length})`, 'folder-open', archivar)}${docsHtml || empty('folder-open', 'No hay documentos vinculados en esta área.', A.tone)}`);
@@ -234,45 +243,50 @@ Object.assign(app, {
 
   // ---------------- VISOR DE DOCUMENTOS ----------------
   canEditDocs() { return this.canImportPie(); },
+  /** ¿Puede modificar este documento? PIE: Equipo PIE y administrativos. */
+  canEditEv(ev) { const a = this.evArea(ev || {}); return a ? this.canEditArea(a) : this.canEditDocs(); },
   docKind(mime, name) {
     const m = String(mime || ''), n = String(name || '').toLowerCase();
     if (/html/.test(m)) return 'html';
     if (/pdf/.test(m) || n.endsWith('.pdf')) return 'pdf';
     if (/^image\//.test(m) || /\.(png|jpe?g|gif|webp)$/.test(n)) return 'image';
     if (/wordprocessingml|google-apps\.document/.test(m) || n.endsWith('.docx')) return 'docx';
+    if (/msword|opendocument\.text|rtf/.test(m) || /\.(doc|odt|rtf)$/.test(n)) return 'word';
     if (/spreadsheet|excel/.test(m) || /\.xlsx?$/.test(n)) return 'sheet';
-    if (/html/.test(m)) return 'html';
     if (/^text\//.test(m) || n.endsWith('.txt')) return 'text';
     return 'other';
   },
-  isEditableName(name, mime) { return ['docx', 'html'].includes(this.docKind(mime, name)); },
+  /** Word (.docx, .doc, .odt, .rtf), Documentos de Google y PDF (convertido) se pueden editar. */
+  isEditableName(name, mime) { return ['docx', 'html', 'word', 'pdf'].includes(this.docKind(mime, name)); },
   /** Limpia HTML de un documento: sin scripts, eventos ni enlaces peligrosos. */
   safeHtml(html) {
     const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
-    doc.querySelectorAll('script, style, iframe, object, embed, link, meta, form').forEach(n => n.remove());
+    // Casillas de Word (controles de formulario) -> símbolos que se pueden marcar
+    doc.querySelectorAll('input[type="checkbox"]').forEach(i => i.replaceWith(doc.createTextNode(i.checked || i.hasAttribute('checked') ? '☒' : '☐')));
+    doc.querySelectorAll('script, style, iframe, object, embed, link, meta, form, input, button, select, textarea').forEach(n => n.remove());
     doc.querySelectorAll('*').forEach(n => [...n.attributes].forEach(a => {
-      if (/^on/i.test(a.name) || (/^(href|src)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
+      if (/^on/i.test(a.name) || (/^(href|src)$/i.test(a.name) && /^\s*javascript:/i.test(a.value)) || a.name === 'contenteditable') n.removeAttribute(a.name);
     }));
-    // Celdas y párrafos completamente en negrita son títulos: se centran; el resto del texto se justifica
+    // Celdas completamente en negrita son títulos: se centran; el resto del texto se justifica
     doc.querySelectorAll('td, th').forEach(n => {
       const total = n.textContent.replace(/\s/g, '').length;
       if (!total) return;
-      const bold = [...n.querySelectorAll('strong, b')].filter(b => !b.parentElement.closest('strong, b') || b.parentElement === n).reduce((t, b) => t + b.textContent.replace(/\s/g, '').length, 0);
+      const bold = [...n.querySelectorAll('strong, b')].filter(b => !b.parentElement.closest('strong, b')).reduce((t, b) => t + b.textContent.replace(/\s/g, '').length, 0);
       if (bold / total >= 0.9) n.classList.add('doc-head');
     });
     return doc.body.firstChild.innerHTML;
   },
-  async openEvidence(id, editar = false) {
+  async openEvidence(id, editar = false, comoWord = false) {
     const ev = State.rawEvidences.find(x => sameId(x.id, id)) || { id };
-    const done = ui.busy('Abriendo documento', 'Descargando el archivo de forma segura...');
+    const done = ui.busy(comoWord ? 'Convirtiendo a Word' : 'Abriendo documento', comoWord ? 'Se reconoce el texto del PDF para poder editarlo...' : 'Descargando el archivo de forma segura...');
     let f;
-    try { f = await API.call('file', { id }); }
+    try { f = await API.call('file', { id, comoWord }); }
     catch (e) { done(); return toast(e.message, 'error'); }
     const bytes = Uint8Array.from(atob(f.base64 || ''), c => c.charCodeAt(0));
     if (State.viewer?.url) URL.revokeObjectURL(State.viewer.url);
     const kind = this.docKind(f.mimeType, f.fileName);
     const url = URL.createObjectURL(new Blob([bytes], { type: kind === 'pdf' ? 'application/pdf' : (f.mimeType || 'application/octet-stream') }));
-    State.viewer = { id, ev, f, kind, url, bytes, html: '' };
+    State.viewer = { id, ev, f, kind, url, bytes, html: '', convertido: !!f.convertido };
     try {
       if (kind === 'docx') { await this.loadMammoth(); State.viewer.html = this.safeHtml((await mammoth.convertToHtml({ arrayBuffer: bytes.buffer })).value); }
       else if (kind === 'html') State.viewer.html = this.safeHtml(new TextDecoder().decode(bytes));
@@ -280,20 +294,28 @@ Object.assign(app, {
       else if (kind === 'text') State.viewer.text = new TextDecoder().decode(bytes);
     } catch (e) { console.error(e); State.viewer.error = 'No se pudo mostrar el contenido: ' + e.message; }
     done();
-    ui.modal({ title: f.fileName || ev.fileName || 'Documento', icon: 'file-text', tone: AREAS[this.evArea(ev)]?.tone || 'conv', size: 'xl', hideOk: true, cancelText: 'Cerrar', body: '<div id="doc-viewer" class="doc-viewer"></div>' });
-    if (editar && this.canEditDocs() && State.viewer.html) this.editDocument(); else this.renderViewer();
+    if (el('modal').hidden || !el('doc-viewer')) ui.modal({ title: f.fileName || ev.fileName || 'Documento', icon: 'file-text', tone: AREAS[this.evArea(ev)]?.tone || 'conv', size: 'xl', hideOk: true, cancelText: 'Cerrar', body: '<div id="doc-viewer" class="doc-viewer"></div>' });
+    // Un PDF que se pidió editar se convierte primero a Word
+    if (editar && kind === 'pdf' && !comoWord && this.canEditEv(ev)) return this.openEvidence(id, true, true);
+    if (editar && this.canEditEv(ev) && State.viewer.html) this.editDocument(); else this.renderViewer();
   },
   viewerBar() {
-    const v = State.viewer, ev = v.ev, can = this.canEditDocs();
+    const v = State.viewer, ev = v.ev, can = this.canEditEv(ev);
     const editable = can && v.html && ['docx', 'html'].includes(v.kind) && ev.storage === 'drive';
+    const pdfEditable = can && v.kind === 'pdf' && ev.storage === 'drive' && !API.demo;
     return `<div class="doc-viewer__bar">
-      <div class="chips">${ev.type ? chip(ev.type, AREAS[this.evArea(ev)]?.tone || 'neutral') : ''}${ev.archivado ? chip('En el archivo de la plataforma', 'conv', 'archive') : ev.storage === 'drive' ? chip('Vinculado desde Drive', 'neutral', 'link') : ''}${(ev.versiones || []).length ? chip(`${ev.versiones.length + 1} versiones`, 'obs', 'history') : ''}</div>
+      <div class="chips">${ev.type ? chip(ev.type, AREAS[this.evArea(ev)]?.tone || 'neutral') : ''}${ev.esModelo ? chip('Modelo', 'obs', 'stamp') : ''}${ev.archivado ? chip('En el archivo de la plataforma', 'conv', 'archive') : ev.storage === 'drive' ? chip('Vinculado desde Drive', 'neutral', 'link') : ''}${(ev.versiones || []).length ? chip(`${ev.versiones.length + 1} versiones`, 'obs', 'history') : ''}${!can && this.evArea(ev) === 'PIE' ? chip('Solo lectura', 'neutral', 'eye') : ''}</div>
       <div class="row-actions">
         ${editable ? `<button class="btn btn--sm btn--primary" onclick="app.editDocument()">${ico('pencil')}Editar</button>` : ''}
+        ${pdfEditable ? `<button class="btn btn--sm btn--primary" onclick="app.openEvidence(${jsq(ev.id)}, true, true)" title="Reconoce el texto del PDF y lo abre como Word editable">${ico('pencil')}Convertir a Word y editar</button>` : ''}
+        ${can && editable && ev.storage === 'drive' ? `<button class="btn btn--sm" onclick="app.toggleModelo()">${ico('stamp')}${ev.esModelo ? 'Quitar como modelo' : 'Usar como modelo'}</button>` : ''}
         ${can && ev.storage === 'drive' && !ev.archivado ? `<button class="btn btn--sm" onclick="app.archiveDocs([${jsq(ev.id)}], true)">${ico('archive')}Guardar en el archivo</button>` : ''}
         ${(ev.versiones || []).length ? `<button class="btn btn--sm" onclick="app.showVersions()">${ico('history')}Versiones</button>` : ''}
-        <a class="btn btn--sm" href="${v.url}" download="${esc(v.f.fileName || 'documento')}">${ico('download')}Descargar</a>
-        ${v.f.url ? `<a class="btn btn--sm" href="${esc(v.f.url)}" target="_blank" rel="noopener">${ico('external-link')}Abrir en Drive</a>` : ''}
+        <span class="split-btn" role="group" aria-label="Descargar">
+          <button class="btn btn--sm" onclick="app.downloadDoc('pdf')">${ico('download')}PDF</button>
+          <button class="btn btn--sm" onclick="app.downloadDoc('docx')">${ico('download')}Word</button>
+        </span>
+        ${v.f.url && v.f.url !== '#' ? `<a class="btn btn--sm" href="${esc(v.f.url)}" target="_blank" rel="noopener">${ico('external-link')}Abrir en Drive</a>` : ''}
       </div></div>`;
   },
   renderViewer() {
@@ -302,9 +324,9 @@ Object.assign(app, {
     if (v.error) body = `<p class="note">${ico('alert-triangle')}${esc(v.error)}</p>`;
     else if (v.kind === 'pdf') body = `<iframe class="doc-frame" src="${v.url}" title="${esc(v.f.fileName || 'Documento PDF')}"></iframe>`;
     else if (v.kind === 'image') body = `<div class="doc-paper doc-paper--img"><img src="${v.url}" alt="${esc(v.f.fileName || 'Imagen del documento')}"></div>`;
-    else if (v.html) body = `<div class="doc-paper">${v.html}</div>`;
+    else if (v.html) body = `${v.convertido ? `<p class="note">${ico('info')}Documento convertido a Word para verlo y editarlo. Revise el formato antes de guardar.</p>` : ''}${/[☐☒☑]/.test(v.html) && this.canEditEv(v.ev) ? `<p class="note">${ico('square-check')}Este documento tiene casillas. Presione "Editar" para marcarlas.</p>` : ''}<div class="doc-paper">${v.html}</div>`;
     else if (v.text !== undefined) body = `<pre class="doc-paper prewrap">${esc(v.text)}</pre>`;
-    else body = empty('file-question', 'Este formato no se puede mostrar en la página (por ejemplo, Word antiguo .doc). Use "Descargar" o "Abrir en Drive".');
+    else body = empty('file-question', 'Este formato no se puede mostrar en la página. Use la descarga en PDF o Word, o "Abrir en Drive".');
     el('doc-viewer').innerHTML = this.viewerBar() + body;
     ui.guard = null;
     icons();
@@ -318,12 +340,56 @@ Object.assign(app, {
       <div class="row-actions"><button class="btn btn--sm" onclick="app.renderViewer()">${ico('arrow-left')}Volver al documento</button></div>`;
     icons();
   },
+  async toggleModelo() {
+    const ev = State.viewer.ev;
+    try {
+      await DB.save('evidences', { id: ev.id, esModelo: !ev.esModelo }, true);
+      State.viewer.ev = State.rawEvidences.find(x => sameId(x.id, ev.id)) || { ...ev, esModelo: !ev.esModelo };
+      toast(State.viewer.ev.esModelo ? 'Documento marcado como modelo: aparecerá primero al crear documentos de este tipo' : 'Ya no es modelo');
+      this.renderViewer();
+    } catch (e) { toast(e.message, 'error'); }
+  },
+
+  // ---------------- DESCARGA EN PDF O WORD ----------------
+  saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  },
+  async downloadDoc(fmt) {
+    const v = State.viewer;
+    const base = String(v.f.fileName || 'documento').replace(/\.\w{2,5}$/, '');
+    // Si ya está en el formato pedido, se descarga tal cual
+    if (v.bytes?.length && ((fmt === 'pdf' && v.kind === 'pdf') || (fmt === 'docx' && v.kind === 'docx' && !v.convertido))) return this.saveBlob(new Blob([v.bytes], { type: fmt === 'pdf' ? 'application/pdf' : v.f.mimeType }), v.f.fileName || `${base}.${fmt}`);
+    const done = ui.busy('Preparando la descarga', fmt === 'pdf' ? 'Convirtiendo a PDF...' : 'Convirtiendo a Word...');
+    try {
+      if (API.demo || v.ev.storage !== 'drive') throw new Error('local');
+      const out = await API.call('exportarDocumento', { id: v.id, formato: fmt });
+      this.saveBlob(new Blob([Uint8Array.from(atob(out.base64), c => c.charCodeAt(0))], { type: out.mimeType }), out.fileName);
+    } catch (e) {
+      // Sin servidor: se genera desde el contenido mostrado
+      if (!v.html) { done(); return toast(e.message === 'local' ? 'Este formato solo se puede convertir con el servidor configurado.' : e.message, 'error'); }
+      if (fmt === 'pdf' && window.html2pdf) {
+        const host = document.createElement('div');
+        host.className = 'doc-host';
+        host.innerHTML = `<div class="doc-paper doc-paper--print" style="width:720px">${v.html}</div>`;
+        document.body.appendChild(host);
+        document.documentElement.classList.add('is-exporting');
+        try { await html2pdf().set({ margin: [15, 15, 15, 15], filename: `${base}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'letter' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] } }).from(host.firstChild).save(); }
+        finally { host.remove(); document.documentElement.classList.remove('is-exporting'); }
+      } else {
+        this.saveBlob(new Blob(['﻿', `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>${v.html}</body></html>`], { type: 'application/msword' }), `${base}.doc`);
+      }
+    } finally { done(); }
+  },
 
   // ---------------- EDITOR ----------------
   editDocument() {
     const v = State.viewer;
     if (!v.html) return toast('Este documento no se puede editar en la plataforma', 'error');
     const b = (cmd, icon, label, arg = '') => `<button type="button" class="icon-btn" title="${label}" aria-label="${label}" onmousedown="event.preventDefault()" onclick="document.execCommand('${cmd}', false, ${arg ? `'${arg}'` : 'null'})">${ico(icon)}</button>`;
+    const nuevo = !!v.nuevo;
     el('doc-viewer').innerHTML = `
       <div class="doc-viewer__bar doc-editor__bar">
         <div class="row-actions" role="toolbar" aria-label="Formato">
@@ -331,30 +397,103 @@ Object.assign(app, {
           ${b('formatBlock', 'heading-2', 'Título', 'h2')}${b('formatBlock', 'pilcrow', 'Párrafo', 'p')}
           ${b('insertUnorderedList', 'list', 'Lista')}${b('insertOrderedList', 'list-ordered', 'Lista numerada')}
           ${b('undo', 'undo-2', 'Deshacer')}${b('redo', 'redo-2', 'Rehacer')}
+          <button type="button" class="icon-btn" title="Insertar casilla" aria-label="Insertar casilla" onmousedown="event.preventDefault()" onclick="app.insertCheck()">${ico('square')}</button>
         </div>
         <div class="row-actions">
+          <button type="button" class="btn btn--sm" onmousedown="event.preventDefault()" onclick="app.addTableChecks()" title="Pone una casilla en cada celda vacía de la tabla donde está el cursor">${ico('square-check')}Casillas en la tabla</button>
           <button type="button" class="btn btn--sm" onclick="app.markEmptyCells()">${ico('scan-search')}Marcar campos vacíos</button>
           <button type="button" class="btn btn--sm" onmousedown="event.preventDefault()" onclick="app.improveSelection()">${ico('sparkles')}Mejorar redacción (IA)</button>
           <button type="button" class="btn btn--sm" onclick="app.cancelEdit()">Cancelar</button>
-          <button type="button" class="btn btn--sm btn--primary" onclick="app.saveDocument()">${ico('save')}Guardar nueva versión</button>
+          <button type="button" class="btn btn--sm btn--primary" onclick="app.saveDocument()">${ico('save')}${nuevo ? 'Guardar documento' : 'Guardar nueva versión'}</button>
         </div>
       </div>
-      <p class="note">${ico('info')}Complete o mejore el texto directamente en el documento. Al guardar se crea una nueva versión en Word en el archivo de la plataforma; la versión anterior se conserva. Para mejorar la redacción, seleccione un párrafo: a la IA solo se envía ese texto, sin el nombre ni el RUN del estudiante.</p>
+      <p class="note">${ico('info')}${nuevo ? `Documento nuevo para <strong>${esc(v.ev.studentName || '')}</strong> basado en el modelo elegido. Complete los campos y guarde: queda en Word en la ficha y en el archivo de la plataforma.` : 'Complete o mejore el texto directamente en el documento. Al guardar se crea una nueva versión en Word; la anterior se conserva.'} Pinche una casilla ☐ para marcarla (en una misma fila queda marcada solo una). Para mejorar la redacción, seleccione un párrafo: a la IA no se envía el nombre ni el RUN del estudiante.</p>
       <div id="doc-edit" class="doc-paper is-editing" contenteditable="true" spellcheck="true" lang="es">${v.html}</div>`;
+    const ed = el('doc-edit');
+    this.decorateChecks(ed);
+    ed.addEventListener('click', e => this.onCheckClick(e));
+    ed.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('.chk')) { e.preventDefault(); this.toggleCheck(e.target.closest('.chk')); } });
     ui.guard = 'Hay cambios sin guardar en el documento. ¿Desea cerrarlo de todas formas?';
     icons();
-    el('doc-edit').focus();
+    ed.focus();
   },
   cancelEdit() {
     if (!window.confirm('¿Descartar los cambios no guardados?')) return;
+    if (State.viewer.nuevo) { ui.guard = null; ui.close(true); return; }
     this.renderViewer();
   },
+
+  // ---------------- CASILLAS MARCABLES ----------------
+  /** Convierte los símbolos ☐ ☒ ☑ en casillas que se marcan con un clic. */
+  decorateChecks(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => /[☐☒☑✓✔]/.test(n.nodeValue) && !n.parentElement.closest('.chk') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(n => {
+      const frag = document.createDocumentFragment();
+      n.nodeValue.split(/([☐☒☑✓✔])/).forEach(part => {
+        if (!part) return;
+        if (/^[☐☒☑✓✔]$/.test(part)) frag.appendChild(this.checkEl(part !== '☐'));
+        else frag.appendChild(document.createTextNode(part));
+      });
+      n.replaceWith(frag);
+    });
+  },
+  checkEl(on) {
+    const s = document.createElement('span');
+    s.className = 'chk'; s.contentEditable = 'false'; s.tabIndex = 0;
+    s.setAttribute('role', 'checkbox'); s.setAttribute('aria-checked', String(!!on));
+    s.textContent = on ? '☒' : '☐';
+    return s;
+  },
+  toggleCheck(c, exclusivo = true) {
+    const on = c.getAttribute('aria-checked') !== 'true';
+    if (on && exclusivo) {
+      // En una fila con varias columnas de casillas (L, EP, NL, NO...) queda marcada solo una
+      const tr = c.closest('tr');
+      const enOtrasCeldas = tr ? [...tr.querySelectorAll('.chk')].filter(x => x.closest('td, th') !== c.closest('td, th')) : [];
+      if (enOtrasCeldas.length) enOtrasCeldas.forEach(x => { x.setAttribute('aria-checked', 'false'); x.textContent = '☐'; });
+    }
+    c.setAttribute('aria-checked', String(on));
+    c.textContent = on ? '☒' : '☐';
+  },
+  onCheckClick(e) {
+    let c = e.target.closest?.('.chk');
+    // Un clic en una celda que solo tiene una casilla también la marca
+    if (!c) { const td = e.target.closest?.('td'); if (td && td.querySelectorAll('.chk').length === 1 && !td.textContent.replace(/[☐☒\s]/g, '')) c = td.querySelector('.chk'); }
+    if (c) { e.preventDefault(); this.toggleCheck(c); }
+  },
+  insertCheck() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !el('doc-edit').contains(sel.anchorNode)) return toast('Ponga el cursor donde quiere la casilla', 'error');
+    const r = sel.getRangeAt(0);
+    r.deleteContents();
+    const c = this.checkEl(false);
+    r.insertNode(c);
+    r.setStartAfter(c); r.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r);
+  },
+  addTableChecks() {
+    const sel = window.getSelection();
+    const table = sel.rangeCount ? (sel.anchorNode?.nodeType === 1 ? sel.anchorNode : sel.anchorNode?.parentElement)?.closest('#doc-edit table') : null;
+    if (!table) return toast('Ponga el cursor dentro de la tabla donde quiere las casillas', 'error');
+    let n = 0;
+    table.querySelectorAll('tr').forEach(tr => {
+      const cells = [...tr.children];
+      if (cells.length < 2 || cells[0].classList.contains('doc-head') || cells.every(c => c.classList.contains('doc-head') || !c.textContent.trim())) return;
+      cells.slice(1).forEach(td => { if (!td.textContent.trim() && !td.querySelector('.chk')) { td.innerHTML = ''; td.appendChild(this.checkEl(false)); td.classList.add('chk-cell'); n++; } });
+    });
+    toast(n ? `${n} casilla(s) agregadas. Pinche para marcar.` : 'No hay celdas vacías para poner casillas en esa tabla');
+  },
+  /** Devuelve las casillas a símbolos de texto (☐ / ☒) para guardar en Word. */
+  undecorateChecks(root) { root.querySelectorAll('.chk').forEach(c => c.replaceWith(document.createTextNode(c.getAttribute('aria-checked') === 'true' ? '☒' : '☐'))); root.querySelectorAll('.chk-cell').forEach(c => { c.classList.remove('chk-cell'); c.style.textAlign = 'center'; }); },
+
   markEmptyCells() {
     const ed = el('doc-edit');
     if (!ed) return;
     let n = 0;
     ed.querySelectorAll('td, th').forEach(c => {
-      const vacia = !c.textContent.replace(/[\s _.\-:]/g, '');
+      const vacia = !c.textContent.replace(/[\s _.\-:]/g, '');
       c.classList.toggle('is-empty-cell', vacia);
       if (vacia) n++;
     });
@@ -389,29 +528,216 @@ ${anon}` });
     } catch (e) { toast('No se pudo mejorar: ' + e.message, 'error'); }
     finally { done(); }
   },
+  /** HTML listo para Word: sin marcas del editor, con casillas como símbolos y alineación explícita. */
+  editorHtml() {
+    const clone = el('doc-edit').cloneNode(true);
+    this.undecorateChecks(clone);
+    clone.querySelectorAll('.is-empty-cell').forEach(c => c.classList.remove('is-empty-cell'));
+    clone.querySelectorAll('.doc-head').forEach(n => { n.style.textAlign = 'center'; n.classList.remove('doc-head'); });
+    clone.querySelectorAll('[class=""]').forEach(c => c.removeAttribute('class'));
+    clone.querySelectorAll('p, td, li').forEach(n => { if (n.textContent.trim().length > 90 && !n.style.textAlign && !n.closest('[style*="center"]')) n.style.textAlign = 'justify'; });
+    return clone.innerHTML;
+  },
+  planEstrategias(html) {
+    const p = this.parsePlanHtml(html);
+    return p.ambitos.flatMap(a => a.filas.map(f => ({ ambito: a.ambito, descripcion: f.indicador || f.acciones, acciones: f.acciones && f.indicador ? [{ descripcion: f.acciones }] : [], responsable: f.responsable, seguimiento: f.seguimiento })));
+  },
   async saveDocument() {
     const v = State.viewer;
-    const clone = el('doc-edit').cloneNode(true);
-    clone.querySelectorAll('.is-empty-cell').forEach(c => c.classList.remove('is-empty-cell'));
-    clone.querySelectorAll('[class=""]').forEach(c => c.removeAttribute('class'));
-    // Los textos descriptivos quedan justificados también en el Word guardado
-    clone.querySelectorAll('.doc-head').forEach(n => { n.style.textAlign = 'center'; n.classList.remove('doc-head'); });
-    clone.querySelectorAll('p, td, li').forEach(n => { if (n.textContent.trim().length > 90 && !n.style.textAlign && !n.closest('[style*="center"]')) n.style.textAlign = 'justify'; });
-    const html = clone.innerHTML;
+    const html = this.editorHtml();
+    if (v.nuevo) return this.saveNewDocument(html);
     const done = ui.busy('Guardando nueva versión', 'Creando el documento Word en el archivo de la plataforma...');
     try {
       const doc = await API.call('guardarDocumento', { id: v.id, html });
       DB.upsertLocal('evidences', doc, false);
-      v.ev = doc; v.html = html;
+      v.ev = doc; v.html = html; v.convertido = false; v.kind = 'docx'; v.bytes = null;
       v.f = { ...v.f, fileName: doc.fileName, url: doc.url };
       // Si el documento es un plan, se actualizan sus ámbitos y estrategias en la ficha
       const plan = State.rawInclusionReports.find(r => sameId(r.evidenceId, v.id));
       if (plan && this.parsePlanHtml) {
-        const p = this.parsePlanHtml(html);
-        if (p.ambitos.length) await DB.save('reports', { id: plan.id, actualizado: today(), estrategias: p.ambitos.flatMap(a => a.filas.map(f => ({ ambito: a.ambito, descripcion: f.indicador || f.acciones, acciones: f.acciones && f.indicador ? [{ descripcion: f.acciones }] : [], responsable: f.responsable, seguimiento: f.seguimiento }))) }, true);
+        const est = this.planEstrategias(html);
+        if (est.length) await DB.save('reports', { id: plan.id, actualizado: today(), estrategias: est }, true);
       }
       ui.guard = null;
       toast('Nueva versión guardada en el archivo de la plataforma');
+      this.renderViewer();
+      if (State.currentView === 'student_detail') this.changeDetailTab(State.detailTab);
+    } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
+    finally { done(); }
+  },
+
+  // ---------------- CREAR DOCUMENTOS Y PLANES DESDE MODELOS ----------------
+  /** Tipos de documento del área: los conocidos más los que ya existen en los documentos cargados. */
+  docTypesFor(area) {
+    const base = area === 'PIE'
+      ? PIE_DOC_TYPES.map(t => t[1]).filter(t => t !== 'Plan de riesgo de repitencia' && t !== 'Certificado de nacimiento')
+      : ['Plan de riesgo de repitencia', 'Plan de acompañamiento pedagógico', 'Seguimiento del plan de acompañamiento', 'Informe a la familia'];
+    const existentes = State.rawEvidences.filter(e => this.evArea(e) === area && e.type).map(e => e.type);
+    return [...new Set([...base, ...existentes])];
+  },
+  /** Documentos que sirven de modelo: editables, del área; primero los marcados como modelo y los del mismo tipo. */
+  modelsFor(area, type) {
+    return State.rawEvidences.filter(e => this.evArea(e) === area && e.storage === 'drive' && this.isEditableName(e.fileName, e.mimeType))
+      .sort((a, b) => (b.esModelo ? 1 : 0) - (a.esModelo ? 1 : 0) || ((b.type === type) - (a.type === type)) || String(b.date || '').localeCompare(String(a.date || '')));
+  },
+  openCreateDoc(area, studentId = State.selectedStudentId) {
+    if (!this.canEditArea(area)) return toast(area === 'PIE' ? 'Solo el Equipo PIE y los administrativos pueden crear documentos PIE' : 'No tiene permiso para crear planes', 'error');
+    const s = this.getStudent(studentId);
+    if (!s) return toast('Abra primero la ficha del estudiante', 'error');
+    const tipos = this.docTypesFor(area);
+    State.createDoc = { area, studentId: s.id, type: area === 'PIE' ? (tipos.find(t => /^PAI/.test(t)) || tipos[0]) : tipos[0], modelId: '', limpiar: true, completar: true };
+    ui.modal({ title: area === 'PIE' ? 'Crear documento PIE' : 'Crear plan por riesgo de repitencia', icon: 'file-plus', tone: AREAS[area].tone, size: 'md', okText: 'Crear y editar', body: '<div id="create-doc"></div>', onOk: () => { this.startFromModel(); return false; } });
+    this.renderCreateDoc();
+  },
+  renderCreateDoc() {
+    const c = State.createDoc, s = this.getStudent(c.studentId);
+    const models = this.modelsFor(c.area, c.type);
+    const mismos = models.filter(m => m.type === c.type), otros = models.filter(m => m.type !== c.type);
+    if (c.modelId === '' && mismos.length) c.modelId = String(mismos[0].id);
+    if (c.modelId === '' && !mismos.length) c.modelId = 'base';
+    const opt = m => `<option value="${esc(m.id)}" ${sameId(m.id, c.modelId) ? 'selected' : ''}>${m.esModelo ? '★ ' : ''}${esc(m.studentName || '')} · ${esc(m.fileName || '')} · ${fmtDate(m.date) || ''}</option>`;
+    el('create-doc').innerHTML = `<div class="stack">
+      <p class="modal__msg">Estudiante: <strong>${esc(s.name)}</strong> (${esc(s.curso)}).</p>
+      ${fieldHtml('Tipo de documento', `<select class="input" onchange="State.createDoc.type=this.value; State.createDoc.modelId=''; app.renderCreateDoc()">${options(this.docTypesFor(c.area).map(t => [t, t]), c.type)}</select>`)}
+      ${fieldHtml('Modelo en que se basa', `<select class="input" onchange="State.createDoc.modelId=this.value">
+        ${mismos.length ? `<optgroup label="${esc(c.type)} ya cargados">${mismos.map(opt).join('')}</optgroup>` : ''}
+        <option value="base" ${c.modelId === 'base' ? 'selected' : ''}>Formato básico de la plataforma</option>
+        ${otros.length ? `<optgroup label="Otros documentos del área">${otros.slice(0, 60).map(opt).join('')}</optgroup>` : ''}
+      </select>`)}
+      <label class="check"><input type="checkbox" ${c.limpiar ? 'checked' : ''} onchange="State.createDoc.limpiar=this.checked"><span>Usar solo la estructura del modelo (borra las respuestas del otro estudiante y desmarca las casillas)</span></label>
+      <label class="check"><input type="checkbox" ${c.completar ? 'checked' : ''} onchange="State.createDoc.completar=this.checked"><span>Completar automáticamente nombre, RUN, curso, fecha, profesor jefe y asistencia</span></label>
+      <p class="note">${ico('info')}Los modelos son los documentos que ya se cargaron (marcados con ★ los elegidos como "modelo"). Abra cualquier documento y presione "Usar como modelo" para que aparezca primero.</p>
+    </div>`;
+  },
+  async startFromModel() {
+    const c = State.createDoc, s = this.getStudent(c.studentId);
+    const done = ui.busy('Preparando el documento', 'Leyendo el modelo...');
+    try {
+      let html = '', modelo = null;
+      if (c.modelId && c.modelId !== 'base') {
+        modelo = State.rawEvidences.find(e => sameId(e.id, c.modelId));
+        const kind = this.docKind(modelo?.mimeType, modelo?.fileName);
+        const f = await API.call('file', { id: c.modelId, comoWord: kind === 'pdf' });
+        const bytes = Uint8Array.from(atob(f.base64 || ''), ch => ch.charCodeAt(0));
+        if (this.docKind(f.mimeType, f.fileName) === 'docx') { await this.loadMammoth(); html = this.safeHtml((await mammoth.convertToHtml({ arrayBuffer: bytes.buffer })).value); }
+        else if (/html/.test(f.mimeType || '')) html = this.safeHtml(new TextDecoder().decode(bytes));
+        else throw new Error('Este modelo no se puede usar. Elija un documento Word.');
+      } else html = this.safeHtml(this.baseTemplate(c.area, c.type));
+      const ms = modelo ? State.rawStudents.find(x => sameId(x.id, modelo.studentId)) : null;
+      html = this.prepareFromModel(html, ms, s, { ...c, limpiar: c.limpiar && !!modelo });
+      const nombre = `${c.type.replace(/\s*\(.*\)$/, '')} ${today().slice(0, 4)} - ${this.clean(s.name)}`;
+      State.viewer = { nuevo: { area: c.area, type: c.type, modelId: modelo ? modelo.id : '', modeloNombre: modelo ? modelo.fileName : 'formato básico', nombre }, id: '', html, kind: 'html', bytes: new Uint8Array(), url: '',
+        ev: { studentId: String(s.id), studentName: s.name, area: c.area, type: c.type, storage: 'drive' }, f: { fileName: `${nombre}.docx` } };
+      done();
+      ui.modal({ title: `Nuevo: ${nombre}`, icon: 'file-plus', tone: AREAS[c.area].tone, size: 'xl', hideOk: true, cancelText: 'Cerrar', body: '<div id="doc-viewer" class="doc-viewer"></div>' });
+      this.editDocument();
+    } catch (e) { done(); toast(e.message, 'error'); }
+  },
+  /** Adapta el modelo al estudiante: cambia nombre y RUN, borra respuestas y completa los datos conocidos. */
+  prepareFromModel(html, ms, s, o) {
+    const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+    const root = doc.body.firstChild;
+    const nombre = this.formatStudentName ? this.formatStudentName(s.name) : s.name;
+    const N = x => this.normalizarTexto(x);
+    const textNodes = () => { const w = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT); const out = []; while (w.nextNode()) out.push(w.currentNode); return out; };
+    // 1) Nombre y RUN del estudiante del modelo -> los del nuevo estudiante
+    if (ms) {
+      const tokens = new Set(N(ms.name).split(' ').filter(w => w.length > 2));
+      const runModelo = this.limpiarRut(ms.rut || '');
+      textNodes().forEach(n => {
+        const parts = n.nodeValue.split(/(\s+)/);
+        const out = [];
+        for (let i = 0; i < parts.length;) {
+          let j = i, words = 0;
+          while (j < parts.length && (/^\s+$/.test(parts[j]) || tokens.has(N(parts[j].replace(/[^\p{L}]/gu, ''))))) { if (!/^\s+$/.test(parts[j])) words++; j++; }
+          if (words >= 2) { while (j > i && /^\s+$/.test(parts[j - 1])) j--; out.push(nombre); i = j; }
+          else { out.push(parts[i]); i++; }
+        }
+        let v = out.join('');
+        if (runModelo) v = v.replace(/\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[\dkK]/g, m => this.limpiarRut(m) === runModelo ? (s.rut || '') : m);
+        n.nodeValue = v;
+      });
+    }
+    const LBL = /^(nombre|run|rut|curso|fecha|edad|profesor|profesora|establecimiento|colegio|escuela|a[ñn]o|asistencia|apoderad|diagn[oó]stico|nivel|asignatura|docente|especialista|domicilio|tel[eé]fono|responsable|firma|indicador|acciones|seguimiento|objetivo|[aá]mbito)/i;
+    const esEtiqueta = c => c.classList.contains('doc-head') || /_{4,}/.test(c.textContent) || (c.textContent.trim().length < 45 && (LBL.test(N(c.textContent).toLowerCase()) || /:\s*$/.test(c.textContent.trim())));
+    // 2) Solo la estructura: se vacían las respuestas y se desmarcan las casillas
+    if (o.limpiar) {
+      root.querySelectorAll('tr').forEach(tr => {
+        const cells = [...tr.children];
+        const conCasillas = cells.some(c => /[☐☒☑✓✔]/.test(c.textContent));
+        cells.forEach((c, i) => {
+          if (esEtiqueta(c)) return;
+          if (/[☐☒☑✓✔]/.test(c.textContent)) { c.innerHTML = c.innerHTML.replace(/[☒☑✓✔]/g, '☐'); return; }
+          // En una lista de cotejo, la primera columna es el ítem a evaluar: se conserva
+          if (conCasillas && i === 0) return;
+          c.innerHTML = '';
+        });
+      });
+      textNodes().forEach(n => { if (/[☒☑✓✔]/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/[☒☑✓✔]/g, '☐'); });
+    }
+    // 3) Datos conocidos del estudiante en las celdas que siguen a su etiqueta
+    if (o.completar) {
+      const edad = (() => { const f = s.fechaNacimiento ? new Date(s.fechaNacimiento) : null; if (!f || isNaN(f)) return ''; const d = new Date(); let a = d.getFullYear() - f.getFullYear(); if (d < new Date(d.getFullYear(), f.getMonth(), f.getDate())) a--; return `${a} años`; })();
+      const datos = [
+        [/^nombre(s)?( completo)?( del| de la)?( estudiante| alumno\(a\)| alumno| alumna)?$/, nombre],
+        [/^(run|rut)( del estudiante)?$/, s.rut || ''],
+        [/^curso$/, s.curso || ''],
+        [/^fecha( de (elaboracion|emision|inicio|confeccion))?$/, fmtDate(today())],
+        [/^fecha de nacimiento$/, s.fechaNacimiento ? fmtDate(s.fechaNacimiento) : ''],
+        [/^edad$/, edad],
+        [/^profesor(a)? jef(e|a)$/, this.profJefeOf(s.curso) || ''],
+        [/^(establecimiento|colegio|escuela)$/, this.brand ? this.brand().tagline : 'Colegio Marina de Chile'],
+        [/^ano( escolar)?$/, today().slice(0, 4)],
+        [/^(porcentaje de )?asistencia$/, s.asistencia ? `${s.asistencia.real} %` : ''],
+        [/^apoderad(o|a)( \(a\))?$/, s.contacto?.apoderado || '']
+      ];
+      const valor = t => { const k = N(t).toLowerCase().replace(/[:.]/g, '').replace(/\s+/g, ' ').trim(); const hit = datos.find(([re]) => re.test(k)); return hit && hit[1] ? hit[1] : null; };
+      root.querySelectorAll('td, th').forEach(c => {
+        const v = valor(c.textContent);
+        const sig = c.nextElementSibling;
+        if (v && sig && !sig.textContent.trim()) sig.textContent = v;
+      });
+      // Párrafos del tipo "Nombre: ______"
+      textNodes().forEach(n => {
+        n.nodeValue = n.nodeValue.replace(/(Nombre(?: completo)?(?: del estudiante)?|RUN|RUT|Curso|Fecha)\s*:\s*_{2,}/gi, (m, lab) => { const v = valor(lab); return v ? `${lab}: ${v}` : m; });
+      });
+    }
+    return root.innerHTML;
+  },
+  /** Formatos básicos cuando todavía no hay un modelo cargado. */
+  baseTemplate(area, type) {
+    const id = `<table><tr><td><strong>Nombre completo</strong></td><td></td><td><strong>RUN</strong></td><td></td></tr><tr><td><strong>Curso</strong></td><td></td><td><strong>Fecha</strong></td><td></td></tr><tr><td><strong>Profesor jefe</strong></td><td></td><td><strong>Asistencia</strong></td><td></td></tr></table>`;
+    const ambito = n => `<tr><td><strong>ÁMBITO ${n}</strong></td><td></td><td></td><td></td></tr><tr><td><strong>INDICADOR</strong></td><td><strong>ACCIONES</strong></td><td><strong>RESPONSABLE</strong></td><td><strong>SEGUIMIENTO</strong></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr>`;
+    const evalTabla = items => `<table><tr><td><strong>Objetivos abordados durante el periodo</strong></td><td><strong>L</strong></td><td><strong>EP</strong></td><td><strong>NL</strong></td><td><strong>NO</strong></td></tr>${items.map(i => `<tr><td>${i}</td><td>☐</td><td>☐</td><td>☐</td><td>☐</td></tr>`).join('')}</table><p><em>L: logrado. EP: en proceso. NL: no logrado. NO: no observado.</em></p>`;
+    const firmas = `<p></p><table><tr><td><p>_______________________</p><p>Profesional responsable</p></td><td><p>_______________________</p><p>Apoderado(a)</p></td><td><p>_______________________</p><p>Coordinación</p></td></tr></table>`;
+    if (area === 'Repitencia') return `<h2>${esc(type.toUpperCase())}</h2><p>Decreto N° 67/2018 de evaluación, calificación y promoción escolar.</p>${id}
+      <p><strong>1. ANTECEDENTES QUE FUNDAMENTEN LA INTERVENCIÓN Y APOYO.</strong></p><table><tr><td><strong>HISTORIAL ACADÉMICO (Información significativa: informes médicos o psicopedagógicos, cambios de centros, absentismo, apoyos recibidos, áreas no superadas, repeticiones, situación familiar)</strong></td></tr><tr><td></td></tr></table>
+      <p><strong>2. ÁMBITOS DE INTERVENCIÓN.</strong></p><table>${ambito('PEDAGÓGICO')}${ambito('ASISTENCIA')}${ambito('FAMILIAR')}${ambito('SOCIOEMOCIONAL')}</table>
+      <p><strong>3. EVALUACIÓN DEL PLAN.</strong></p>${evalTabla(['Mejora del rendimiento en las asignaturas descendidas', 'Asistencia igual o superior al 85 %', 'Participación de la familia en las acciones acordadas', 'Cumplimiento de los compromisos del estudiante'])}${firmas}`;
+    if (/PAI|PACI|plan/i.test(type)) return `<h2>${esc(type.toUpperCase())}</h2><p>Programa de Integración Escolar (Decreto N° 170/2009 y Decreto N° 83/2015).</p>${id}
+      <table><tr><td><strong>Diagnóstico</strong></td><td></td></tr><tr><td><strong>Profesional especialista</strong></td><td></td></tr><tr><td><strong>Fecha de la última evaluación</strong></td><td></td></tr></table>
+      <p><strong>1. FORTALEZAS Y NECESIDADES DE APOYO.</strong></p><table><tr><td><strong>Fortalezas</strong></td></tr><tr><td></td></tr><tr><td><strong>Necesidades de apoyo</strong></td></tr><tr><td></td></tr></table>
+      <p><strong>2. ÁMBITOS DE INTERVENCIÓN.</strong></p><table>${ambito('PEDAGÓGICO')}${ambito('SOCIOEMOCIONAL')}${ambito('FAMILIAR')}</table>
+      <p><strong>3. EVALUACIÓN DE OBJETIVOS.</strong></p>${evalTabla(['', '', '', ''])}${firmas}`;
+    return `<h2>${esc(type.toUpperCase())}</h2><p>Programa de Integración Escolar.</p>${id}
+      <p><strong>1. MOTIVO.</strong></p><table><tr><td></td></tr></table>
+      <p><strong>2. ANTECEDENTES Y RESULTADOS.</strong></p><table><tr><td></td></tr></table>
+      <p><strong>3. CONCLUSIONES.</strong></p><table><tr><td></td></tr></table>
+      <p><strong>4. SUGERENCIAS Y APOYOS.</strong></p><table><tr><td></td></tr></table>${firmas}`;
+  },
+  async saveNewDocument(html) {
+    const v = State.viewer, n = v.nuevo, s = this.getStudent(v.ev.studentId);
+    const done = ui.busy('Guardando el documento', 'Creando el Word en la carpeta del estudiante...');
+    try {
+      const out = await API.call('crearDocumento', { studentId: s.id, studentName: s.name, curso: s.curso, html, nombre: n.nombre, area: n.area });
+      const evId = 'drv_' + out.fileId, anio = today().slice(0, 4);
+      const ev = { id: evId, studentId: String(s.id), studentName: s.name, course: s.curso, date: today(), anio, area: n.area, areaFija: true, type: n.type, description: `Creado en la plataforma desde ${n.modeloNombre}`, fileName: out.fileName, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: out.fileId, url: out.url, archivado: true, modeloId: n.modelId || '', ...(API.demo ? { demoHtml: html } : {}) };
+      await DB.save('evidences', ev);
+      if (/plan|\bpai\b|paci/i.test(n.type)) await DB.save('reports', { id: 'plan_' + out.fileId, studentId: String(s.id), type: n.type, area: n.area, areaFija: true, date: today(), anio, responsablePlan: State.currentUser.name, fuente: out.fileName, evidenceId: evId, estrategias: this.planEstrategias(html) });
+      State.areaVer = (State.areaVer || 0) + 1;
+      ui.guard = null;
+      State.viewer = { ...v, nuevo: null, id: evId, ev, html, kind: 'docx', bytes: null, f: { fileName: out.fileName, url: out.url, mimeType: ev.mimeType } };
+      toast('Documento creado y guardado en la ficha');
       this.renderViewer();
       if (State.currentView === 'student_detail') this.changeDetailTab(State.detailTab);
     } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }

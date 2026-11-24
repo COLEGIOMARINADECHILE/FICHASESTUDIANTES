@@ -91,7 +91,7 @@ Object.assign(app, {
       const iCurso = cells.findIndex(c => /^CURSO$/i.test(c));
       if (iCurso >= 0 && cells[iCurso + 1]) curso = cells[iCurso + 1];
       if (/^ÁMBITO|^AMBITO/i.test(first)) { actual = { ambito: first.replace(/[.\-–\s]+$/, ''), filas: [] }; ambitos.push(actual); return; }
-      if (!actual || /^INDICADOR/i.test(first) || cells.every(c => !c)) return;
+      if (!actual || /^INDICADOR/i.test(first) || cells.every(c => !c) || cells.some(c => /[☐☒☑]/.test(c))) return;
       if (cells.length >= 2 && cells.slice(0, 2).some(c => c.length > 2)) actual.filas.push({ indicador: cells[0] || '', acciones: cells[1] || '', responsable: cells[2] || '', seguimiento: cells[3] || '' });
     });
     return { nombre, curso, ambitos: ambitos.filter(a => a.filas.length), text: cell(doc.body) };
@@ -296,7 +296,7 @@ Object.assign(app, {
     rows.sort((a, b) => (ALL_COURSES.indexOf(a.s.curso) - ALL_COURSES.indexOf(b.s.curso)) || a.s.name.localeCompare(b.s.name));
     const sum = k => all.reduce((a, r) => a + r[k], 0);
     const cursos = [...new Set(all.map(r => r.s.curso))].sort((a, b) => ALL_COURSES.indexOf(a) - ALL_COURSES.indexOf(b));
-    const can = this.canImportPie();
+    const can = this.canEditArea(v.area);
     const sinArchivar = State.rawEvidences.filter(e => this.evArea(e) && e.storage === 'drive' && !e.archivado).map(e => e.id);
     el('pie-actions').innerHTML = can ? `
       ${State.rawInclusionReports.length ? `<button class="btn" onclick="app.openClassifyPlans()">${ico('arrow-right-left')}Separar PIE y repitencia</button>` : ''}

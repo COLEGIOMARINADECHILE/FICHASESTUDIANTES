@@ -989,3 +989,14 @@ h1, h2 { color: var(--color-heading); }
 .acta-group__form { display: flex; flex-direction: column; gap: 0.6rem; }
 @media (max-width: 760px) { .acta-group { grid-template-columns: 1fr; } }
 .doc-paper .doc-head, .doc-paper .doc-head p { text-align: center; text-align-last: auto; }
+
+/* Casillas marcables dentro del editor de documentos */
+.doc-paper .chk { display: inline-flex; align-items: center; justify-content: center; min-width: 1.4em; min-height: 1.4em; font-size: 1.15em; line-height: 1; cursor: pointer; border-radius: 4px; user-select: none; color: #1f2d4d; }
+.doc-paper .chk:hover { background: var(--tone-obs-soft); }
+.doc-paper .chk:focus-visible { outline: 2px solid var(--tone-conv-ink); outline-offset: 1px; }
+.doc-paper .chk[aria-checked="true"] { color: #0b5a2a; font-weight: 700; background: #e3f4e8; }
+.doc-paper td:has(> .chk:only-child), .doc-paper td.chk-cell { text-align: center; cursor: pointer; }
+.split-btn { display: inline-flex; }
+.split-btn .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-btn .btn + .btn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; }
+.doc-paper--print { max-height: none; overflow: visible; border: 0; }
