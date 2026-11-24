@@ -20,24 +20,74 @@ Object.assign(app, {
   diaOf(course) { return (State.dia || []).filter(d => d.course === course).sort((a, b) => String(b.anio).localeCompare(String(a.anio)) || DIA_PERIODOS.indexOf(b.periodo) - DIA_PERIODOS.indexOf(a.periodo) || String(a.asignatura).localeCompare(String(b.asignatura))); },
 
   // ---------------- LECTURA DEL PDF ----------------
-  /** Líneas del PDF reconstruidas por posición (cada fila de una tabla queda en una línea). */
-  async pdfLines(file) {
+  /** Páginas del PDF con cada texto y su posición (x, y, ancho), más las líneas reconstruidas. */
+  async pdfPages(file) {
     const pdf = await this.pdfjs().getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-    const lines = [];
+    const pages = [], lines = [];
     for (let p = 1; p <= pdf.numPages; p++) {
-      const items = (await (await pdf.getPage(p)).getTextContent()).items.filter(i => i.str.trim());
+      const items = (await (await pdf.getPage(p)).getTextContent()).items.filter(i => i.str.trim()).map(i => ({ s: i.str.trim(), x: i.transform[4], y: i.transform[5], w: i.width || 0 }));
       const filas = [];
-      items.forEach(i => {
-        const y = i.transform[5], x = i.transform[4];
-        let f = filas.find(r => Math.abs(r.y - y) < 3);
-        if (!f) filas.push(f = { y, items: [] });
-        f.items.push({ x, s: i.str });
-      });
-      filas.sort((a, b) => b.y - a.y).forEach(f => lines.push(f.items.sort((a, b) => a.x - b.x).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim()));
+      items.forEach(i => { let f = filas.find(r => Math.abs(r.y - i.y) < 3); if (!f) filas.push(f = { y: i.y, items: [] }); f.items.push(i); });
+      filas.sort((a, b) => b.y - a.y).forEach(f => { f.items.sort((a, b) => a.x - b.x); lines.push(f.items.map(i => i.s).join(' ').replace(/\s+/g, ' ').trim()); });
+      pages.push({ items, filas });
     }
-    return lines;
+    return { pages, lines };
   },
-  parseDia(lines, fileName) {
+  async pdfLines(file) { return (await this.pdfPages(file)).lines; },
+  /**
+   * Tabla de resultados por estudiante, leída por posición:
+   * - cada fila: número, nombre y un valor por columna (L / NL, % o nivel de logro);
+   * - las columnas se nombran con las etiquetas que están sobre cada una;
+   * - los ejes son los títulos de la fila superior del encabezado, que abarcan varias columnas.
+   * Así se respetan los ejes propios de cada informe DIA (asignatura y nivel).
+   */
+  diaTabla(pages) {
+    const esValor = s => /^(NL|L|NA|\d{1,3}(?:[.,]\d+)?\s*%?|Insuficiente|Elemental|Intermedio|Adecuado|Satisfactorio|Logrado|No logrado)$/i.test(s);
+    const filas = [];
+    let ref = null;
+    pages.forEach((pg, pi) => pg.filas.forEach(f => {
+      // Separa celdas que vienen juntas ("L NL L") repartiendo su ancho
+      const its = f.items.flatMap(i => { const tk = i.s.split(/\s+/); return tk.length > 1 && tk.every(esValor) ? tk.map((s, k) => ({ s, x: i.x + (i.w / tk.length) * k, w: i.w / tk.length, y: i.y })) : [i]; });
+      const vals = its.filter(i => esValor(i.s) && i.x > 120);
+      const texto = its.filter(i => !vals.includes(i)).map(i => i.s).join(' ').trim();
+      const m = texto.match(/^(\d{1,3})\s*\.?\s+([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ' .-]+)$/);
+      if (!m || vals.length < 2 || /\b(pregunta|OA|habilidad)\b/i.test(texto)) return;
+      const fila = { n: +m[1], nombre: m[2].trim(), valores: vals.map(v => /^n?l$/i.test(v.s) ? v.s.toUpperCase() : v.s), xs: vals.map(v => v.x + v.w / 2), page: pi, y: f.y };
+      filas.push(fila);
+      if (!ref || fila.xs.length > ref.xs.length) ref = fila;
+    }));
+    if (!ref) return { filas: [], columnas: [], ejeDe: [] };
+    const anchors = ref.xs;
+    // Cada fila se alinea a las columnas por posición (por si falta una celda)
+    filas.forEach(f => {
+      const v = Array(anchors.length).fill('');
+      f.xs.forEach((x, k) => { let best = 0; anchors.forEach((a, j) => { if (Math.abs(a - x) < Math.abs(anchors[best] - x)) best = j; }); v[best] = f.valores[k]; });
+      f.valores = v; delete f.xs;
+    });
+    const bordes = anchors.map((a, j) => [j ? (anchors[j - 1] + a) / 2 : a - (anchors[1] - anchors[0]) / 2, j < anchors.length - 1 ? (a + anchors[j + 1]) / 2 : a + (a - anchors[j - 1]) / 2]);
+    const colDe = x => bordes.findIndex(([a, b]) => x >= a && x < b);
+    // Encabezado: textos sobre la primera fila de datos de esa página (sin título ni pie)
+    const pg = pages[filas.find(f => f.page === ref.page) ? ref.page : 0];
+    const primera = Math.max(...filas.filter(f => f.page === ref.page).map(f => f.y));
+    const enc = pg.items.filter(i => i.y > primera + 2 && i.y < primera + 90 && i.x + i.w > bordes[0][0] - 5 && !/^(estudiante|tabla\b|resultados de cada)/i.test(i.s) && !/^\[?contin/i.test(i.s));
+    const ys = [...new Set(enc.map(i => Math.round(i.y)))].sort((a, b) => b - a);
+    // Fila de ejes: la más alta, con títulos que abarcan varias columnas (o menos títulos que columnas)
+    const filasEnc = ys.map(y => enc.filter(i => Math.abs(i.y - y) < 3));
+    let ejesFila = [];
+    if (filasEnc.length >= 2) {
+      const top = filasEnc[0];
+      const espacio = anchors.length > 1 ? anchors[1] - anchors[0] : 40;
+      if (top.length < anchors.length && top.some(i => i.w > espacio * 1.2)) ejesFila = top;
+    }
+    const columnas = anchors.map(() => []);
+    enc.filter(i => !ejesFila.includes(i)).sort((a, b) => b.y - a.y || a.x - b.x).forEach(i => { const j = colDe(i.x + i.w / 2); if (j >= 0) columnas[j].push(i.s); });
+    const nombres = columnas.map((c, j) => c.join(' ').replace(/\s+/g, ' ').trim() || `Indicador ${j + 1}`);
+    const ejes = ejesFila.sort((a, b) => a.x - b.x).map(i => ({ nombre: i.s, col: Math.max(0, colDe(i.x + 3)) }));
+    const ejeDe = anchors.map((a, j) => { const e = ejes.filter(x => x.col <= j).pop(); return e ? e.nombre : nombres[j]; });
+    return { filas, columnas: nombres, ejeDe };
+  },
+  parseDia(doc, fileName) {
+    const lines = doc.lines || doc;
     const t = lines.join('\n');
     const val = re => ((t.match(re) || [])[1] || '').trim();
     const titulo = t.match(/Informe de Resultados\s*(\d{4})\s*\|?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ ]{3,40})/);
@@ -51,16 +101,8 @@ Object.assign(app, {
     const nivel = (t.match(/(\d{1,2}|I{1,3}V?|IV)\s*°?\s*(b[aá]sico|medio)/i) || [])[2] || (/medio/i.test(cursoTxt) ? 'medio' : 'básico');
     const mc = cursoTxt.match(/^(\d{1,2}|I{1,3}V?|IV)\s*°?\s*(?:b[aá]sico|medio|B|M)?\s*([A-Z])\b/i);
     const course = mc ? this.courseFromText(`${mc[1]} ${/medio/i.test(nivel) ? 'MEDIO' : 'BASICO'} ${mc[2]}`) : '';
-    // Tabla de resultados por estudiante: "1 APELLIDO APELLIDO NOMBRE L NL ..."
-    const filas = [];
-    lines.forEach(l => {
-      const m = l.match(/^(\d{1,3})\s+([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ' .-]+?)\s+((?:(?:NL|L|[\d.,]+\s*%?|Insuficiente|Elemental|Intermedio|Adecuado|Satisfactorio)\s*){2,})$/i);
-      if (m && !/\b(pregunta|OA|habilidad)\b/i.test(m[2])) filas.push({ n: +m[1], nombre: m[2].trim(), valores: m[3].trim().split(/\s+/).map(v => v.toUpperCase() === 'NL' || v.toUpperCase() === 'L' ? v.toUpperCase() : v) });
-    });
-    const nCol = filas.length ? Math.max(...filas.map(f => f.valores.length)) : 0;
-    const conocido = /lectura/i.test(asignatura) && nCol === DIA_LECTURA_1B.columnas.length;
-    const columnas = conocido ? DIA_LECTURA_1B.columnas : Array.from({ length: nCol }, (_, i) => `Indicador ${i + 1}`);
-    const grupos = conocido ? DIA_LECTURA_1B.grupos : (nCol ? [['Resultado general', 0, nCol]] : []);
+    // Tabla por estudiante con sus propios ejes
+    const tabla = doc.pages ? this.diaTabla(doc.pages) : { filas: [], columnas: [], ejeDe: [] };
     // Preguntas: bloques "A: 12.50%  B: 56.25%  C: ..  N: .." (la respuesta correcta se estima como la más elegida)
     const opciones = [...t.matchAll(/\b([A-D]|N)\s*:\s*([\d.,]+)\s*%/g)].map(m => [m[1], parseFloat(m[2].replace(',', '.'))]);
     const preguntas = [];
@@ -72,23 +114,60 @@ Object.assign(app, {
       const [correcta, pct] = alts.sort((a, b) => b[1] - a[1])[0] || ['', 0];
       return { n: nums[i] ? +nums[i][1] : i + 1, oa: nums[i] ? nums[i][2] : '', tipo: nums[i] ? nums[i][3] : '', opciones: p, correcta, pct };
     });
-    return { anio, asignatura, periodo, course, cursoTxt, docente: val(/docente de la asignatura:\s*([^\n]+)/i), director: val(/director[a]?:\s*([^\n]+)/i), nInforme: +val(/considera este informe:\s*(\d+)/i) || filas.length, fechaInforme: val(/generaci[oó]n de este informe:\s*([\d\/]+)/i), filas, columnas, grupos, preguntas: pregs, conocido };
+    // Nombre del eje que evalúan las preguntas ("...preguntas del instrumento que evalúan la comprensión oral")
+    // Nombre del eje de las preguntas: título "Tabla N. Resultados del curso en cada pregunta de <eje>", o el subtítulo antes de "La Tabla N muestra"
+    const iTabla = lines.findIndex(l => /^La Tabla \d+ muestra/i.test(l));
+    const ejePreg = (lines.map(l => l.match(/Resultados del curso en cada pregunta (?:de|del|en) ([A-Za-zÁÉÍÓÚÑáéíóúñ ,]{3,60})$/i)).find(Boolean) || [])[1]
+      || (iTabla > 0 && lines[iTabla - 1].length < 50 && !/\d/.test(lines[iTabla - 1]) ? lines[iTabla - 1] : '');
+    return { anio, asignatura, periodo, course, cursoTxt, docente: val(/docente de la asignatura:\s*([^\n]+)/i), director: val(/director[a]?:\s*([^\n]+)/i), nInforme: +val(/considera este informe:\s*(\d+)/i) || tabla.filas.length, fechaInforme: val(/generaci[oó]n de este informe:\s*([\d\/]+)/i),
+      filas: tabla.filas, columnas: tabla.columnas, ejeDe: tabla.ejeDe, grupos: [], preguntas: pregs, ejePreguntas: ejePreg ? ejePreg.trim().charAt(0).toUpperCase() + ejePreg.trim().slice(1) : '', conocido: tabla.filas.length > 0 };
   },
-  /** Porcentajes del curso: logro por indicador (estudiantes con L), promedio por área y comprensión oral desde las preguntas. */
+  /** Ejes del informe: cada eje agrupa sus columnas (aunque no estén juntas). Compatible con informes guardados antes. */
+  diaEjes(d) {
+    const ejeDe = d.ejeDe && d.ejeDe.length === d.columnas.length ? d.ejeDe : d.columnas.map((c, j) => { const g = (d.grupos || []).find(([, a, b]) => j >= a && j < b); return g ? g[0] : c; });
+    const orden = [];
+    ejeDe.forEach((e, j) => { let x = orden.find(o => o.nombre === e); if (!x) orden.push(x = { nombre: e, cols: [] }); x.cols.push(j); });
+    return orden;
+  },
+  /** Porcentajes del curso por indicador y por eje (L, % o nivel), más el eje evaluado con preguntas. */
   diaCalc(d) {
     const n = d.estudiantes.length || 1;
-    const esLogro = v => v === 'L' || /adecuado|satisfactorio|logrado/i.test(v) && !/no logrado/i.test(v);
-    const ind = d.columnas.map((c, i) => ({ nombre: c, pct: Math.round(d.estudiantes.filter(e => esLogro(e.valores[i] || '')).length / n * 10000) / 100 }));
-    const areas = d.grupos.map(([nombre, a, b]) => { const sub = ind.slice(a, b); return { nombre, pct: sub.length ? Math.round(sub.reduce((t, x) => t + x.pct, 0) / sub.length * 100) / 100 : 0, sub }; });
-    if ((d.preguntas || []).length) areas.push({ nombre: /lectura/i.test(d.asignatura) ? 'Comprensión oral' : 'Preguntas del instrumento', pct: Math.round(d.preguntas.reduce((t, p) => t + p.pct, 0) / d.preguntas.length * 100) / 100, sub: [], estimado: true });
+    const esLogro = v => v === 'L' || (/adecuado|satisfactorio|logrado/i.test(v) && !/no logrado/i.test(v));
+    const num = v => { const x = parseFloat(String(v).replace(',', '.').replace('%', '')); return isNaN(x) ? null : x; };
+    const ind = d.columnas.map((c, i) => {
+      const vals = d.estudiantes.map(e => e.valores[i] || '').filter(Boolean);
+      const nums = vals.map(num).filter(x => x !== null);
+      const pct = nums.length === vals.length && nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : d.estudiantes.filter(e => esLogro(e.valores[i] || '')).length / n * 100;
+      return { nombre: c, pct: Math.round(pct * 100) / 100 };
+    });
+    const areas = this.diaEjes(d).map(e => { const sub = e.cols.map(j => ind[j]); return { nombre: e.nombre, pct: Math.round(sub.reduce((t, x) => t + x.pct, 0) / (sub.length || 1) * 100) / 100, sub: sub.length > 1 || sub[0]?.nombre !== e.nombre ? sub : [] }; });
+    if ((d.preguntas || []).length) areas.push({ nombre: d.ejePreguntas || (/lectura/i.test(d.asignatura) ? 'Comprensión oral' : 'Preguntas del instrumento'), pct: Math.round(d.preguntas.reduce((t, p) => t + p.pct, 0) / d.preguntas.length * 100) / 100, sub: [], estimado: true });
     (d.areasManual || []).forEach(a => { if (a.nombre && !areas.some(x => x.nombre === a.nombre)) areas.push({ nombre: a.nombre, pct: +a.pct || 0, sub: [], manual: true }); });
-    const apoyo = d.estudiantes.filter(e => e.valores.filter(v => !esLogro(v)).length >= Math.ceil(d.columnas.length / 2));
+    const noLogra = e => e.valores.filter(v => v && !esLogro(v) && !(num(v) !== null && num(v) >= 50)).length;
+    const apoyo = d.estudiantes.filter(e => noLogra(e) >= Math.ceil(d.columnas.length / 2));
     return { ind, areas, apoyo, esLogro };
   },
 
   // ---------------- CARGA (UNO O VARIOS) ----------------
   openDiaUpload() {
-    this.pickFiles({ accept: '.pdf,application/pdf', onPick: files => this.handleDiaFiles(files) });
+    ui.modal({
+      title: 'Subir informes DIA', icon: 'upload', tone: 'obs', size: 'md', hideOk: true, cancelText: 'Cerrar',
+      body: `<div class="stack">
+        <p class="modal__msg">Puede subir <strong>varios informes a la vez</strong> (de distintos cursos, asignaturas y periodos). El sistema identifica en cada PDF el curso, la asignatura, el periodo y sus propios ejes.</p>
+        <div id="dia-drop" class="drop-zone" tabindex="0" role="button" aria-label="Arrastre aquí los informes DIA o presione para elegirlos">${ico('file-up')}<strong>Arrastre aquí los PDF del DIA</strong><span class="muted small">o use los botones</span></div>
+        <div class="grid-2">
+          <button type="button" class="btn btn--primary" onclick="ui.close(); app.pickFiles({ accept: '.pdf,application/pdf', onPick: f => app.handleDiaFiles(f) })">${ico('files')}Elegir archivos (varios)</button>
+          <button type="button" class="btn" onclick="ui.close(); app.pickFiles({ folder: true, accept: '.pdf,application/pdf', onPick: f => app.handleDiaFiles(f) })">${ico('folder-open')}Elegir una carpeta completa</button>
+        </div>
+        <p class="note">${ico('info')}En la ventana de archivos, mantenga presionada la tecla Ctrl (o Mayús) para seleccionar varios.</p>
+      </div>`
+    });
+    const z = el('dia-drop');
+    z.onclick = () => { ui.close(); this.pickFiles({ accept: '.pdf,application/pdf', onPick: f => this.handleDiaFiles(f) }); };
+    z.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); z.onclick(); } };
+    z.ondragover = e => { e.preventDefault(); z.classList.add('is-over'); };
+    z.ondragleave = () => z.classList.remove('is-over');
+    z.ondrop = e => { e.preventDefault(); const f = [...(e.dataTransfer.files || [])]; ui.close(); this.handleDiaFiles(f); };
   },
   async handleDiaFiles(files) {
     files = files.filter(f => /\.pdf$/i.test(f.name));
@@ -98,7 +177,7 @@ Object.assign(app, {
     for (const [i, f] of files.entries()) {
       el('busy-msg').textContent = `${i + 1} de ${files.length}: ${f.name}`;
       try {
-        const p = this.parseDia(await this.pdfLines(f), f.name);
+        const p = this.parseDia(await this.pdfPages(f), f.name);
         items.push({ file: f, ...p, incluir: true });
       } catch (e) { errores.push(`${f.name}: ${e.message}`); }
     }
@@ -126,12 +205,28 @@ Object.assign(app, {
           ${fieldHtml('Año', `<input type="number" class="input input--num num" value="${esc(it.anio)}" onchange="State.diaImport[${i}].anio=this.value">`)}
         </div>
         ${it.filas.length ? '' : `<p class="note">${ico('info')}No se encontró una tabla de resultados por estudiante con L / NL. Se guardará el PDF y podrá escribir los porcentajes por área en la página de Resultados DIA.</p>`}
-        ${it.filas.length && !it.conocido ? `<p class="note">${ico('info')}Formato de informe no reconocido del todo: las columnas quedan como "Indicador 1, 2...". Puede renombrarlas después.</p>` : ''}
+        ${it.filas.length ? this.diaEjesEditorHtml(it, i) : ''}
         ${est.length ? `<details><summary class="small">Ver estudiantes del informe y su ficha</summary><ul class="iv-list iv-list--tight">${est.map(e => `<li><span>${esc(e.nombre)}</span><span class="small">${e.studentId ? `→ ${esc(e.ficha)}` : '<em>sin ficha encontrada</em>'}</span></li>`).join('')}</ul></details>` : ''}
       </article>`;
     }).join('')}
     <p class="note">${ico('shield-check')}Según la Agencia de Calidad, estos resultados no deben usarse para calificar a los estudiantes ni para comparar cursos.</p></div>`;
     icons();
+  },
+  /** Ejes detectados en el informe y sus columnas, editables antes de guardar. */
+  diaEjesEditorHtml(it, i) {
+    const ejes = this.diaEjes({ columnas: it.columnas, ejeDe: it.ejeDe });
+    const sinEjes = ejes.every(e => e.cols.length === 1 && e.nombre === it.columnas[e.cols[0]]);
+    const nombres = [...new Set(it.ejeDe)];
+    return `<details class="dia-ejes" ${sinEjes ? 'open' : ''}><summary class="small">${ico('layers')}Ejes detectados en este informe: ${ejes.length} ${sinEjes ? '(no se encontraron títulos de ejes: revíselos)' : ''}</summary>
+      <div class="chips">${ejes.map(e => chip(`${e.nombre} · ${e.cols.length} indicador(es)`, 'obs')).join('')}${it.preguntas.length ? chip(`${it.ejePreguntas || 'Preguntas'} · ${it.preguntas.length} preguntas`, 'conv') : ''}</div>
+      <datalist id="dia-ejes-${i}">${nombres.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <div class="table-wrap"><table class="table table--dense"><thead><tr><th>Columna del informe</th><th>Eje al que pertenece</th></tr></thead><tbody>
+        ${it.columnas.map((c, j) => `<tr><td><input class="input" value="${esc(c)}" aria-label="Nombre de la columna ${j + 1}" onchange="State.diaImport[${i}].columnas[${j}]=this.value.trim() || 'Indicador ${j + 1}'"></td>
+          <td><input class="input" list="dia-ejes-${i}" value="${esc(it.ejeDe[j] || '')}" aria-label="Eje de la columna ${j + 1}" onchange="State.diaImport[${i}].ejeDe[${j}]=this.value.trim() || State.diaImport[${i}].columnas[${j}]; app.renderDiaImport()"></td></tr>`).join('')}
+      </tbody></table></div>
+      ${it.preguntas.length ? fieldHtml('Eje evaluado con las preguntas del instrumento', `<input class="input" value="${esc(it.ejePreguntas || '')}" placeholder="Ej: Comprensión oral" onchange="State.diaImport[${i}].ejePreguntas=this.value.trim()">`) : ''}
+      <p class="muted small">Cada eje se calcula con sus propias columnas: los porcentajes no mezclan ejes distintos.</p>
+    </details>`;
   },
   async saveDiaImport() {
     const sel = State.diaImport.filter(it => it.incluir);
@@ -149,7 +244,7 @@ Object.assign(app, {
         const up = await API.call('upload', { folderName: `${it.course} - Resultados DIA`, fileName: it.file.name, mimeType: 'application/pdf', base64: String(await readFileAsDataURL(it.file)).split(',')[1] });
         await DB.save('dia', {
           id, course: it.course, anio: String(it.anio), asignatura: it.asignatura, periodo: it.periodo, docente: it.docente, nInforme: it.nInforme, fechaInforme: it.fechaInforme,
-          columnas: it.columnas, grupos: it.grupos, preguntas: it.preguntas, estudiantes: this.diaMatch(it), areasManual: prev?.areasManual || [],
+          columnas: it.columnas, ejeDe: it.ejeDe || [], grupos: [], preguntas: it.preguntas, ejePreguntas: it.ejePreguntas || '', estudiantes: this.diaMatch(it), areasManual: prev?.areasManual || [],
           conclusiones: prev?.conclusiones || {}, fileName: it.file.name, driveId: up.fileId, url: up.url, cargadoPor: State.currentUser.name, fecha: today()
         });
         ok.push(`${it.asignatura} · ${it.periodo} · ${it.course}`);
@@ -168,7 +263,7 @@ Object.assign(app, {
     const lista = this.diaOf(course);
     el('dia-toolbar').innerHTML = `<button class="btn" onclick="app.openCourse(${jsq(course)})">${ico('arrow-left')}Volver al curso</button>
       <div class="row-actions">
-        <select class="input" aria-label="Curso" onchange="app.openDia(this.value)">${options(ALL_COURSES.map(c => [c, `${c}${(State.dia || []).some(d => d.course === c) ? ' ●' : ''}`]), course)}</select>
+        <select class="input" aria-label="Curso" onchange="app.openDia(this.value)">${options([['', 'Todos los cursos'], ...this.myCourses().map(c => [c, `${c}${(State.dia || []).some(d => d.course === c) ? ' ●' : ''}`])], course)}</select>
         ${this.canDia() ? `<button class="btn btn--primary" onclick="app.openDiaUpload()">${ico('upload')}Subir informes DIA</button>` : ''}
       </div>`;
     (this._diaCharts || []).forEach(c => c.destroy());

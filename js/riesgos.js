@@ -55,7 +55,7 @@ Object.assign(app, {
     const criticas = a.rendimiento.filter(r => r.n && r.bajo / r.n >= 0.25);
     const nivelGen = NIVELES_RIESGO.find(n => n[0] === d.nivelGeneral);
     el('risk-toolbar').innerHTML = `
-      <button class="btn" onclick="app.openCourse(${jsq(course)})">${ico('arrow-left')}Volver al curso</button>
+      <div class="row-actions"><button class="btn" onclick="app.navigate('ov_riesgos')">${ico('layout-list')}Todos los cursos</button><button class="btn" onclick="app.openCourse(${jsq(course)})">${ico('arrow-left')}Volver al curso</button></div>
       <div class="row-actions">
         <label class="field field--inline"><span class="field__label">Año</span><input type="number" class="input input--num num" value="${esc(State.riskAnio)}" onchange="State.riskAnio=this.value; State.rkDraft=null; app.renderCourseRisk(); icons()"></label>
         <button class="btn" onclick="app.openTraspaso(${jsq(course)})">${ico('file-stack')}Ficha de traspaso</button>

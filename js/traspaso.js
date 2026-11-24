@@ -285,7 +285,7 @@ Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del c
     };
 
     el('traspaso-toolbar').innerHTML = `
-      <button class="btn" onclick="app.navigate('students')">${ico('arrow-left')}Volver al curso</button>
+      <div class="row-actions"><button class="btn" onclick="app.navigate('ov_traspaso')">${ico('layout-list')}Todos los cursos</button><button class="btn" onclick="app.openCourse(${jsq(State.traspasoCourse)})">${ico('arrow-left')}Volver al curso</button></div>
       <div class="row-actions">
         <label class="field field--inline"><span class="field__label">Año</span><input type="number" class="input input--num num" value="${esc(State.traspasoAnio)}" onchange="State.traspasoAnio=this.value; State.trDraft=null; app.renderTraspaso(); icons()"></label>
         <button class="btn" onclick="app.openTrAutofill()">${ico('wand-2')}Autocompletar con datos</button>

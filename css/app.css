@@ -1172,3 +1172,14 @@ body.has-iv-panel .main { padding-right: min(400px, 40vw); }
 .tr-dia h4 { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.35rem; }
 .tr-dia h4 svg { width: 1rem; height: 1rem; }
 .tr-dia .chips { gap: 0.35rem; }
+
+/* Vista de todos los cursos y zona para arrastrar archivos */
+.ov-bar { width: 9rem; height: 0.55rem; border-radius: 999px; background: var(--color-rule); overflow: hidden; }
+.ov-bar span { display: block; height: 100%; background: var(--tone-conv-ink); border-radius: 999px; }
+.drop-zone { display: grid; place-items: center; gap: 0.3rem; padding: 1.6rem 1rem; border: 2px dashed var(--color-rule); border-radius: 12px; text-align: center; cursor: pointer; color: var(--color-heading); }
+.drop-zone svg { width: 1.8rem; height: 1.8rem; color: var(--tone-obs-ink); }
+.drop-zone:hover, .drop-zone.is-over { border-color: var(--tone-obs-ink); background: var(--tone-obs-soft); }
+.drop-zone:focus-visible { outline: 2px solid var(--tone-conv-ink); outline-offset: 2px; }
+.dia-ejes { margin-top: 0.4rem; }
+.dia-ejes > summary { cursor: pointer; display: flex; align-items: center; gap: 0.35rem; font-weight: 600; }
+.dia-ejes > summary svg { width: 1rem; height: 1rem; }

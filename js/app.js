@@ -332,7 +332,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { dia: 'renderDia', mine: 'renderMine', course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { ov_traspaso: 'renderOvTraspaso', ov_riesgos: 'renderOvRiesgos', dia: 'renderDia', mine: 'renderMine', course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -371,8 +371,8 @@ window.app = {
       ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
-      ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso']],
-      ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk']],
+      ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
+      ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk', 'ov_riesgos']],
       ['pick_dia', 'bar-chart-3', 'Resultados DIA', hasAccess('ver_fichas'), ['dia']],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
