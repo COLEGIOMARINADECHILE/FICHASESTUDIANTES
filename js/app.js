@@ -843,9 +843,9 @@ window.app = {
             : `<button class="btn btn--sm" onclick="State.export.tempIntId=${jsq(r.id)}; app.openExportModal('protocolo_informe')">${ico('file-output')}Generar informe PDF</button>`}</div>` : ''}
         </div>` : '';
       const agreements = (r.agreements || []).length ? `
-        <div class="agreements"><h4>${ico('check-circle')}Medidas y acuerdos</h4>${r.agreements.map(a => `
-          <div class="agreement" data-falta="${esc(a.falta || '')}">
-            <div class="agreement__head">${a.falta ? chip(`Falta ${a.falta.toLowerCase()}`, { LEVE: 'warn', GRAVE: 'warn', 'GRAVÍSIMA': 'proto' }[a.falta] || 'neutral') : '<span></span>'}<span class="muted small">Estado: ${esc(a.progress)}</span></div>
+        <div class="agreements"><h4>${ico('check-circle')}Medidas y acuerdos ${this.agreementTally(r)}</h4>${r.agreements.map((a, i) => `
+          <div class="agreement" data-falta="${esc(a.falta || '')}" data-estado="${this.agreementState(a)}">
+            <div class="agreement__head">${a.falta ? chip(`Falta ${a.falta.toLowerCase()}`, { LEVE: 'warn', GRAVE: 'warn', 'GRAVÍSIMA': 'proto' }[a.falta] || 'neutral') : '<span></span>'}${this.canMarkAgreement(r, canEdit) ? this.agreementMarksHtml(r, a, i) : `<span class="muted small">Estado: ${esc(a.progress || 'No Iniciado')}</span>`}</div>
             <p class="prewrap">${esc(a.text)}</p>${a.responsable || a.plazo ? `<p class="agreement__meta">${a.responsable ? `${ico('user')}Responsable: <strong>${esc(a.responsable)}</strong>` : ''}${a.plazo ? `${ico('calendar')}Plazo: <strong>${esc(this.fmtPlazo(a))}</strong>` : ''}</p>` : ''}</div>`).join('')}</div>` : '';
       return `
         <article class="record" data-tone="${isProt ? 'proto' : r.isPrivate ? 'pie' : 'neutral'}">
@@ -868,6 +868,47 @@ window.app = {
       ${formOpen ? this.interventionFormHtml() : ''}
       <div class="stack">${list || empty('clipboard-list', 'No hay intervenciones registradas.')}</div>`);
     if (formOpen) { this.renderAgreementsForm(); this.handleIntTypeChange(); }
+  },
+
+  // ---- Marcado rápido de medidas y acuerdos ----
+  agreementState(a) {
+    const p = String((a && a.progress) || '');
+    if (/^logrado|realizad|cumplid|complet|finaliz/i.test(p)) return 'si';
+    if (/no logrado|no realizad|no cumplid/i.test(p)) return 'no';
+    if (/proceso|modific/i.test(p)) return 'proceso';
+    return 'pendiente';
+  },
+  canMarkAgreement(r, canEdit) {
+    const u = State.currentUser;
+    if (canEdit || hasAccess('agregar_entrevistas')) return true;
+    if (sameId(r.professionalId, u.id) || (r.sharedWith || []).some(x => sameId(x, u.id))) return true;
+    return (r.agreements || []).some(a => a.responsable && String(a.responsable).toLowerCase() === String(u.name || '').toLowerCase());
+  },
+  agreementTally(r) {
+    const ags = (r.agreements || []).filter(a => a.text);
+    if (!ags.length) return '';
+    const hechos = ags.filter(a => this.agreementState(a) === 'si').length;
+    return `<span class="agr-tally${hechos === ags.length ? ' is-done' : ''}">${hechos} de ${ags.length} realizados</span>`;
+  },
+  agreementMarksHtml(r, a, i) {
+    const st = this.agreementState(a);
+    const b = (k, label, icon, valor) => `<button type="button" class="agr-mark agr-mark--${k}" aria-pressed="${st === k}" title="Marcar como ${label.toLowerCase()}" onclick="app.markAgreement(${jsq(r.id)}, ${i}, ${jsq(st === k ? 'No Iniciado' : valor)})">${ico(icon)}${label}</button>`;
+    const quien = a.marcadoPor ? `<span class="agr-who">${esc(a.marcadoPor)} · ${fmtDate(a.marcadoFecha)}</span>` : '';
+    return `<div class="agr-marks" role="group" aria-label="Estado del acuerdo">${quien}${b('si', 'Realizado', 'check', 'Logrado')}${b('proceso', 'En proceso', 'clock', 'En Proceso')}${b('no', 'No realizado', 'x', 'No Logrado')}</div>`;
+  },
+  async markAgreement(id, i, valor) {
+    const r = this.current().history.find(x => sameId(x.id, id));
+    if (!r || !r.agreements || !r.agreements[i]) return;
+    const antes = r.agreements.map(a => ({ ...a }));
+    const agreements = r.agreements.map((a, k) => k !== i ? a : (valor === 'No Iniciado'
+      ? (({ marcadoPor, marcadoFecha, ...rest }) => ({ ...rest, progress: valor }))(a)
+      : { ...a, progress: valor, marcadoPor: State.currentUser.name, marcadoFecha: today() }));
+    r.agreements = agreements;
+    this.renderInterventions();
+    try {
+      await DB.patch('interventions', id, { agreements });
+      toast(valor === 'No Iniciado' ? 'Marca quitada' : `Acuerdo marcado: ${valor === 'Logrado' ? 'realizado' : valor === 'No Logrado' ? 'no realizado' : 'en proceso'}`);
+    } catch (e) { r.agreements = antes; this.renderInterventions(); toast(e.message, 'error'); }
   },
 
   openInterventionForm(r = null) {
