@@ -637,8 +637,8 @@ window.app = {
       <tbody>${f.map(s => {
         const plans = State.studentPlans.filter(p => sameId(p.studentId, s.id)).map(p => chip(p.type || 'Plan activo', 'plan', 'bookmark')).join('');
         return `<tr class="${s.status === 'blocked' ? 'is-retirado' : ''}"${s.status === 'blocked' ? '' : this.highlightAttrs(s)}>
-          <td><span class="cell-title">${esc(s.name)} ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
-            <span class="chips">${this.recordChips([s.id], this.countRecords(s))}${s.status === 'blocked' ? chip(s.egresado ? `Egresado(a) ${s.anioEgreso || ''}` : `Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', s.egresado ? 'graduation-cap' : 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
+          <td><div class="st-row">${this.miniFotoHtml ? this.miniFotoHtml(s) : ''}<div class="st-row__txt"><span class="cell-title">${esc(s.name)} ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
+            <span class="chips">${this.recordChips([s.id], this.countRecords(s))}${s.status === 'blocked' ? chip(s.egresado ? `Egresado(a) ${s.anioEgreso || ''}` : `Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', s.egresado ? 'graduation-cap' : 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></div></div></td>
           <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Inasistencias de ${esc(s.name)}" value="${s.asistencia.inasistencias}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'inasistencias', this.value)"></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Atrasos de ${esc(s.name)}" value="${s.asistencia.atrasos}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'atrasos', this.value)"></td>

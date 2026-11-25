@@ -1,0 +1,22 @@
+{
+  "name": "Trayectoria Educativa · Colegio Marina de Chile",
+  "short_name": "Trayectoria",
+  "description": "Trayectoria educativa, convivencia e inclusión de los estudiantes del Colegio Marina de Chile.",
+  "lang": "es-CL",
+  "dir": "ltr",
+  "start_url": "./?app=1",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#16285a",
+  "theme_color": "#16285a",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "img/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "img/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

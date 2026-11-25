@@ -12,6 +12,11 @@
 // las reuniones a las que fueron invitados. Cerrada la reunión, queda de solo
 // lectura (salvo marcar el cumplimiento de sus acuerdos) y el PIN deja de servir.
 // =====================================================================
+// Tarjetas de la introducción y la conclusión: [clave, título, ícono, tono, tipo]
+const REU_IA_BLOQUES = {
+  intro: [['panorama', 'Panorama general', 'eye', 'obs', 'texto'], ['fortalezas', 'Fortalezas', 'star', 'conv', 'lista'], ['focos', 'Focos de preocupación', 'alert-triangle', 'proto', 'lista'], ['anteriores', 'Acuerdos de la reunión anterior', 'history', 'warn', 'texto'], ['preguntas', 'Preguntas para guiar la reunión', 'help-circle', 'pie', 'lista']],
+  conclusion: [['sintesis', 'Síntesis de lo tratado', 'file-text', 'obs', 'texto'], ['decisiones', 'Decisiones y acuerdos', 'check-circle', 'conv', 'lista'], ['seguimiento', 'Acuerdos anteriores', 'history', 'warn', 'texto'], ['focos', 'Focos para la próxima reunión', 'target', 'proto', 'lista']]
+};
 const REU_SECCIONES = [
   ['vision', 'a) Visión general del curso', 'Profesor(a) jefe', 'eye'],
   ['casos', 'b) Casos relevantes, derivaciones y seguimiento', 'Convivencia Escolar / Profesor(a) jefe', 'users'],
@@ -25,6 +30,10 @@ Object.assign(app, {
   reunion(id) { return this.reuniones().find(r => sameId(r.id, id)); },
   reuOrganiza(r) { const u = State.currentUser; return hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema') || hasAccess('editar_fichas') || (r && sameId(r.creadoPorId, u.id)); },
   reuParticipa(r) { return (r?.participantes || []).some(p => p.userId && sameId(p.userId, State.currentUser.id)); },
+  /** Quien dirige (creó) la reunión: único que ve el PIN y registra la asistencia, sea o no administrador. */
+  reuDirige(r) { return !!r && sameId(r.creadoPorId, State.currentUser.id); },
+  reuEstadoAsis(p) { return p.asistencia || (p.presente ? 'presente' : ''); },
+  reuAsisChip(p) { const st = this.reuEstadoAsis(p); return st === 'presente' ? chip(`Presente${p.via === 'pin' ? ' con PIN' : ''}${p.hora ? ' ' + p.hora : ''}`, 'conv', 'check') : st === 'justificado' ? chip('Justificado', 'warn', 'file-check') : st === 'ausente' ? chip('Ausente', 'proto', 'x') : chip('Sin registrar', 'neutral', 'clock'); },
   reuPuedeEscribir(r) { return r && r.estado === 'abierta' && !State.verAnio && (this.reuOrganiza(r) || this.reuParticipa(r)); },
   reuPuedeMarcar(r) { return r && !State.verAnio && !r.anioArchivo && (this.reuOrganiza(r) || this.reuParticipa(r) || hasAccess('agregar_entrevistas')); },
   reuPuedeIniciar() { return !this.isQuickOnly() && !State.verAnio && (hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('gestionar_usuarios')); },
@@ -139,7 +148,7 @@ Object.assign(app, {
     if (!n.course) { toast('Elija el curso', 'error'); return false; }
     const staff = this.staffList();
     const me = State.currentUser;
-    const participantes = staff.filter(u => n.sel[u.id] || sameId(u.id, me.id)).map(u => ({ id: 'u' + u.id, userId: String(u.id), nombre: u.name, cargo: this.cargoDe(u), presente: sameId(u.id, me.id), via: sameId(u.id, me.id) ? 'organiza' : '', hora: sameId(u.id, me.id) ? new Date().toTimeString().slice(0, 5) : '' }));
+    const participantes = staff.filter(u => n.sel[u.id] || sameId(u.id, me.id)).map(u => ({ id: 'u' + u.id, userId: String(u.id), nombre: u.name, cargo: this.cargoDe(u), presente: sameId(u.id, me.id), asistencia: sameId(u.id, me.id) ? 'presente' : '', via: sameId(u.id, me.id) ? 'organiza' : '', hora: sameId(u.id, me.id) ? new Date().toTimeString().slice(0, 5) : '' }));
     const prev = this.reunionesDe(n.course)[0];
     const doc = {
       id: 'reu_' + Date.now(), course: n.course, anio: String(this.anioActual ? this.anioActual() : today().slice(0, 4)), fecha: el('reu-n-fecha').value || today(), hora: el('reu-n-hora').value, lugar: el('reu-n-lugar').value.trim(),
@@ -156,6 +165,7 @@ Object.assign(app, {
   // ---------------- DETALLE DE LA REUNIÓN ----------------
   renderReunion(r) {
     const puede = this.reuPuedeEscribir(r), org = this.reuOrganiza(r) && r.estado === 'abierta' && !State.verAnio;
+    const dirige = this.reuDirige(r) && r.estado === 'abierta' && !State.verAnio;
     const prev = r.anterior ? this.reunion(r.anterior.reunionId) : null;
     el('reu-toolbar').innerHTML = `<button class="btn" onclick="app.closeReunionView()">${ico('arrow-left')}Todas las reuniones</button>
       <div class="row-actions">
@@ -174,20 +184,20 @@ Object.assign(app, {
         ${!puede ? `<p class="entry__note entry__note--info">${ico(r.estado === 'abierta' ? 'eye' : 'lock')}${r.estado === 'abierta' ? 'Usted puede leer esta reunión. Solo los participantes escriben; si participa, registre su asistencia con el PIN.' : 'La reunión está cerrada: queda como acta y solo se puede marcar el cumplimiento de sus acuerdos.'}</p>` : ''}
       </article>
 
-      ${r.estado === 'abierta' && org ? `<section class="panel reu-pin"><div><span class="cell__label">PIN de asistencia</span><span class="reu-pin__num num">${esc(r.pin || '------')}</span><span class="muted small">Los participantes entran a "Reuniones de nivel" → "Registrar mi asistencia con PIN". Deja de funcionar al cerrar la reunión.</span></div>
+      ${r.estado === 'abierta' && dirige ? `<section class="panel reu-pin"><div><span class="cell__label">PIN de asistencia (solo usted lo ve)</span><span class="reu-pin__num num">${esc(r.pin || '------')}</span><span class="muted small">Entréguelo en persona a cada invitado: lo escribe en el aviso que le aparece o en "Reuniones de nivel" → "Registrar mi asistencia con PIN". Deja de funcionar al cerrar la reunión.</span></div>
         <div class="row-actions"><button class="btn btn--sm" onclick="app.reuPinNuevo(${jsq(r.id)})">${ico('refresh-cw')}Generar otro PIN</button></div></section>` : ''}
 
-      <section class="panel"><div class="panel__head"><h2>${ico('users')}Participantes (${pres.length})</h2></div>
-        ${pres.length ? `<div class="table-wrap"><table class="table table--dense"><thead><tr><th>Nombre</th><th>Cargo</th><th>Asistencia</th>${org ? '<th class="t-actions"></th>' : ''}</tr></thead><tbody>
-        ${(r.participantes || []).map((p, i) => !p.presente ? '' : `<tr><td><span class="cell-title">${esc(p.nombre)}</span>${p.userId ? '' : '<span class="cell-sub">Externo(a)</span>'}</td><td>${esc(p.cargo || '')}</td>
-          <td>${org ? `<label class="check"><input type="checkbox" ${p.presente ? 'checked' : ''} onchange="app.reuPresente(${jsq(r.id)}, ${i}, this.checked)"><span>${p.presente ? `Presente${p.via === 'pin' ? ` con PIN (${esc(p.hora)})` : p.hora ? ` (${esc(p.hora)})` : ''}` : 'Ausente'}</span></label>` : (p.presente ? chip(`Presente${p.via === 'pin' ? ' con PIN' : ''}${p.hora ? ' ' + p.hora : ''}`, 'conv', 'check') : chip('Ausente', 'neutral'))}</td>
-          ${org ? `<td class="t-actions">${sameId(p.userId, r.creadoPorId) ? '' : `<button class="icon-btn icon-btn--danger" title="Quitar" aria-label="Quitar a ${esc(p.nombre)}" onclick="app.reuQuitar(${jsq(r.id)}, ${i})">${ico('x')}</button>`}</td>` : ''}</tr>`).join('')}
-        </tbody></table></div>` : '<p class="muted small">Aún nadie registra asistencia.</p>'}
-        ${(r.participantes || []).some(p => !p.presente) ? `<div class="reu-invitados"><span class="small"><strong>Invitados que aún no registran asistencia</strong> (no aparecen en el acta):</span>
-          ${(r.participantes || []).map((p, i) => p.presente ? '' : `<span class="reu-inv">${esc(p.nombre)}${p.cargo ? ` <span class="muted">· ${esc(p.cargo)}</span>` : ''}${org ? `<button type="button" class="link-btn" onclick="app.reuPresente(${jsq(r.id)}, ${i}, true)">marcar presente</button><button type="button" class="icon-btn icon-btn--sm" title="Quitar invitación" aria-label="Quitar a ${esc(p.nombre)}" onclick="app.reuQuitar(${jsq(r.id)}, ${i})">${ico('x')}</button>` : ''}</span>`).join('')}</div>` : ''}
-        ${org ? `<div class="reu-add">
-          <select id="reu-add-staff" class="input" aria-label="Agregar funcionario"><option value="">Agregar funcionario...</option>${options(this.staffList().filter(u => !(r.participantes || []).some(p => sameId(p.userId, u.id))).map(u => [u.id, `${u.name} (${this.cargoDe(u)})`]))}</select>
-          <button class="btn btn--sm" onclick="app.reuAgregar(${jsq(r.id)})">${ico('user-plus')}Agregar</button>
+      <section class="panel"><div class="panel__head"><h2>${ico('users')}Participantes (${pres.length} presentes)</h2>${dirige ? '<span class="muted small">Usted dirige: registra la asistencia de los invitados</span>' : '<span class="muted small">La asistencia la registra quien dirige; cada invitado se registra con su PIN</span>'}</div>
+        <div class="reu-asis">${(r.participantes || []).map((p, i) => { const st = this.reuEstadoAsis(p); return `<div class="reu-asis__row" data-st="${st || 'pendiente'}">
+          <span class="reu-asis__who"><strong>${esc(p.nombre)}</strong><span class="muted small">${esc(p.cargo || '')}${p.userId ? '' : ' · externo(a)'}${sameId(p.userId, r.creadoPorId) ? ' · dirige' : ''}</span></span>
+          ${dirige && !sameId(p.userId, r.creadoPorId) ? `<span class="segs reu-asis__segs" role="group" aria-label="Asistencia de ${esc(p.nombre)}">${[['presente', 'Presente', 'check'], ['justificado', 'Justificado', 'file-check'], ['ausente', 'Ausente', 'x']].map(([k, l, ic]) => `<button type="button" class="seg" aria-pressed="${st === k}" onclick="app.reuAsistencia(${jsq(r.id)}, ${i}, '${k}')">${ico(ic)}${l}</button>`).join('')}</span>
+            <button class="icon-btn icon-btn--danger" title="Quitar invitación" aria-label="Quitar a ${esc(p.nombre)}" onclick="app.reuQuitar(${jsq(r.id)}, ${i})">${ico('x')}</button>`
+            : `<span class="reu-asis__st">${this.reuAsisChip(p)}</span>`}
+        </div>`; }).join('') || '<p class="muted small">Sin participantes.</p>'}</div>
+        <p class="muted small">En el acta figuran los presentes; los justificados se indican aparte. Los invitados sin asistencia registrada no aparecen.</p>
+        ${dirige ? `<div class="reu-add">
+          <select id="reu-add-staff" class="input" aria-label="Agregar funcionario"><option value="">Invitar funcionario...</option>${options(this.staffList().filter(u => !(r.participantes || []).some(p => sameId(p.userId, u.id))).map(u => [u.id, `${u.name} (${this.cargoDe(u)})`]))}</select>
+          <button class="btn btn--sm" onclick="app.reuAgregar(${jsq(r.id)})">${ico('user-plus')}Invitar</button>
           <input id="reu-ext-nombre" class="input" placeholder="Persona externa: nombre"><input id="reu-ext-cargo" class="input" placeholder="Cargo o institución">
           <button class="btn btn--sm" onclick="app.reuAgregarExterno(${jsq(r.id)})">${ico('user-plus')}Agregar externo</button>
         </div>` : ''}
@@ -331,9 +341,13 @@ Object.assign(app, {
     return this.reuPatch(id, { ['sec_' + k]: { texto, por: State.currentUser.name, fecha: new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) } }, 'Guardado');
   },
   reuProxima(id, campo, v) { const r = this.reunion(id); this.reuPatch(id, { proxima: { ...(r.proxima || {}), [campo]: v } }, 'Próxima reunión guardada'); },
-  async reuPresente(id, i, v) {
+  /** Solo quien dirige: presente, justificado o ausente (un segundo clic quita la marca). */
+  async reuAsistencia(id, i, estado) {
     const r = this.reunion(id);
-    const participantes = (r.participantes || []).map((p, k) => k === i ? { ...p, presente: v, via: v ? (p.via === 'pin' ? 'pin' : 'manual') : '', hora: v ? (p.hora || new Date().toTimeString().slice(0, 5)) : '' } : p);
+    const p0 = r.participantes[i];
+    const nuevo = this.reuEstadoAsis(p0) === estado ? '' : estado;
+    const hora = new Date().toTimeString().slice(0, 5);
+    const participantes = (r.participantes || []).map((p, k) => k !== i ? p : { ...p, asistencia: nuevo, presente: nuevo === 'presente', via: nuevo === 'presente' ? (p.via === 'pin' ? 'pin' : 'manual') : '', hora: nuevo === 'presente' ? (p.hora || hora) : '', marcadoPor: State.currentUser.name });
     if (await this.reuPatch(id, { participantes })) this.render();
   },
   async reuQuitar(id, i) { const r = this.reunion(id); if (await this.reuPatch(id, { participantes: r.participantes.filter((_, k) => k !== i) })) this.render(); },
@@ -342,13 +356,13 @@ Object.assign(app, {
     const u = this.staffList().find(x => sameId(x.id, uid));
     if (!u) return toast('Elija un funcionario', 'error');
     const r = this.reunion(id);
-    if (await this.reuPatch(id, { participantes: [...(r.participantes || []), { id: 'u' + u.id, userId: String(u.id), nombre: u.name, cargo: this.cargoDe(u), presente: false, via: '', hora: '' }] }, `${u.name} fue invitado(a)`)) this.render();
+    if (await this.reuPatch(id, { participantes: [...(r.participantes || []), { id: 'u' + u.id, userId: String(u.id), nombre: u.name, cargo: this.cargoDe(u), presente: false, asistencia: '', via: '', hora: '' }] }, `${u.name} fue invitado(a)`)) this.render();
   },
   async reuAgregarExterno(id) {
     const nombre = el('reu-ext-nombre').value.trim(), cargo = el('reu-ext-cargo').value.trim();
     if (!nombre) return toast('Escriba el nombre', 'error');
     const r = this.reunion(id);
-    if (await this.reuPatch(id, { participantes: [...(r.participantes || []), { id: 'e' + Date.now(), userId: '', nombre, cargo, presente: true, via: 'manual', hora: new Date().toTimeString().slice(0, 5) }] })) this.render();
+    if (await this.reuPatch(id, { participantes: [...(r.participantes || []), { id: 'e' + Date.now(), userId: '', nombre, cargo, presente: true, asistencia: 'presente', via: 'manual', hora: new Date().toTimeString().slice(0, 5) }] })) this.render();
   },
   async reuPinNuevo(id) { if (await this.reuPatch(id, { pin: this.nuevoPin(), pinActivo: true }, 'Nuevo PIN generado')) this.render(); },
   async reuAgregarAcuerdo(id) {
@@ -420,13 +434,66 @@ Object.assign(app, {
   // ---------------- INTRODUCCIÓN Y CONCLUSIÓN CON IA (editables) ----------------
   reuIASeccionHtml(r, campo, titulo, desc, icon, puede) {
     const s = r['sec_' + campo] || {};
-    return `<section class="panel reu-sec reu-ia" data-campo="${campo}">
+    const legado = s.texto && !s.estructura; // texto antiguo sin tarjetas
+    const E = s.estructura || {};
+    const bloques = REU_IA_BLOQUES[campo];
+    const editable = puede && !legado;
+    return `<section class="panel reu-sec reu-ia" data-campo="${campo}" data-reu="${esc(String(r.id))}">
       <div class="panel__head"><h2>${ico(icon)}${esc(titulo)}</h2>
         ${puede ? `<button type="button" class="btn btn--sm" onclick="app.reuIA(${jsq(r.id)}, '${campo}')">${ico('sparkles')}${s.texto ? 'Proponer de nuevo con IA' : 'Generar con IA'}</button>` : ''}</div>
-      <p class="muted small">${esc(desc)} La IA solo recibe datos del curso sin nombres de estudiantes; el texto se puede editar y queda en el acta.</p>
-      <textarea class="input" id="reu-sec-${campo}" rows="6" ${puede ? '' : 'readonly'} placeholder="${puede ? 'Escriba o genere el texto con IA...' : 'Sin registro.'}" onchange="app.reuGuardarSeccion(${jsq(r.id)}, '${campo}', this.value)">${esc(s.texto || '')}</textarea>
+      <p class="muted small">${esc(desc)} La IA solo recibe datos del curso sin nombres de estudiantes. ${editable ? 'Pinche cualquier texto para editarlo; en las listas, Enter agrega un punto nuevo.' : ''}</p>
+      ${legado ? `<textarea class="input" id="reu-sec-${campo}" rows="6" ${puede ? '' : 'readonly'} onchange="app.reuGuardarSeccion(${jsq(r.id)}, '${campo}', this.value)">${esc(s.texto)}</textarea>${puede ? '<p class="muted small">Este texto es de una versión anterior: use "Proponer de nuevo con IA" para verlo en tarjetas.</p>' : ''}`
+        : `<div class="reu-ia__grid">${bloques.map(([k, t, ic, tone, tipo]) => {
+          const v = E[k];
+          const vacio = tipo === 'lista' ? !(v || []).length : !String(v || '').trim();
+          if (vacio && !editable) return '';
+          return `<div class="reu-ia__card" data-tone="${tone}" data-bloque="${k}" data-tipo="${tipo}">
+            <h4>${ico(ic)}${esc(t)}</h4>
+            ${tipo === 'lista'
+              ? `<ul class="reu-ia__list">${(v && v.length ? v : (editable ? [''] : [])).map(x => `<li ${editable ? 'contenteditable="true"' : ''} data-ph="Escriba un punto..." onkeydown="app.reuIAKey(event)" onblur="app.reuIAGuardar(this)">${esc(x)}</li>`).join('')}</ul>${editable ? `<button type="button" class="link-btn reu-ia__add" onclick="app.reuIAAgregar(this)">${ico('plus')}Agregar punto</button>` : ''}`
+              : `<p class="reu-ia__txt" ${editable ? 'contenteditable="true"' : ''} data-ph="Escriba aquí..." onblur="app.reuIAGuardar(this)">${esc(v || '')}</p>`}
+          </div>`; }).join('')}</div>`}
       ${s.por ? `<p class="muted small">Última edición: ${esc(s.por)}, ${esc(s.fecha || '')}${s.ia ? ' · propuesta inicial de la IA' : ''}</p>` : ''}
     </section>`;
+  },
+  /** Texto plano de las tarjetas (para la IA de la conclusión y respaldo). */
+  reuIATexto(campo, E) {
+    return REU_IA_BLOQUES[campo].map(([k, t, , , tipo]) => { const v = E[k]; if (tipo === 'lista') return (v || []).length ? `${t}:\n${v.map(x => `- ${x}`).join('\n')}` : ''; return v ? `${t}: ${v}` : ''; }).filter(Boolean).join('\n\n');
+  },
+  reuIAKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const li = document.createElement('li');
+      li.contentEditable = 'true'; li.dataset.ph = 'Escriba un punto...';
+      li.setAttribute('onkeydown', 'app.reuIAKey(event)'); li.setAttribute('onblur', 'app.reuIAGuardar(this)');
+      e.target.after(li); li.focus();
+    } else if (e.key === 'Backspace' && !e.target.textContent && e.target.parentElement.children.length > 1) {
+      e.preventDefault(); const prev = e.target.previousElementSibling || e.target.nextElementSibling; e.target.remove(); prev?.focus(); this.reuIAGuardar(prev);
+    }
+  },
+  reuIAAgregar(btn) {
+    const ul = btn.previousElementSibling;
+    const li = document.createElement('li');
+    li.contentEditable = 'true'; li.dataset.ph = 'Escriba un punto...';
+    li.setAttribute('onkeydown', 'app.reuIAKey(event)'); li.setAttribute('onblur', 'app.reuIAGuardar(this)');
+    ul.appendChild(li); li.focus();
+  },
+  /** Guarda todas las tarjetas de la sección (al salir de un texto editado). */
+  reuIAGuardar(nodo) {
+    const sec = nodo?.closest?.('.reu-ia');
+    if (!sec) return;
+    clearTimeout(this._reuIAT);
+    this._reuIAT = setTimeout(() => {
+      const campo = sec.dataset.campo, id = sec.dataset.reu;
+      const r = this.reunion(id);
+      const E = {};
+      sec.querySelectorAll('[data-bloque]').forEach(c => {
+        E[c.dataset.bloque] = c.dataset.tipo === 'lista' ? [...c.querySelectorAll('li')].map(li => li.textContent.trim()).filter(Boolean) : (c.querySelector('.reu-ia__txt')?.textContent || '').trim();
+      });
+      const prev = r['sec_' + campo] || {};
+      if (JSON.stringify(E) === JSON.stringify(prev.estructura || {})) return;
+      this.reuPatch(id, { ['sec_' + campo]: { estructura: E, texto: this.reuIATexto(campo, E), por: State.currentUser.name, fecha: new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }), ia: !!prev.ia } }, 'Guardado');
+    }, 250);
   },
   /** Datos del curso para la IA: indicadores y cantidades, sin nombres. */
   reuDatosIA(r) {
@@ -451,21 +518,23 @@ Object.assign(app, {
     const ok = await this.iaConsent(`Reunión de nivel de ${esc(r.course)}: indicadores del curso (matrícula, asistencia, convivencia, notas, DIA), cantidades de casos y, para la conclusión, lo escrito en la reunión y sus acuerdos. Los nombres de estudiantes se reemplazan antes de enviar.`);
     if (!ok) return;
     const datos = this.reuDatosIA(r);
-    const pide = campo === 'intro'
-      ? 'Redacta la INTRODUCCIÓN de la reunión: un análisis breve del curso que oriente la conversación. Incluye (1) panorama general con las cifras clave, (2) fortalezas, (3) focos de preocupación con su evidencia (asistencia, convivencia, rendimiento, DIA), (4) estado de los acuerdos de la reunión anterior y (5) 3 preguntas para guiar la reunión. Entre 10 y 16 líneas.'
-      : 'Redacta la CONCLUSIÓN de la reunión: síntesis de lo tratado en cada punto, decisiones y acuerdos tomados (con su responsable y plazo si existen), estado de los acuerdos anteriores y focos a monitorear en la próxima reunión. Entre 8 y 14 líneas.';
+    const formato = campo === 'intro'
+      ? '{"panorama": "2 a 3 oraciones con las cifras clave del curso", "fortalezas": ["punto breve con su cifra", "..."], "focos": ["foco de preocupación con su evidencia (asistencia, convivencia, rendimiento o DIA)", "..."], "anteriores": "estado de los acuerdos de la reunión anterior en 1 o 2 oraciones (o que no hay acuerdos previos)", "preguntas": ["pregunta para guiar la reunión", "pregunta", "pregunta"]}'
+      : '{"sintesis": "síntesis de lo tratado en 2 a 4 oraciones", "decisiones": ["decisión o acuerdo con responsable y plazo si existen", "..."], "seguimiento": "estado de los acuerdos anteriores en 1 o 2 oraciones", "focos": ["foco a monitorear en la próxima reunión", "..."]}';
     AI.run(campo === 'intro' ? 'Preparando la introducción' : 'Preparando la conclusión', 'La IA analiza los datos del curso...', async () => {
-      const res = await API.call('ai', { motivo: `Reunión de nivel ${r.course} (${campo === 'intro' ? 'introducción' : 'conclusión'})`, json: true, prompt: `Eres parte del equipo de gestión de un colegio público en Chile (profesor jefe, convivencia escolar, inspectoría, orientación y coordinación de ciclo). ${pide}
-Reglas: usa solo los datos entregados y cita las cifras; no inventes casos ni nombres; "[estudiante]" reemplaza nombres y no debes deducirlos; lenguaje profesional, claro y preventivo; usa viñetas cortas cuando ayude; no hagas diagnósticos clínicos.
+      const res = await API.call('ai', { motivo: `Reunión de nivel ${r.course} (${campo === 'intro' ? 'introducción' : 'conclusión'})`, json: true, prompt: `Eres parte del equipo de gestión de un colegio público en Chile (profesor jefe, convivencia escolar, inspectoría, orientación y coordinación de ciclo). Redacta la ${campo === 'intro' ? 'INTRODUCCIÓN de la reunión de nivel: un análisis breve del curso que oriente la conversación' : 'CONCLUSIÓN de la reunión de nivel'}.
+Reglas: usa solo los datos entregados y cita las cifras; no inventes casos ni nombres; "[estudiante]" reemplaza nombres y no debes deducirlos; lenguaje profesional, claro y preventivo; cada punto de una lista es una frase corta (máximo 25 palabras), entre 2 y 5 puntos por lista; no hagas diagnósticos clínicos.
 
 DATOS (JSON): ${JSON.stringify(datos).slice(0, 12000)}
 
-Devuelve SOLO un JSON: {"texto": "..."}` });
-      const texto = String(res.json?.texto || '').trim();
-      if (!texto) throw new Error('La IA no devolvió texto. Intente de nuevo.');
-      await this.reuPatch(id, { ['sec_' + campo]: { texto, por: State.currentUser.name, fecha: new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }), ia: true } });
+Devuelve SOLO un JSON con esta estructura: ${formato}` });
+      const j = res.json || {};
+      const E = {};
+      REU_IA_BLOQUES[campo].forEach(([k, , , , tipo]) => { E[k] = tipo === 'lista' ? (Array.isArray(j[k]) ? j[k] : String(j[k] || '').split(/\n+/)).map(x => String(x).replace(/^\s*(?:[-•*]|\d{1,2}[.)])\s+/, '').trim()).filter(Boolean) : String(j[k] || '').trim(); });
+      if (!Object.values(E).some(v => (Array.isArray(v) ? v.length : v))) throw new Error('La IA no devolvió contenido. Intente de nuevo.');
+      await this.reuPatch(id, { ['sec_' + campo]: { estructura: E, texto: this.reuIATexto(campo, E), por: State.currentUser.name, fecha: new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }), ia: true } });
       this.render();
-      toast('Propuesta lista: revísela y edítela si es necesario');
+      toast('Propuesta lista: pinche cualquier texto para editarlo');
     });
   },
 
@@ -532,11 +601,20 @@ app.reuDatosDocHtml = function (O) {
     : `<p class="doc-muted"><strong>${esc(g.t)}:</strong> ${esc(g.vacio || 'Sin datos.')}</p>`).join('');
   return `<div class="doc-avoid"><p class="doc-muted"><em>Datos de la plataforma${O.fecha ? ` al ${esc(O.fecha)}` : ''}</em></p>${kpis}${notas}</div>${grupos}`;
 };
+app.reuIADocHtml = function (campo, s) {
+  if (!s?.estructura) return `<div class="doc-box doc-pre">${esc(s?.texto || '')}</div>`;
+  return REU_IA_BLOQUES[campo].map(([k, t, , , tipo]) => {
+    const v = s.estructura[k];
+    if (tipo === 'lista') return (v || []).length ? `<p><strong>${esc(t)}</strong></p><ul>${v.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+    return v ? `<p><strong>${esc(t)}:</strong> ${esc(v)}</p>` : '';
+  }).join('');
+};
 app.REPORTS.reunion_nivel = function () {
   const r = app.reunion(State.export.tempReunionId) || {};
   const prev = r.anterior ? app.reunion(r.anterior.reunionId) : null;
   const revision = r.revisionAnterior && r.revisionAnterior.length ? r.revisionAnterior : (prev ? (prev.agreements || []).filter(a => a.text).map(a => ({ text: a.text, responsable: a.responsable || '', plazo: app.fmtPlazo(a), estado: app.agreementStatusText(a) })) : []);
   const presentes = (r.participantes || []).filter(p => p.presente);
+  const justificados = (r.participantes || []).filter(p => app.reuEstadoAsis(p) === 'justificado');
   const asis = p => p.via === 'pin' ? `Con PIN${p.hora ? ` (${p.hora})` : ''}` : p.via === 'organiza' ? `Organiza${p.hora ? ` (${p.hora})` : ''}` : `Presente${p.hora ? ` (${p.hora})` : ''}`;
   const caja = (t, vacio = 'Sin registro.') => `<div class="doc-box doc-pre">${esc(t || vacio)}</div>`;
   let n = 0;
@@ -548,13 +626,13 @@ app.REPORTS.reunion_nivel = function () {
   return {
     filename: `Acta_reunion_nivel_${String(r.course || '').replace(/\s+/g, '_')}_${r.fecha || ''}.pdf`, title: 'ACTA DE REUNIÓN DE NIVEL',
     body: `${docKv([[['Curso', esc(r.course || '')], ['Fecha y hora', `${fmtDate(r.fecha)}${r.hora ? ` · ${esc(r.hora)}` : ''}`]], [['Lugar', esc(r.lugar || '-')], ['Profesor(a) jefe', esc(app.profJefeOf(r.course) || '-')]], [['Organiza', esc(r.creadoPor || '')], ['Estado', r.estado === 'cerrada' ? `Cerrada el ${fmtDate(r.fechaCierre)} a las ${esc(r.horaCierre || '')}` : 'En curso (acta preliminar)']], [['PIN de asistencia', esc(r.pin || 'No disponible')], ['Asistentes', String(presentes.length)]]])}
-      <div class="doc-avoid">${titulo('Participantes')}${presentes.length ? docTable(['N°', 'Nombre', 'Cargo', 'Asistencia'], presentes.map((p, i) => [i + 1, esc(p.nombre), esc(p.cargo || ''), esc(asis(p))]), '') : '<p class="doc-muted">Sin asistentes registrados.</p>'}</div>
-      ${r.sec_intro?.texto ? `<div class="doc-avoid">${titulo('Introducción: análisis del curso')}${caja(r.sec_intro.texto)}</div>` : ''}
+      <div class="doc-avoid">${titulo('Participantes')}${presentes.length ? docTable(['N°', 'Nombre', 'Cargo', 'Asistencia'], presentes.map((p, i) => [i + 1, esc(p.nombre), esc(p.cargo || ''), esc(asis(p))]), '') : '<p class="doc-muted">Sin asistentes registrados.</p>'}${justificados.length ? `<p class="doc-muted"><strong>Justificaron su inasistencia:</strong> ${justificados.map(p => esc(`${p.nombre}${p.cargo ? ` (${p.cargo})` : ''}`)).join(', ')}.</p>` : ''}</div>
+      ${r.sec_intro?.texto ? `<div class="doc-avoid">${titulo('Introducción: análisis del curso')}${app.reuIADocHtml('intro', r.sec_intro)}</div>` : ''}
       ${revision.length ? `<div class="doc-avoid">${titulo(`Revisión de acuerdos de la reunión anterior${prev ? ` (${fmtDate(prev.fecha)})` : ''}`)}${docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], revision.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(a.plazo || '-'), esc(a.estado)]), '')}</div>` : ''}
       ${REU_SECCIONES.map(seccion).join('')}
       <div class="doc-avoid">${titulo('Acuerdos')}${(r.agreements || []).filter(a => a.text).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], r.agreements.filter(a => a.text).map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>
       ${r.proxima?.fecha || r.proxima?.temas ? `<div class="doc-avoid">${titulo('Próxima reunión')}${docKv([[['Fecha', r.proxima.fecha ? fmtDate(r.proxima.fecha) : 'Por definir'], ['Temas a revisar', esc(r.proxima.temas || '-')]]])}</div>` : ''}
-      ${r.sec_conclusion?.texto ? `<div class="doc-avoid">${titulo('Conclusión')}${caja(r.sec_conclusion.texto)}</div>` : ''}
+      ${r.sec_conclusion?.texto ? `<div class="doc-avoid">${titulo('Conclusión')}${app.reuIADocHtml('conclusion', r.sec_conclusion)}</div>` : ''}
       <p class="doc-muted">Acta generada desde la plataforma. Solo figuran los participantes que registraron asistencia; la asistencia con PIN quedó registrada con su hora. Información confidencial (Ley N° 21.719).</p>`
   };
 };
@@ -579,7 +657,9 @@ Object.assign(app, {
   },
   renderReuAviso() {
     let b = el('reu-aviso');
-    const lista = State.reuActivas || [];
+    const viendo = State.currentView === 'reuniones' && State.reunionId;
+    // La reunión que ya está abierta en pantalla no necesita aviso ni botón
+    const lista = (State.reuActivas || []).filter(x => !(x.presente && viendo && String(x.id) === String(State.reunionId)));
     if (!lista.length || !State.currentUser) { if (b) b.hidden = true; return; }
     if (!b) { b = document.createElement('div'); b.id = 'reu-aviso'; b.className = 'reu-aviso'; b.setAttribute('role', 'status'); document.body.appendChild(b); }
     b.hidden = false;
@@ -616,6 +696,8 @@ Object.assign(app, {
 
 (() => {
   // Primera revisión al ingresar y luego cada 45 segundos
+  const rnd = app.render;
+  app.render = function () { const out = rnd.apply(this, arguments); this.renderReuAviso && this.renderReuAviso(); return out; };
   const start = app.startSession;
   app.startSession = async function (r) { const out = await start.call(this, r); setTimeout(() => this.reuCheckActivas(), 1500); return out; };
   setInterval(() => app.reuCheckActivas(), 45000);

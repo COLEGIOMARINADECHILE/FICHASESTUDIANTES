@@ -1451,3 +1451,88 @@ body.is-archivo .main, body.is-archivo main { outline: 3px solid #c98a12; outlin
 .reu-incl { margin: 0.2rem 0 0.4rem; }
 .reu-ia { border-left: 5px solid #7c5cc4; }
 .reu-sec .field__label { display: block; margin-top: 0.6rem; }
+/* Miniatura de foto en el directorio */
+.st-row { display: flex; align-items: flex-start; gap: 0.6rem; }
+.st-row__txt { display: grid; min-width: 0; }
+.st-mini { flex: none; width: 2.6rem; height: 2.6rem; padding: 0; border-radius: 50%; overflow: hidden; border: 2px solid var(--color-rule); background: var(--color-paper-2, #eee); display: grid; place-items: center; cursor: pointer; }
+.st-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.st-mini span { font-weight: 700; color: var(--color-muted, #666); }
+.st-mini:hover { border-color: var(--color-accent); }
+
+/* Aplicación instalable */
+.install-btn .ico { width: 1rem; height: 1rem; }
+.login-install { display: flex; justify-content: center; margin-top: 0.8rem; }
+.install-steps { display: grid; gap: 0.6rem; padding-left: 1.2rem; margin: 0; }
+.install-steps svg { width: 1rem; height: 1rem; vertical-align: -0.15em; }
+
+/* Celular (iPhone y Android): zonas seguras, textos y ventanas */
+@supports (padding: max(0px)) {
+  .side__top { padding-top: max(var(--space-sm), env(safe-area-inset-top)); padding-left: max(var(--space-md), env(safe-area-inset-left)); padding-right: max(var(--space-md), env(safe-area-inset-right)); }
+  #toast-container { bottom: max(var(--space-md), env(safe-area-inset-bottom)); }
+  .reu-aviso { bottom: calc(1rem + env(safe-area-inset-bottom)); }
+  .modal { padding-bottom: max(var(--space-md), env(safe-area-inset-bottom)); }
+}
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overscroll-behavior-y: none; }
+.is-app body { -webkit-user-select: none; user-select: none; }
+.is-app input, .is-app textarea, .is-app [contenteditable], .is-app p, .is-app td, .is-app li { -webkit-user-select: text; user-select: text; }
+@media (max-width: 760px) {
+  /* iPhone amplía la pantalla si el texto de un campo es menor a 16 px */
+  input, select, textarea, .input { font-size: 16px; }
+  .main { padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right)); padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+  .toolbar, .row-actions { flex-wrap: wrap; }
+  .page__head { flex-wrap: wrap; gap: 0.6rem; }
+  .page__actions { flex-wrap: wrap; }
+  .modal { padding: 0; align-items: end; }
+  .modal__panel { max-width: 100% !important; max-height: 94dvh; border-radius: 18px 18px 0 0; }
+  .modal__body { padding: var(--space-md); }
+  .modal__foot { position: sticky; bottom: 0; flex-wrap: wrap; }
+  .modal__foot .btn { flex: 1 1 auto; justify-content: center; }
+  #notice-layer { top: max(0.5rem, env(safe-area-inset-top)); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .entry__head { flex-wrap: wrap; }
+  .st-photo { width: 3.6rem; height: 3.6rem; }
+  .reu-pin__num { font-size: 1.9rem; letter-spacing: 0.25em; }
+  .reu-aviso__item { border-radius: 16px; flex-wrap: wrap; }
+  .reu-aviso__item .btn { width: 100%; justify-content: center; }
+  .dash-cycles .chart { height: 300px; }
+  .table td, .table th { padding-left: 0.5rem; padding-right: 0.5rem; }
+  .st-mini { width: 2.2rem; height: 2.2rem; }
+}
+@media (max-width: 420px) {
+  .stats { grid-template-columns: 1fr 1fr !important; }
+  .grid-4 { grid-template-columns: 1fr; }
+  .btn { min-height: 2.5rem; }
+}
+/* Reunión: introducción y conclusión en tarjetas editables */
+.reu-ia__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.7rem; margin-top: 0.4rem; }
+.reu-ia__card { border-radius: 14px; padding: 0.8rem 0.9rem; background: var(--color-paper); border: 1px solid var(--color-rule); border-top: 5px solid #8a8f98; display: grid; gap: 0.4rem; align-content: start; }
+.reu-ia__card[data-bloque="panorama"], .reu-ia__card[data-bloque="sintesis"] { grid-column: 1 / -1; }
+.reu-ia__card[data-tone="obs"] { border-top-color: #2f6fb3; background: #f3f7fc; }
+.reu-ia__card[data-tone="conv"] { border-top-color: #1f7a4d; background: #f1f8f4; }
+.reu-ia__card[data-tone="proto"] { border-top-color: #b42318; background: #fdf3f2; }
+.reu-ia__card[data-tone="warn"] { border-top-color: #d18a14; background: #fdf8ec; }
+.reu-ia__card[data-tone="pie"] { border-top-color: #7c5cc4; background: #f6f2fc; }
+.reu-ia__card h4 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.92rem; }
+.reu-ia__card h4 svg { width: 1.05rem; height: 1.05rem; }
+.reu-ia__txt { margin: 0; line-height: 1.55; }
+.reu-ia__list { margin: 0; padding-left: 1.15rem; display: grid; gap: 0.3rem; line-height: 1.45; }
+.reu-ia__list li::marker { color: currentColor; }
+.reu-ia [contenteditable="true"] { border-radius: 6px; padding: 0.1rem 0.3rem; margin: 0 -0.3rem; outline: none; cursor: text; transition: background-color 0.15s; }
+.reu-ia [contenteditable="true"]:hover { background: rgb(255 255 255 / 0.7); box-shadow: inset 0 0 0 1px var(--color-rule); }
+.reu-ia [contenteditable="true"]:focus { background: #fff; box-shadow: inset 0 0 0 2px var(--color-accent); }
+.reu-ia [contenteditable="true"]:empty::before { content: attr(data-ph); color: var(--color-muted, #999); }
+.reu-ia__add { justify-self: start; display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.82rem; }
+.reu-ia__add svg { width: 0.9rem; height: 0.9rem; }
+
+/* Reunión: asistencia (solo quien dirige marca) */
+.reu-asis { display: grid; gap: 0.35rem; }
+.reu-asis__row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.45rem 0.6rem; border-radius: 10px; border: 1px solid var(--color-rule); border-left: 5px solid #8a8f98; background: var(--color-paper); }
+.reu-asis__row[data-st="presente"] { border-left-color: #1f7a4d; }
+.reu-asis__row[data-st="justificado"] { border-left-color: #d18a14; }
+.reu-asis__row[data-st="ausente"] { border-left-color: #b42318; }
+.reu-asis__who { flex: 1 1 14rem; display: grid; }
+.reu-asis__segs .seg { display: inline-flex; align-items: center; gap: 0.25rem; }
+.reu-asis__segs .seg svg { width: 0.85rem; height: 0.85rem; }
+@media (max-width: 760px) { .reu-asis__segs { width: 100%; } .reu-asis__segs .seg { flex: 1; justify-content: center; } }

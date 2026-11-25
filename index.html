@@ -2,45 +2,56 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#16285a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Trayectoria">
+  <meta name="application-name" content="Trayectoria">
+  <meta name="format-detection" content="telephone=no">
   <title>Trayectoria Escolar</title>
   <meta name="description" content="Seguimiento de estudiantes, convivencia e inclusión del Colegio Marina de Chile.">
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="css/app.css?v=2026-12-15a">
+  <link rel="stylesheet" href="css/app.css?v=2026-12-16b">
 
   <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=2026-12-15a"></script>
-  <script defer src="js/core.js?v=2026-12-15a"></script>
-  <script defer src="js/app.js?v=2026-12-15a"></script>
-  <script defer src="js/plans.js?v=2026-12-15a"></script>
-  <script defer src="js/export.js?v=2026-12-15a"></script>
-  <script defer src="js/imports.js?v=2026-12-15a"></script>
-  <script defer src="js/people.js?v=2026-12-15a"></script>
-  <script defer src="js/audit.js?v=2026-12-15a"></script>
-  <script defer src="js/pie.js?v=2026-12-15a"></script>
-  <script defer src="js/docs.js?v=2026-12-15a"></script>
-  <script defer src="js/actas.js?v=2026-12-15a"></script>
-  <script defer src="js/riesgos.js?v=2026-12-15a"></script>
-  <script defer src="js/entrevista.js?v=2026-12-15a"></script>
-  <script defer src="js/acuerdos.js?v=2026-12-15a"></script>
-  <script defer src="js/misacciones.js?v=2026-12-15a"></script>
-  <script defer src="js/resaltado.js?v=2026-12-15a"></script>
-  <script defer src="js/salud.js?v=2026-12-15a"></script>
-  <script defer src="js/dia.js?v=2026-12-15a"></script>
-  <script defer src="js/resumenes.js?v=2026-12-15a"></script>
-  <script defer src="js/sige.js?v=2026-12-15a"></script>
-  <script defer src="js/traspaso.js?v=2026-12-15a"></script>
-  <script defer src="js/condiciones.js?v=2026-12-15a"></script>
-  <script defer src="js/anio.js?v=2026-12-15a"></script>
-  <script defer src="js/reuniones.js?v=2026-12-15a"></script>
-  <script defer src="js/mejoras.js?v=2026-12-15a"></script>
+  <script defer src="js/config.js?v=2026-12-16b"></script>
+  <script defer src="js/core.js?v=2026-12-16b"></script>
+  <script defer src="js/app.js?v=2026-12-16b"></script>
+  <script defer src="js/plans.js?v=2026-12-16b"></script>
+  <script defer src="js/export.js?v=2026-12-16b"></script>
+  <script defer src="js/imports.js?v=2026-12-16b"></script>
+  <script defer src="js/people.js?v=2026-12-16b"></script>
+  <script defer src="js/audit.js?v=2026-12-16b"></script>
+  <script defer src="js/pie.js?v=2026-12-16b"></script>
+  <script defer src="js/docs.js?v=2026-12-16b"></script>
+  <script defer src="js/actas.js?v=2026-12-16b"></script>
+  <script defer src="js/riesgos.js?v=2026-12-16b"></script>
+  <script defer src="js/entrevista.js?v=2026-12-16b"></script>
+  <script defer src="js/acuerdos.js?v=2026-12-16b"></script>
+  <script defer src="js/misacciones.js?v=2026-12-16b"></script>
+  <script defer src="js/resaltado.js?v=2026-12-16b"></script>
+  <script defer src="js/salud.js?v=2026-12-16b"></script>
+  <script defer src="js/dia.js?v=2026-12-16b"></script>
+  <script defer src="js/resumenes.js?v=2026-12-16b"></script>
+  <script defer src="js/sige.js?v=2026-12-16b"></script>
+  <script defer src="js/traspaso.js?v=2026-12-16b"></script>
+  <script defer src="js/condiciones.js?v=2026-12-16b"></script>
+  <script defer src="js/anio.js?v=2026-12-16b"></script>
+  <script defer src="js/reuniones.js?v=2026-12-16b"></script>
+  <script defer src="js/mejoras.js?v=2026-12-16b"></script>
+  <script defer src="js/pwa.js?v=2026-12-16b"></script>
   <script async src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
@@ -354,5 +365,11 @@
   <div id="toast-container" aria-live="polite"></div>
   <input type="file" id="grades-file-input" accept="application/pdf" multiple hidden onchange="app.handleGradesPdf(event)">
   <input type="file" id="attendance-file-input" accept=".xlsx,.xls" hidden onchange="app.handleAttendanceExcel(event)">
+  <script>
+    // Aplicación instalable: registra el service worker (solo en https o en el equipo local)
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
 </body>
 </html>

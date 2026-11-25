@@ -124,6 +124,7 @@ Object.assign(app, {
     c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     const data = c.toDataURL('image/jpeg', 0.82);
+    const mini = this.miniDesde(img);
     const s = State.rawStudents.find(x => sameId(x.id, id));
     ui.modal({ title: 'Foto del estudiante', icon: 'camera', size: 'md', okText: 'Guardar foto',
       body: `<div class="st-photo-big"><img src="${data}" alt="Vista previa"></div>
@@ -132,20 +133,62 @@ Object.assign(app, {
       onOk: async () => {
         if (!el('foto-ok').checked) { toast('Confirme la autorización para usar la imagen', 'error'); return false; }
         try {
-          const r = await API.call('subirFoto', { studentId: id, base64: data.split(',')[1] });
-          Object.assign(s, { fotoId: r.fotoId, fotoFecha: r.fotoFecha, fotoPor: State.currentUser.name });
+          const r = await API.call('subirFoto', { studentId: id, base64: data.split(',')[1], mini });
+          Object.assign(s, { fotoId: r.fotoId, fotoFecha: r.fotoFecha, fotoPor: State.currentUser.name, fotoMini: mini });
           State.fotos[id] = data;
           this.refreshFoto(id);
           toast('Foto guardada');
         } catch (e) { toast(e.message, 'error'); return false; }
       } });
   },
+  /** Miniatura cuadrada de 72 px (recorte centrado) para las listas. */
+  miniDesde(img) {
+    const t = 72, c = document.createElement('canvas');
+    c.width = t; c.height = t;
+    const lado = Math.min(img.width, img.height);
+    c.getContext('2d').drawImage(img, (img.width - lado) / 2, Math.max(0, (img.height - lado) / 3), lado, lado, 0, 0, t, t);
+    return c.toDataURL('image/jpeg', 0.72);
+  },
+  /** Miniatura en el directorio: foto pequeña o la inicial del nombre. */
+  miniFotoHtml(s) {
+    const ini = esc(String(s.name || '?').replace(/^[^,]*,\s*/, '').charAt(0) || '?');
+    if (!s.fotoMini && s.fotoId && this.puedeFoto()) this.colaMini(s);
+    return `<button type="button" class="st-mini" data-mini="${esc(String(s.id))}" title="Abrir la ficha de ${esc(s.name)}" aria-label="Abrir la ficha de ${esc(s.name)}" onclick="app.openStudent(${jsq(s.id)})">${s.fotoMini ? `<img src="${s.fotoMini}" alt="" loading="lazy">` : `<span>${ini}</span>`}</button>`;
+  },
+  /** Fotos subidas antes de existir las miniaturas: se generan de a una, en segundo plano. */
+  colaMini(s) {
+    State.miniCola = State.miniCola || [];
+    State.miniHechas = State.miniHechas || new Set();
+    if (State.miniHechas.has(String(s.id)) || State.miniCola.includes(String(s.id))) return;
+    State.miniCola.push(String(s.id));
+    if (!this._miniCorriendo) this.procesarMinis();
+  },
+  async procesarMinis() {
+    this._miniCorriendo = true;
+    while ((State.miniCola || []).length && State.miniHechas.size < 120) {
+      const id = State.miniCola.shift();
+      State.miniHechas.add(id);
+      const s = State.rawStudents.find(x => sameId(x.id, id));
+      if (!s || s.fotoMini || !s.fotoId) continue;
+      try {
+        const r = await API.call('foto', { studentId: id });
+        if (!r.base64) continue;
+        const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = `data:image/jpeg;base64,${r.base64}`; });
+        const mini = this.miniDesde(img);
+        await DB.patch('students', id, { fotoMini: mini });
+        s.fotoMini = mini;
+        (State.fotos = State.fotos || {})[id] = `data:image/jpeg;base64,${r.base64}`;
+        document.querySelectorAll(`[data-mini="${CSS.escape(id)}"]`).forEach(n => { n.innerHTML = `<img src="${mini}" alt="">`; });
+      } catch (e) { /* se intentará en otra sesión */ }
+    }
+    this._miniCorriendo = false;
+  },
   quitarFoto(id) {
     ui.confirm({ title: 'Quitar la foto', msg: '¿Quitar la foto de este estudiante? El archivo se envía a la papelera de Drive.', okText: 'Quitar foto', action: async () => {
       try {
         await API.call('quitarFoto', { studentId: id });
         const s = State.rawStudents.find(x => sameId(x.id, id));
-        delete s.fotoId; delete s.fotoFecha; delete s.fotoPor;
+        delete s.fotoId; delete s.fotoFecha; delete s.fotoPor; delete s.fotoMini;
         State.fotos[id] = '';
         this.refreshFoto(id);
         toast('Foto quitada');
@@ -401,9 +444,9 @@ Object.assign(app, {
         db.students.forEach(s => { if (!p.studentIds.map(String).includes(String(s.id))) return; if (p.kind !== 'atraso' && (s.registroAsistencia || []).some(r => r.fecha === p.date && r.tipo === 'inasistencia')) return; s[field] = (parseInt(s[field]) || 0) + 1; s.registroAsistencia = [...(s.registroAsistencia || []), { fecha: p.date, tipo: p.kind, detalle: p.detail, por: State.currentUser?.name, masivo: true }]; reg.push(String(s.id)); });
         return { registrados: reg, omitidos: p.studentIds.length - reg.length };
       }
-      case 'subirFoto': { db.fotos = db.fotos || {}; const s = db.students.find(x => sameId(x.id, p.studentId)); const id = 'foto_' + Date.now(); db.fotos[id] = p.base64; Object.assign(s, { fotoId: id, fotoFecha: today(), fotoPor: State.currentUser?.name }); return { fotoId: id, fotoFecha: today() }; }
+      case 'subirFoto': { db.fotos = db.fotos || {}; const s = db.students.find(x => sameId(x.id, p.studentId)); const id = 'foto_' + Date.now(); db.fotos[id] = p.base64; Object.assign(s, { fotoId: id, fotoFecha: today(), fotoPor: State.currentUser?.name, fotoMini: p.mini }); return { fotoId: id, fotoFecha: today() }; }
       case 'foto': { const s = db.students.find(x => sameId(x.id, p.studentId)); return { base64: (s && db.fotos && db.fotos[s.fotoId]) || '', mimeType: 'image/jpeg' }; }
-      case 'quitarFoto': { const s = db.students.find(x => sameId(x.id, p.studentId)); if (s) { delete s.fotoId; delete s.fotoFecha; } return { ok: true }; }
+      case 'quitarFoto': { const s = db.students.find(x => sameId(x.id, p.studentId)); if (s) { delete s.fotoId; delete s.fotoFecha; delete s.fotoMini; } return { ok: true }; }
       case 'reunionPin': {
         const r = (db.reuniones || []).find(x => x.estado === 'abierta' && x.pinActivo && String(x.pin) === String(p.pin).replace(/\D/g, ''));
         if (!r) throw new Error('PIN no válido, o la reunión ya fue cerrada.');
