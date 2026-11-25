@@ -1536,3 +1536,11 @@ body { overscroll-behavior-y: none; }
 .reu-asis__segs .seg { display: inline-flex; align-items: center; gap: 0.25rem; }
 .reu-asis__segs .seg svg { width: 0.85rem; height: 0.85rem; }
 @media (max-width: 760px) { .reu-asis__segs { width: 100%; } .reu-asis__segs .seg { flex: 1; justify-content: center; } }
+/* Directorio: el nombre abre la ficha */
+.st-name { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--color-heading); text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 30%, transparent); text-underline-offset: 3px; }
+.st-name:hover { color: var(--tone-conv-ink); text-decoration-color: currentColor; }
+.st-name:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+/* Solicitudes de eliminación de actas */
+.reu-sol { border-left: 5px solid #d18a14; margin-top: 0.8rem; }
+.reu-sol__item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.6rem; padding: 0.6rem 0.7rem; border: 1px solid var(--color-rule); border-radius: 10px; background: var(--color-paper); }
+.reu-sol__motivo { margin: 0.3rem 0 0; font-size: 0.88rem; }

@@ -62,12 +62,12 @@ Object.assign(app, {
       return `<article class="reu-card" data-estado="${r.estado}">
         <div><span class="cell-title">${esc(r.course)} · ${fmtDate(r.fecha)}${r.hora ? ` · ${esc(r.hora)}` : ''}</span>
           <span class="cell-sub">${r.estado === 'abierta' ? chip('En curso', 'warn', 'radio') : chip('Cerrada', 'neutral', 'lock')} ${pres} presente(s) · ${ag.length ? `${hechos} de ${ag.length} acuerdos realizados` : 'sin acuerdos'} · Organiza ${esc(r.creadoPor || '')}${this.reuParticipa(r) ? ' · usted participa' : ''}</span></div>
-        <div class="row-actions"><button class="btn btn--sm" onclick="app.openReunion(${jsq(r.id)})">${ico('folder-open')}${r.estado === 'abierta' && this.reuPuedeEscribir(r) ? 'Continuar' : 'Ver'}</button><button class="btn btn--sm" onclick="app.reuActa(${jsq(r.id)})">${ico('file-down')}Acta</button>${this.reuOrganiza(r) && !State.verAnio && !r.anioArchivo ? `${r.estado === 'abierta' ? `<button class="icon-btn" title="Editar datos" aria-label="Editar datos de la reunión" onclick="app.reuEditar(${jsq(r.id)})">${ico('edit-2')}</button>` : ''}<button class="icon-btn icon-btn--danger" title="Eliminar reunión" aria-label="Eliminar reunión" onclick="app.reuEliminar(${jsq(r.id)})">${ico('trash-2')}</button>` : ''}</div>
+        <div class="row-actions"><button class="btn btn--sm" onclick="app.openReunion(${jsq(r.id)})">${ico('folder-open')}${r.estado === 'abierta' && this.reuPuedeEscribir(r) ? 'Continuar' : 'Ver'}</button><button class="btn btn--sm" onclick="app.reuActa(${jsq(r.id)})">${ico('file-down')}Acta</button>${this.reuOrganiza(r) && !State.verAnio && !r.anioArchivo ? `${r.estado === 'abierta' ? `<button class="icon-btn" title="Editar datos" aria-label="Editar datos de la reunión" onclick="app.reuEditar(${jsq(r.id)})">${ico('edit-2')}</button>` : ''}` : ''}${this.reuBotonEliminar(r)}</div>
       </article>`;
     };
     el('reu-body').innerHTML = `<article class="entry"><div class="entry__head"><div class="entry__id"><h1 class="entry__name">Reuniones de nivel${course ? ` · ${esc(course)}` : ''}</h1>
         <div class="chips">${chip(`${lista.length} reunión(es)`, 'obs', 'users-round')}${abiertas.length ? chip(`${abiertas.length} en curso`, 'warn', 'radio') : ''}</div></div></div>
-        <p class="entry__note entry__note--info">${ico('info')}Cada curso lleva su serie de reuniones: visión general, casos relevantes, asistencia y situación académica, con acuerdos que se revisan en la reunión siguiente. Escriben los participantes; el resto del equipo puede leerlas.${this.isQuickOnly() ? ' Usted ve solo las reuniones a las que fue invitado(a).' : ''}</p></article>
+        ${this.reuSolicitudesHtml()}<p class="entry__note entry__note--info">${ico('info')}Cada curso lleva su serie de reuniones: visión general, casos relevantes, asistencia y situación académica, con acuerdos que se revisan en la reunión siguiente. Escriben los participantes; el resto del equipo puede leerlas.${this.isQuickOnly() ? ' Usted ve solo las reuniones a las que fue invitado(a).' : ''}</p></article>
       ${lista.length ? `<div class="stack">${lista.map(card).join('')}</div>` : empty('users-round', this.isQuickOnly() ? 'No tiene reuniones de nivel asignadas. Si le entregaron un PIN, use "Registrar mi asistencia con PIN".' : 'Aún no hay reuniones de nivel. Inicie una con "Nueva reunión de nivel".', 'obs')}`;
     icons();
   },
@@ -174,13 +174,14 @@ Object.assign(app, {
         <button class="btn" onclick="app.reuActa(${jsq(r.id)})">${ico('file-down')}Acta (PDF o Word)</button>
         ${org ? `<button class="btn" onclick="app.reuEditar(${jsq(r.id)})">${ico('edit-2')}Editar datos</button><button class="btn btn--danger" onclick="app.cerrarReunion(${jsq(r.id)})">${ico('lock')}Cerrar reunión</button>` : ''}
         ${r.estado === 'cerrada' && this.reuOrganiza(r) && !State.verAnio && !r.anioArchivo ? `<button class="btn" onclick="app.reuReabrir(${jsq(r.id)})">${ico('unlock')}Reabrir para corregir</button>` : ''}
-        ${this.reuOrganiza(r) && !State.verAnio && !r.anioArchivo ? `<button class="icon-btn icon-btn--danger" title="Eliminar reunión" aria-label="Eliminar reunión" onclick="app.reuEliminar(${jsq(r.id)})">${ico('trash-2')}</button>` : ''}
+        ${this.reuBotonEliminar(r, true)}
       </div>`;
     const pres = (r.participantes || []).filter(p => p.presente);
     el('reu-body').innerHTML = `
       <article class="entry"><div class="entry__head"><div class="entry__id">
         <h1 class="entry__name">Reunión de nivel · ${esc(r.course)}</h1>
         <div class="chips">${chip(fmtDate(r.fecha) + (r.hora ? ` · ${r.hora}` : ''), 'obs', 'calendar')}${r.lugar ? chip(r.lugar, 'neutral', 'map-pin') : ''}${r.estado === 'abierta' ? chip('En curso', 'warn', 'radio') : chip(`Cerrada el ${fmtDate(r.fechaCierre)} ${r.horaCierre || ''}`, 'neutral', 'lock')}${chip(`Organiza: ${r.creadoPor}`, 'neutral', 'user')}${chip(`Profesor(a) jefe: ${this.profJefeOf(r.course) || 'sin registrar'}`, 'conv', 'user-check')}</div></div></div>
+        ${r.solicitudEliminar?.estado === 'pendiente' ? `<p class="entry__note">${ico('hourglass')}Se solicitó eliminar esta acta (${esc(r.solicitudEliminar.por)}, ${esc(r.solicitudEliminar.fecha)}). Motivo: ${esc(r.solicitudEliminar.motivo)}. Espera la autorización de un administrador.</p>` : r.solicitudEliminar?.estado === 'rechazada' && this.reuDirige(r) ? `<p class="entry__note">${ico('x-circle')}La solicitud de eliminación fue rechazada por ${esc(r.solicitudEliminar.resueltoPor || '')}${r.solicitudEliminar.comentario ? `: ${esc(r.solicitudEliminar.comentario)}` : ''}.</p>` : ''}
         ${!puede ? `<p class="entry__note entry__note--info">${ico(r.estado === 'abierta' ? 'eye' : 'lock')}${r.estado === 'abierta' ? 'Usted puede leer esta reunión. Solo los participantes escriben; si participa, registre su asistencia con el PIN.' : 'La reunión está cerrada: queda como acta y solo se puede marcar el cumplimiento de sus acuerdos.'}</p>` : ''}
       </article>
 
@@ -557,16 +558,83 @@ Devuelve SOLO un JSON con esta estructura: ${formato}` });
       if (await this.reuPatch(id, { estado: 'abierta', pinActivo: false, reabiertaPor: State.currentUser.name, reabiertaEl: today() }, 'Reunión reabierta')) this.render();
     } });
   },
+  // ---------------- ELIMINAR UN ACTA ----------------
+  // Solo quien inició la reunión, mientras está abierta o hasta 1 hora después de cerrada.
+  // Después, se solicita autorización a un administrador indicando el motivo (queda en la bitácora).
+  reuCierreMs(r) { return r.cerradaEn ? Date.parse(r.cerradaEn) : r.fechaCierre ? Date.parse(`${r.fechaCierre}T${r.horaCierre || '00:00'}:00-03:00`) : 0; },
+  reuMinutosParaEliminar(r) { return r.estado !== 'cerrada' ? Infinity : Math.floor((this.reuCierreMs(r) + 3600000 - Date.now()) / 60000); },
+  reuBotonEliminar(r, grande = false) {
+    if (!this.reuDirige(r) || State.verAnio || r.anioArchivo) return '';
+    if (r.solicitudEliminar?.estado === 'pendiente') return chip('Eliminación solicitada: espera autorización', 'warn', 'hourglass');
+    const min = this.reuMinutosParaEliminar(r);
+    if (min > 0) return `<button class="icon-btn icon-btn--danger" title="${min === Infinity ? 'Eliminar reunión' : `Eliminar acta (quedan ${min} min)`}" aria-label="Eliminar reunión" onclick="app.reuEliminar(${jsq(r.id)})">${ico('trash-2')}</button>`;
+    return grande ? `<button class="btn btn--sm" onclick="app.reuSolicitarEliminar(${jsq(r.id)})">${ico('shield-alert')}Solicitar eliminación</button>` : `<button class="icon-btn" title="Solicitar eliminación al administrador" aria-label="Solicitar eliminación" onclick="app.reuSolicitarEliminar(${jsq(r.id)})">${ico('shield-alert')}</button>`;
+  },
   reuEliminar(id) {
     const r = this.reunion(id);
-    ui.confirm({ title: 'Eliminar reunión', msg: `¿Eliminar la reunión de nivel de <strong>${esc(r.course)}</strong> del ${fmtDate(r.fecha)}? Se eliminan sus puntos, participantes y acuerdos. No se puede deshacer.`, okText: 'Sí, eliminar', action: async () => {
+    if (!this.reuDirige(r)) return notice({ type: 'error', title: 'No puede eliminar esta acta', msg: 'Solo quien inició la reunión puede eliminarla.' });
+    if (this.reuMinutosParaEliminar(r) <= 0) return this.reuSolicitarEliminar(id);
+    const min = this.reuMinutosParaEliminar(r);
+    ui.confirm({ title: 'Eliminar reunión', msg: `¿Eliminar la reunión de nivel de <strong>${esc(r.course)}</strong> del ${fmtDate(r.fecha)}? Se eliminan sus puntos, participantes y acuerdos. No se puede deshacer.${min !== Infinity ? `<br><br>Puede eliminarla por ${min} minuto(s) más; después necesitará la autorización de un administrador.` : ''}`, okText: 'Sí, eliminar', action: async () => {
       try {
         await DB.remove('reuniones', id);
         State.reunionId = null;
         notice({ type: 'success', title: 'Reunión eliminada', msg: `${r.course}, ${fmtDate(r.fecha)}.` });
         this.navigate('reuniones');
-      } catch (e) { notice({ type: 'error', title: 'No se pudo eliminar', msg: e.message }); }
+      } catch (e) {
+        if (e.code === 'REQUIERE_AUTORIZACION') { ui.close(); return this.reuSolicitarEliminar(id); }
+        notice({ type: 'error', title: 'No se pudo eliminar', msg: e.message });
+      }
     } });
+  },
+  reuSolicitarEliminar(id) {
+    const r = this.reunion(id);
+    ui.modal({ title: 'Solicitar eliminación del acta', icon: 'shield-alert', tone: 'warn', size: 'md', okText: 'Enviar solicitud',
+      body: `<div class="stack">
+        <p class="modal__msg">Pasó más de una hora desde que se cerró el acta de <strong>${esc(r.course)}</strong> del ${fmtDate(r.fecha)}. Para eliminarla, un administrador debe autorizarlo.</p>
+        ${fieldHtml('Motivo de la eliminación *', '<textarea id="reu-del-motivo" class="input" rows="4" placeholder="Explique por qué se debe eliminar esta acta (por ejemplo: se registró en el curso equivocado o está duplicada)."></textarea>')}
+        <p class="note">${ico('scroll-text')}La solicitud y el motivo quedan registrados en la bitácora, y se avisa a los administradores por correo y en la plataforma.</p>
+      </div>`,
+      onOk: async () => {
+        const motivo = el('reu-del-motivo').value.trim();
+        if (motivo.length < 10) { toast('Explique el motivo (al menos 10 caracteres)', 'error'); return false; }
+        try {
+          const res = await API.call('solicitarEliminarReunion', { id, motivo });
+          await DB.load();
+          notice({ type: 'success', title: 'Solicitud enviada', msg: `Un administrador revisará la eliminación del acta de ${r.course}.${res.avisados ? ` Se avisó por correo a ${res.avisados} administrador(es).` : ''}` });
+          this.render();
+        } catch (e) { toast(e.message, 'error'); return false; }
+      } });
+  },
+  /** Administrador: solicitudes pendientes (autorizar o rechazar, con comentario). */
+  reuSolicitudes() { return this.reuniones().filter(r => r.solicitudEliminar?.estado === 'pendiente'); },
+  reuSolicitudesHtml() {
+    if (!(hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'))) return '';
+    const lista = this.reuSolicitudes();
+    if (!lista.length) return '';
+    return `<section class="panel reu-sol"><div class="panel__head"><h2>${ico('shield-alert')}Solicitudes de eliminación de actas (${lista.length})</h2></div>
+      <div class="stack">${lista.map(r => `<article class="reu-sol__item">
+        <div><span class="cell-title">${esc(r.course)} · reunión del ${fmtDate(r.fecha)}</span>
+          <span class="cell-sub">Solicita ${esc(r.solicitudEliminar.por)} el ${esc(r.solicitudEliminar.fecha)}</span>
+          <p class="reu-sol__motivo"><strong>Motivo:</strong> ${esc(r.solicitudEliminar.motivo)}</p></div>
+        <div class="row-actions"><button class="btn btn--sm" onclick="app.reuActa(${jsq(r.id)})">${ico('file-down')}Ver acta</button><button class="btn btn--sm" onclick="app.reuResolver(${jsq(r.id)}, false)">${ico('x')}Rechazar</button><button class="btn btn--sm btn--danger" onclick="app.reuResolver(${jsq(r.id)}, true)">${ico('trash-2')}Autorizar eliminación</button></div>
+      </article>`).join('')}</div></section>`;
+  },
+  reuResolver(id, aprobar) {
+    const r = this.reunion(id);
+    ui.modal({ title: aprobar ? 'Autorizar la eliminación' : 'Rechazar la solicitud', icon: aprobar ? 'trash-2' : 'x', tone: aprobar ? 'proto' : 'warn', size: 'md', okText: aprobar ? 'Eliminar el acta' : 'Rechazar', okTone: aprobar ? 'danger' : 'primary',
+      body: `<div class="stack"><p class="modal__msg">Acta de <strong>${esc(r.course)}</strong> del ${fmtDate(r.fecha)}, solicitada por ${esc(r.solicitudEliminar.por)}.</p><p class="small"><strong>Motivo:</strong> ${esc(r.solicitudEliminar.motivo)}</p>
+        ${fieldHtml(aprobar ? 'Comentario (opcional)' : 'Motivo del rechazo (opcional)', '<textarea id="reu-res-com" class="input" rows="3"></textarea>')}
+        <p class="note">${ico('scroll-text')}La decisión queda registrada en la bitácora.${aprobar ? ' El acta se elimina de forma definitiva.' : ''}</p></div>`,
+      onOk: async () => {
+        try {
+          await API.call('resolverEliminarReunion', { id, aprobar, comentario: el('reu-res-com').value.trim() });
+          await DB.load();
+          State.reunionId = null;
+          notice({ type: 'success', title: aprobar ? 'Acta eliminada' : 'Solicitud rechazada', msg: `${r.course}, ${fmtDate(r.fecha)}. Quedó registrado en la bitácora.` });
+          this.navigate('reuniones');
+        } catch (e) { toast(e.message, 'error'); return false; }
+      } });
   },
 
   // ---------------- CIERRE Y ACTA ----------------
@@ -648,9 +716,12 @@ Object.assign(app, {
       if (API.demo) {
         const me = State.currentUser.id;
         lista = (Demo.db?.reuniones || []).filter(r => r.estado === 'abierta' && (r.participantes || []).some(p => sameId(p.userId, me))).map(r => ({ id: r.id, course: r.course, fecha: r.fecha, hora: r.hora, lugar: r.lugar, creadoPor: r.creadoPor, organiza: sameId(r.creadoPorId, me), presente: (r.participantes || []).some(p => sameId(p.userId, me) && p.presente) }));
-      } else lista = (await API.call('reunionesActivas')).reuniones || [];
+      } else { const res = await API.call('reunionesActivas'); lista = res.reuniones || []; this._ultimaSol = res.solicitudes || []; }
     } catch (e) { return; }
     State.reuActivas = lista;
+    // Administradores: aviso de solicitudes de eliminación de actas pendientes
+    const sol = API.demo ? (Demo.db?.reuniones || []).filter(r => r.solicitudEliminar?.estado === 'pendiente') : (this._ultimaSol || []);
+    if ((hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema')) && sol.length && !State.reuSolAvisada) { State.reuSolAvisada = true; notice({ type: 'warn', title: `Hay ${sol.length} solicitud(es) para eliminar actas de reunión`, msg: 'Revise el motivo y autorice o rechace la eliminación.', actions: [['Revisar solicitudes', () => { State.reunionId = null; this.navigate('reuniones'); }]] }); }
     this.renderReuAviso();
     const pendiente = lista.find(x => !x.presente && !(State.reuAvisadas || new Set()).has(String(x.id)));
     if (pendiente && el('modal').hidden && el('busy').hidden) this.reuAvisoModal(pendiente);
@@ -702,6 +773,29 @@ Object.assign(app, {
   app.startSession = async function (r) { const out = await start.call(this, r); setTimeout(() => this.reuCheckActivas(), 1500); return out; };
   setInterval(() => app.reuCheckActivas(), 45000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') app.reuCheckActivas(); });
+})();
+
+// Modo demostración: las mismas reglas de eliminación que el servidor
+(() => {
+  const dh = Demo.handle.bind(Demo);
+  Demo.handle = function (action, p) {
+    if (!this.db) this.seed();
+    const db = this.db, me = State.currentUser || {};
+    const r = p && p.id !== undefined ? (db.reuniones || []).find(x => sameId(x.id, p.id)) : null;
+    if (action === 'save' && p.col === 'reuniones' && r && p.data?.estado === 'cerrada' && r.estado !== 'cerrada') { const out = dh(action, p); const x = db.reuniones.find(y => sameId(y.id, p.id)); x.cerradaEn = new Date().toISOString(); return out; }
+    if (action === 'remove' && p.col === 'reuniones' && r) {
+      if (!sameId(r.creadoPorId, me.id)) throw new Error('Solo quien inició la reunión puede eliminar su acta.');
+      if (r.estado === 'cerrada' && Date.now() - app.reuCierreMs(r) > 3600000) { const e = new Error('Pasó más de una hora desde el cierre del acta.'); e.code = 'REQUIERE_AUTORIZACION'; throw e; }
+    }
+    if (action === 'solicitarEliminarReunion') { if (!sameId(r.creadoPorId, me.id)) throw new Error('Solo quien inició la reunión puede solicitarlo.'); r.solicitudEliminar = { estado: 'pendiente', por: me.name, porId: String(me.id), motivo: p.motivo, fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; (this.audit = this.audit || []).push({ fecha: new Date().toISOString().slice(0, 19), funcionario: me.name, accion: 'Solicitud de eliminación de acta', seccion: 'Reuniones de nivel', registro: r.id, detalle: `Motivo: ${p.motivo}` }); return { ok: true, avisados: 1 }; }
+    if (action === 'resolverEliminarReunion') {
+      const s = r.solicitudEliminar;
+      (this.audit = this.audit || []).push({ fecha: new Date().toISOString().slice(0, 19), funcionario: me.name, accion: p.aprobar ? 'Eliminación de acta autorizada' : 'Solicitud de eliminación rechazada', seccion: 'Reuniones de nivel', registro: r.id, detalle: `Motivo: ${s.motivo}${p.comentario ? `. Comentario: ${p.comentario}` : ''}` });
+      if (p.aprobar) { db.reuniones = db.reuniones.filter(x => !sameId(x.id, r.id)); return { eliminada: true }; }
+      Object.assign(s, { estado: 'rechazada', resueltoPor: me.name, comentario: p.comentario }); return { eliminada: false };
+    }
+    return dh(action, p);
+  };
 })();
 
 // Firmas del acta: todos los participantes presentes
