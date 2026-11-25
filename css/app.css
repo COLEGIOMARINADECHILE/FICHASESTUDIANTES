@@ -1306,3 +1306,37 @@ body.has-iv-panel .main { padding-right: min(400px, 40vw); }
 .cond-cell[data-level="bajo"] { background: #fdecea; color: #9b1c12; }
 .cond-prom td { border-top: 2px solid var(--color-rule); }
 @media (max-width: 640px) { .cond-dim { grid-template-columns: 1fr auto; } .cond-bar { grid-column: 1 / -1; grid-row: 2; } .cond-tag { justify-self: end; } }
+/* Menú lateral: barra de desplazamiento visible y flechas para recorrerlo */
+.nav { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--color-shell-ink) 35%, transparent) transparent; }
+.nav::-webkit-scrollbar { display: block; width: 6px; }
+.nav::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--color-shell-ink) 35%, transparent); border-radius: 999px; }
+.nav-scroll { display: flex; align-items: center; justify-content: center; gap: 0.3rem; width: 100%; min-height: 1.6rem; flex: none; border: 0; border-radius: 8px; background: color-mix(in oklab, var(--color-shell-ink) 10%, transparent); color: var(--color-shell-ink); cursor: pointer; animation: navPulse 1.6s ease-in-out 2; }
+.nav-scroll[hidden] { display: none; }
+.nav-scroll:hover { background: color-mix(in oklab, var(--color-shell-ink) 20%, transparent); }
+.nav-scroll:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.nav-scroll .ico { width: 1.1rem; height: 1.1rem; }
+@keyframes navPulse { 50% { background: color-mix(in oklab, var(--color-accent) 45%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .nav-scroll { animation: none; } }
+/* Año escolar: archivo, selector, cierre */
+.anio-banner { position: sticky; top: 0; z-index: 45; display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.55rem 1rem; background: #3b2f12; color: #fff4d6; font-size: 0.88rem; }
+.anio-banner[hidden] { display: none; }
+.anio-banner .btn { margin-left: auto; }
+.anio-banner svg { width: 1.1rem; height: 1.1rem; flex: none; }
+.anio-picker { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.2rem 0.4rem; font-size: 0.78rem; color: var(--color-shell-muted); }
+.anio-picker .ico { width: 1rem; height: 1rem; }
+.anio-picker select { grid-column: 1 / -1; background: color-mix(in oklab, var(--color-shell-ink) 8%, transparent); color: var(--color-shell-ink); border-color: color-mix(in oklab, var(--color-shell-ink) 20%, transparent); }
+.anio-picker select option { color: #111; }
+body.is-archivo .main, body.is-archivo main { outline: 3px solid #c98a12; outline-offset: -3px; }
+.cierre-pasos { display: grid; gap: 0.35rem; padding-left: 1.2rem; }
+.cierre-curso { border: 1px solid var(--color-rule); border-radius: 10px; padding: 0.4rem 0.7rem; }
+.cierre-curso > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
+.cierre-bulk { margin: 0.4rem 0; align-items: center; gap: 0.5rem; }
+.cierre-curso tr[data-acc="repite"] td:first-child { box-shadow: inset 4px 0 0 #b42318; }
+.cierre-curso tr[data-acc="cambio"] td:first-child { box-shadow: inset 4px 0 0 #c98a12; }
+.cierre-curso tr[data-acc="egresa"] td:first-child { box-shadow: inset 4px 0 0 #3b6fb6; }
+.cierre-curso tr[data-revisar="true"] { background: #fdecea; }
+.cierre-confirm { border: 2px solid #b42318; }
+.archivo-anio { border: 1px solid var(--color-rule); border-radius: 12px; padding: 0.8rem; display: grid; gap: 0.6rem; margin-bottom: 0.8rem; background: var(--color-paper-2, #f6f4ee); }
+.archivo-anio__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.archivo-anio__head h3 { display: flex; align-items: center; gap: 0.35rem; margin: 0; }
+.archivo-anio__head .btn { margin-left: auto; }

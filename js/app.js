@@ -373,10 +373,10 @@ window.app = {
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
       ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk', 'ov_riesgos']],
+      ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['pick_dia', 'bar-chart-3', 'Resultados DIA', hasAccess('ver_fichas'), ['dia']],
       ['cartas', 'file-check', 'Cartas de compromiso', !!(this.canUploadActas && this.canUploadActas()), []],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
-      ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
       ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), []],
       ['audit', 'scroll-text', 'Bitácora', this.canSeeAudit(), ['audit']],
@@ -384,6 +384,31 @@ window.app = {
     ];
     el('nav-menu').innerHTML = items.filter(i => i[3]).map(([id, icon, label, , views]) =>
       `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'report' ? 'app.openStaffReportModal()' : id === 'cartas' ? 'app.openCartasHub()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
+    this.setupNavScroll();
+  },
+  /** Flechas para recorrer el menú lateral cuando no cabe completo en la pantalla. */
+  setupNavScroll() {
+    const nav = el('nav-menu');
+    if (!nav) return;
+    if (!el('nav-up')) {
+      const mk = (id, dir, icon, label) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; b.className = `nav-scroll nav-scroll--${dir}`; b.setAttribute('aria-label', label); b.title = label; b.innerHTML = ico(icon); b.onclick = () => nav.scrollBy({ top: (dir === 'up' ? -1 : 1) * Math.max(120, nav.clientHeight * 0.7), behavior: 'smooth' }); return b; };
+      nav.before(mk('nav-up', 'up', 'chevron-up', 'Ver opciones de más arriba'));
+      nav.after(mk('nav-down', 'down', 'chevron-down', 'Ver más opciones del menú'));
+      const upd = () => {
+        const max = nav.scrollHeight - nav.clientHeight;
+        el('nav-up').hidden = !(max > 4 && nav.scrollTop > 4);
+        el('nav-down').hidden = !(max > 4 && nav.scrollTop < max - 4);
+      };
+      nav.addEventListener('scroll', upd, { passive: true });
+      window.addEventListener('resize', upd);
+      this._navUpd = upd;
+      icons();
+    }
+    requestAnimationFrame(() => {
+      const cur = nav.querySelector('[aria-current="page"]');
+      if (cur) { const r = cur.offsetTop - nav.offsetTop; if (r < nav.scrollTop || r > nav.scrollTop + nav.clientHeight - cur.offsetHeight) nav.scrollTop = r - nav.clientHeight / 2; }
+      this._navUpd && this._navUpd();
+    });
   },
 
   // ---------------- DATOS DE ESTUDIANTES ----------------
@@ -611,7 +636,7 @@ window.app = {
         const plans = State.studentPlans.filter(p => sameId(p.studentId, s.id)).map(p => chip(p.type || 'Plan activo', 'plan', 'bookmark')).join('');
         return `<tr class="${s.status === 'blocked' ? 'is-retirado' : ''}"${s.status === 'blocked' ? '' : this.highlightAttrs(s)}>
           <td><span class="cell-title">${esc(s.name)} ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
-            <span class="chips">${this.recordChips([s.id], this.countRecords(s))}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
+            <span class="chips">${this.recordChips([s.id], this.countRecords(s))}${s.status === 'blocked' ? chip(s.egresado ? `Egresado(a) ${s.anioEgreso || ''}` : `Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', s.egresado ? 'graduation-cap' : 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></td>
           <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Inasistencias de ${esc(s.name)}" value="${s.asistencia.inasistencias}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'inasistencias', this.value)"></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Atrasos de ${esc(s.name)}" value="${s.asistencia.atrasos}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'atrasos', this.value)"></td>
@@ -710,7 +735,7 @@ window.app = {
         <span class="avatar avatar--lg" aria-hidden="true">${esc(s.name.charAt(0))}</span>
         <div class="entry__id">
           <h1 class="entry__name">${esc(s.name)} ${this.areaBadges(s)}</h1>
-          <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(`Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}${this.healthChips(s)}${this.repToggleHtml(s)}</div>
+          <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(s.egresado ? (s.motivoRetiro || `Egresado(a) ${s.anioEgreso || ''}`) : `Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}${this.healthChips(s)}${this.repToggleHtml(s)}</div>
           ${s.riesgoRepitencia?.activo && s.riesgoRepitencia.motivo ? `<p class="entry__note">${ico('alert-triangle')}Riesgo de repitencia: ${esc(s.riesgoRepitencia.motivo)} <span class="muted small">(${esc(s.riesgoRepitencia.por || '')}, ${fmtDate(s.riesgoRepitencia.fecha)})</span></p>` : ''}
         </div>
         <div class="chips chips--end">${this.recordChips([s.id], this.countRecords(s))}</div>
@@ -732,8 +757,10 @@ window.app = {
 
   changeDetailTab(tab) {
     State.detailTab = tab;
-    el('detail-tabs').innerHTML = this.TABS.map(([id, label, tone]) => `<button type="button" role="tab" class="tab" data-tone="${tone}" aria-selected="${id === tab}" onclick="app.changeDetailTab('${id}')">${label}</button>`).join('');
-    ({ entrevistas: () => this.renderInterventions(), observaciones: () => this.renderSimple('observations'), enfermeria: () => this.renderSimple('nursings'), salud: () => this.renderSalud(), pie: () => this.renderPiePlans(), repitencia: () => this.renderRepitencia(), cartas: () => this.renderCartas(), respaldos: () => this.renderEvidences() })[tab]();
+    const tabs = this.TABS.concat(this.extraTabs ? this.extraTabs() : []);
+    if (!tabs.some(([id]) => id === tab)) { tab = 'entrevistas'; State.detailTab = tab; }
+    el('detail-tabs').innerHTML = tabs.map(([id, label, tone]) => `<button type="button" role="tab" class="tab" data-tone="${tone}" aria-selected="${id === tab}" onclick="app.changeDetailTab('${id}')">${label}</button>`).join('');
+    (({ entrevistas: () => this.renderInterventions(), observaciones: () => this.renderSimple('observations'), enfermeria: () => this.renderSimple('nursings'), salud: () => this.renderSalud(), pie: () => this.renderPiePlans(), repitencia: () => this.renderRepitencia(), cartas: () => this.renderCartas(), respaldos: () => this.renderEvidences() })[tab] || (() => this['renderTab_' + tab]()))();
     icons();
   },
   panel(html) { el('detail-panel').innerHTML = html; icons(); },
@@ -895,7 +922,7 @@ window.app = {
     return String(a.plazo).slice(0, 10);
   },
   /** Cumplimiento según el plazo: a tiempo, fuera de plazo, vencido o dentro de plazo. */
-  agreementTiming(a) {
+  agreementTiming(a, ref = today()) {
     const st = this.agreementState(a), lim = this.agreementDeadline(a);
     const dias = (x, y) => Math.round((new Date(x + 'T12:00') - new Date(y + 'T12:00')) / 86400000);
     if (st === 'si') {
@@ -904,16 +931,16 @@ window.app = {
       return d <= 0 ? { k: 'ok', t: 'A tiempo' } : { k: 'late', t: `Fuera de plazo (${d} día${d === 1 ? '' : 's'})` };
     }
     if (st === 'no') return { k: 'bad', t: 'No realizado' };
-    if (lim && dias(today(), lim) > 0) { const d = dias(today(), lim); return { k: 'late', t: `Vencido hace ${d} día${d === 1 ? '' : 's'}` }; }
+    if (lim && dias(ref, lim) > 0) { const d = dias(ref, lim); return { k: 'late', t: `Vencido hace ${d} día${d === 1 ? '' : 's'}` }; }
     return lim ? { k: 'wait', t: 'Dentro de plazo' } : { k: 'wait', t: 'Sin plazo' };
   },
   /** Texto del estado para actas e informes impresos. */
-  agreementStatusText(a) {
+  agreementStatusText(a, ref) {
     const st = this.agreementState(a);
     const nombre = { si: 'Realizado', no: 'No realizado', proceso: 'En proceso', pendiente: 'Pendiente' }[st];
     const fecha = a.marcadoFecha && (st === 'si' || st === 'no') ? ` el ${fmtDate(a.marcadoFecha)}` : '';
-    const tm = this.agreementTiming(a);
-    const extra = (st === 'si' && a.plazo) || ((st === 'pendiente' || st === 'proceso') && tm.k === 'late') ? ` · ${tm.t.toLowerCase()}` : '';
+    const tm = this.agreementTiming(a, ref || today());
+    const extra = (st === 'si' && a.plazo) || ((st === 'pendiente' || st === 'proceso') && tm.k === 'late') ? ` · ${tm.t.toLowerCase()}${ref && st !== 'si' ? ' al cierre del año' : ''}` : '';
     return `${nombre}${fecha}${extra}`;
   },
 
