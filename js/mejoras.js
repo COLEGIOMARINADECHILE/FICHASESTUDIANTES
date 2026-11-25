@@ -252,7 +252,7 @@ Object.assign(app, {
     box.style.height = `${Math.max(240, data.length * 30 + 50)}px`;
     let note = panel.querySelector('.dash-note');
     if (!note) { note = document.createElement('p'); note.className = 'dash-note muted small'; panel.appendChild(note); }
-    note.textContent = metric === 'pct' ? 'Porcentaje de los estudiantes de cada curso que tienen al menos un registro (convivencia, PIE, protocolos, observaciones o enfermería). Así se comparan cursos con distinta matrícula. Pinche una barra para abrir el curso.' : 'Total de registros dividido por la matrícula del curso. Pinche una barra para abrir el curso.';
+    note.textContent = metric === 'pct' ? 'Porcentaje de los estudiantes de cada curso que tienen al menos un registro (convivencia, PIE, protocolos, observaciones o enfermería). Así se comparan cursos con distinta matrícula. Pinche una barra para abrir el curso.' : 'Registros por estudiante, separados en Convivencia (incluye protocolos), PIE, y observaciones y enfermería. Se calcula dividiendo por la matrícula del curso, así se comparan cursos de distinto tamaño. Pinche una barra para abrir el curso.';
     const col = v => metric === 'pct' ? (v >= 50 ? '#b42318' : v >= 25 ? '#d18a14' : '#1f7a4d') : (v >= 2 ? '#b42318' : v >= 1 ? '#d18a14' : '#1f7a4d');
     const etiqueta = { id: 'dashLabels', afterDatasetsDraw(ch) {
       const { ctx } = ch;
@@ -260,16 +260,28 @@ Object.assign(app, {
       ctx.font = `600 11px ${cssVar('--font-body') || 'sans-serif'}`;
       ctx.fillStyle = cssVar('--color-ink') || '#222';
       ctx.textBaseline = 'middle';
-      ch.getDatasetMeta(0).data.forEach((bar, i) => { const d = data[i]; ctx.fillText(metric === 'pct' ? `${String(d.pct).replace('.', ',')} %  (${d.con} de ${d.n})` : `${String(d.porEst).replace('.', ',')}  (${d.total} registros)`, bar.x + 6, bar.y); });
+      const ultimo = ch.data.datasets.length - 1;
+      ch.getDatasetMeta(ultimo).data.forEach((bar, i) => { const d = data[i]; ctx.fillText(metric === 'pct' ? `${String(d.pct).replace('.', ',')} %  (${d.con} de ${d.n})` : `${String(d.porEst).replace('.', ',')}  (${d.total} registros)`, bar.x + 6, bar.y); });
       ctx.restore();
     } };
+    // "Registros por estudiante": barras apiladas que separan Convivencia (incluye protocolos), PIE y otros registros
+    const r2 = v => Math.round(v * 100) / 100;
+    const apiladas = [
+      ['Convivencia y protocolos', d => r2((d.conv + d.proto) / d.n), '#c0392b'],
+      ['PIE', d => r2(d.pie / d.n), '#2f6fb3'],
+      ['Observaciones y enfermería', d => r2((d.obs + d.enf) / d.n), '#8a8f98']
+    ];
+    const datasets = metric === 'pct'
+      ? [{ data: data.map(d => d.valor), backgroundColor: data.map(d => col(d.valor)), borderRadius: 8, borderSkipped: false, barThickness: 18 }]
+      : apiladas.map(([label, fn, color], j) => ({ label, data: data.map(fn), backgroundColor: color, stack: 's', barThickness: 18, borderRadius: j === apiladas.length - 1 ? { topRight: 8, bottomRight: 8 } : 0, borderSkipped: false }));
     this.barC = new Chart(canvas, {
       type: 'bar',
-      data: { labels: data.map(d => d.curso), datasets: [{ data: data.map(d => d.valor), backgroundColor: data.map(d => col(d.valor)), borderRadius: 8, borderSkipped: false, barThickness: 18 }] },
+      data: { labels: data.map(d => d.curso), datasets },
       options: {
-        indexAxis: 'y', maintainAspectRatio: false, layout: { padding: { right: 120 } },
-        scales: { x: { min: 0, max: metric === 'pct' ? 100 : undefined, grid: { color: cssVar('--color-rule') }, ticks: { callback: v => metric === 'pct' ? `${v}%` : v } }, y: { grid: { display: false }, ticks: { font: { weight: '600' } } } },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => { const d = data[c.dataIndex]; return [`${d.con} de ${d.n} estudiantes con registros (${String(d.pct).replace('.', ',')} %)`, `${d.total} registros: ${d.conv} convivencia, ${d.pie} PIE, ${d.proto} protocolos, ${d.obs} observaciones, ${d.enf} enfermería`]; } } } },
+        indexAxis: 'y', maintainAspectRatio: false, layout: { padding: { right: 130 } },
+        scales: { x: { stacked: metric !== 'pct', min: 0, max: metric === 'pct' ? 100 : undefined, grid: { color: cssVar('--color-rule') }, ticks: { callback: v => metric === 'pct' ? `${v}%` : v } }, y: { stacked: metric !== 'pct', grid: { display: false }, ticks: { font: { weight: '600' } } } },
+        plugins: { legend: { display: metric !== 'pct', position: 'top', align: 'start', labels: { usePointStyle: true, boxWidth: 10 } },
+          tooltip: { callbacks: { label: c => { const d = data[c.dataIndex]; return metric === 'pct' ? [`${d.con} de ${d.n} estudiantes con registros (${String(d.pct).replace('.', ',')} %)`, `${d.total} registros: ${d.conv} convivencia, ${d.pie} PIE, ${d.proto} protocolos, ${d.obs} observaciones, ${d.enf} enfermería`] : `${c.dataset.label}: ${String(c.raw).replace('.', ',')} por estudiante`; }, footer: items => { if (metric === 'pct') return ''; const d = data[items[0].dataIndex]; return `Total: ${String(d.porEst).replace('.', ',')} por estudiante (${d.total} registros, ${d.n} estudiantes)\nConvivencia ${d.conv} · Protocolos ${d.proto} · PIE ${d.pie} · Observaciones ${d.obs} · Enfermería ${d.enf}`; } } } },
         onHover: (e, items) => { e.native.target.style.cursor = items[0] ? 'pointer' : 'default'; },
         onClick: (e, items) => { if (items.length) app.openCourse(data[items[0].index].curso); }
       },
@@ -298,8 +310,38 @@ Object.assign(app, {
   }
 });
 
+// ---------------- 5. REVISIÓN DE DATOS PIE ----------------
+Object.assign(app, {
+  /** Revisa que todo plan o documento PIE quede en la ficha de un estudiante vigente. */
+  pieRevision() {
+    const ids = new Map(State.rawStudents.map(s => [String(s.id), s]));
+    const planes = State.rawInclusionReports.filter(r => this.planArea(r) === 'PIE');
+    const docs = State.rawEvidences.filter(e => this.evArea(e) === 'PIE');
+    const sinFicha = [...planes.map(r => ({ tipo: 'Plan', nombre: r.type || r.titulo || 'Plan PIE', quien: r.studentName || '', id: r.studentId })), ...docs.map(e => ({ tipo: 'Documento', nombre: e.fileName || e.type || 'Documento', quien: e.studentName || '', id: e.studentId }))].filter(x => !x.id || !ids.has(String(x.id)));
+    const retirados = new Set([...planes, ...docs].map(x => String(x.studentId)).filter(id => ids.get(id)?.status === 'blocked'));
+    const porDoc = new Set(docs.filter(e => !e.area).map(e => String(e.studentId)));
+    const porEquipo = this.getStudents().filter(s => s.status !== 'blocked' && (s.history || []).some(h => this.recordCategory(h) === 'pie') && !(this.pieIndex().get(String(s.id))?.plans || this.pieIndex().get(String(s.id))?.docs));
+    return { planes: planes.length, docs: docs.length, sinFicha, retirados: retirados.size, porDoc: porDoc.size, porEquipo };
+  },
+  pieRevisionHtml() {
+    const r = this.pieRevision();
+    return `<details class="panel pie-rev" ${r.sinFicha.length ? 'open' : ''}><summary><strong>${ico('shield-check')}Revisión de datos PIE</strong> <span class="muted small">${r.planes} plan(es) y ${r.docs} documento(s) PIE${r.sinFicha.length ? ` · ${r.sinFicha.length} sin ficha` : ' · todos en la ficha de un estudiante'}</span></summary>
+      <ul class="pie-rev__list">
+        <li data-ok="${!r.sinFicha.length}">${r.sinFicha.length ? `<strong>${r.sinFicha.length} plan(es) o documento(s) PIE no están en la ficha de ningún estudiante de la nómina</strong> (el estudiante no existe, cambió su identificador o no se asignó). Vuelva a vincularlos desde "Cargar planes" o "Vincular carpetas de Drive":<ul>${r.sinFicha.slice(0, 30).map(x => `<li>${esc(x.tipo)}: ${esc(x.nombre)}${x.quien ? ` (${esc(x.quien)})` : ''}</li>`).join('')}</ul>` : 'Todos los planes y documentos PIE están en la ficha de un estudiante.'}</li>
+        <li data-ok="true">${r.porDoc} estudiante(s) se reconocen como PIE por documentos subidos sin área (por ejemplo "Informe PIE", "PACI", "evaluación psicopedagógica"); ahora también se cuentan.</li>
+        <li data-ok="true">${r.porEquipo.length} estudiante(s) se reconocen como PIE solo por intervenciones de funcionarios del Equipo PIE (perfil o cargo PIE, inclusión, integración, diferencial, fonoaudiología o psicopedagogía), aún sin plan ni documentos cargados${r.porEquipo.length ? `: ${r.porEquipo.slice(0, 20).map(s => esc(this.clean(s.name))).join(', ')}` : ''}.</li>
+        ${r.retirados ? `<li data-ok="true">${r.retirados} estudiante(s) con información PIE están retirados o egresados: no aparecen en la lista, pero su información se conserva en la ficha.</li>` : ''}
+      </ul></details>`;
+  }
+});
+
 // ---------------- INTEGRACIÓN ----------------
 (() => {
+  const pie = app.renderPie;
+  if (pie) app.renderPie = function () {
+    pie.call(this);
+    if ((State.pieView?.area || 'PIE') === 'PIE' && !this.isQuickOnly()) { el('pie-list').insertAdjacentHTML('beforeend', this.pieRevisionHtml()); icons(); }
+  };
   // Portada
   const dash = app.renderDashboard;
   app.renderDashboard = function () { dash.call(this); this.drawDashboardCharts(); };

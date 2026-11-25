@@ -122,7 +122,27 @@ const hasAccess = f => { const fn = State.currentUser?.functions || []; return f
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const readFileAsDataURL = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('No se pudo leer el archivo')); r.readAsDataURL(file); });
 
-/** Aviso breve: queda visible hasta que el funcionario lo cierra con la X (se muestran los 4 más recientes). */
+/**
+ * Los avisos se cierran solos a los 12 segundos (o antes con la X). Mientras el mouse está
+ * encima o se usa uno de sus botones, la cuenta se detiene. Una barra muestra el tiempo restante.
+ */
+const AVISO_MS = 12000;
+function autoCerrar(node, ms = AVISO_MS) {
+  let restante = ms, inicio = Date.now(), timer = null;
+  const bar = document.createElement('span');
+  bar.className = 'aviso-timer';
+  bar.style.animationDuration = `${ms}ms`;
+  node.appendChild(bar);
+  const correr = () => { inicio = Date.now(); timer = setTimeout(() => node.remove(), restante); bar.style.animationPlayState = 'running'; };
+  const pausar = () => { clearTimeout(timer); restante = Math.max(1500, restante - (Date.now() - inicio)); bar.style.animationPlayState = 'paused'; };
+  node.addEventListener('mouseenter', pausar);
+  node.addEventListener('mouseleave', correr);
+  node.addEventListener('focusin', pausar);
+  node.addEventListener('focusout', correr);
+  correr();
+}
+
+/** Aviso breve (se muestran los 4 más recientes; se cierra solo a los 12 segundos). */
 function toast(msg, type = 'success') {
   const t = document.createElement('div');
   t.className = `toast toast--${type}`;
@@ -134,6 +154,7 @@ function toast(msg, type = 'success') {
   const box = el('toast-container');
   box.appendChild(t);
   while (box.children.length > 4) box.firstElementChild.remove();
+  autoCerrar(t);
   icons();
 }
 
@@ -160,8 +181,9 @@ function notice({ type = 'success', title, msg = '', items = [], actions = [] })
   card.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => { card.remove(); actions[+b.dataset.act][1](); }; });
   layer.prepend(card);
   while (layer.children.length > 3) layer.lastElementChild.remove();
+  autoCerrar(card);
   icons();
-  card.querySelector('.notice__close').focus({ preventScroll: true });
+  // No se quita el foco de lo que el funcionario está escribiendo
 }
 
 // Etiquetas reutilizables
@@ -211,7 +233,18 @@ const ui = {
     el('busy-title').textContent = title;
     el('busy-msg').textContent = msg;
     el('busy').hidden = false;
-    return () => { el('busy').hidden = true; };
+    // Si una operación se demora demasiado, se ofrece cerrar la espera para no dejar la página bloqueada
+    clearTimeout(this._busyT);
+    el('busy-escape')?.remove();
+    this._busyT = setTimeout(() => {
+      if (el('busy').hidden) return;
+      const b = document.createElement('button');
+      b.type = 'button'; b.id = 'busy-escape'; b.className = 'btn btn--sm';
+      b.textContent = 'Seguir trabajando (la operación continúa en segundo plano)';
+      b.onclick = () => { el('busy').hidden = true; b.remove(); };
+      el('busy-msg').after(b);
+    }, 25000);
+    return () => { clearTimeout(this._busyT); el('busy-escape')?.remove(); el('busy').hidden = true; };
   }
 };
 

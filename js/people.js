@@ -256,8 +256,9 @@ ${b.tagline}`.trim();
   /** Convivencia o PIE según el perfil de quien registró; los protocolos van aparte. */
   recordCategory(h) {
     if (h.type === PROTOCOLO) return 'proto';
-    const u = State.users.find(x => sameId(x.id, h.professionalId));
-    return u && u.role === 'Equipo PIE' ? 'pie' : 'conv';
+    const u = State.users.find(x => sameId(x.id, h.professionalId)) || (State.directorio || []).find(x => sameId(x.id, h.professionalId));
+    // Equipo PIE: el perfil o el cargo lo indica (PIE, inclusión, integración, educación diferencial, fonoaudiología, psicopedagogía)
+    return u && RE_ROL_PIE.test(`${u.role || ''} ${u.customRole || ''}`) ? 'pie' : 'conv';
   },
   /** Etiquetas con número que abren el detalle. ids: estudiantes; c: conteos de countRecords. */
   recordChips(ids, c) {
@@ -414,10 +415,12 @@ ${b.tagline}`.trim();
       onOk: async () => {
         const detail = el('qe-detail').value.trim();
         if (kind === 'anotacion' && !detail) { toast('Escriba el detalle de la anotación', 'error'); return false; }
-        await API.call('registrarEvento', { studentId: s.id, kind, date: el('qe-date').value, detail, tipo: kind === 'anotacion' && el('qe-pos').getAttribute('aria-pressed') === 'true' ? 'Positiva' : 'Negativa' });
+        const res = await API.call('registrarEvento', { studentId: s.id, kind, date: el('qe-date').value, detail, tipo: kind === 'anotacion' && el('qe-pos').getAttribute('aria-pressed') === 'true' ? 'Positiva' : 'Negativa' });
+        // Atrasos e inasistencias: se actualiza el contador local sin volver a descargar todo
         toast(`${{ anotacion: 'Anotación registrada', atraso: 'Atraso registrado', inasistencia: 'Inasistencia registrada' }[kind]} para ${this.clean(s.name)}`);
         this.logQuick(s, { anotacion: 'Anotación', atraso: 'Atraso', inasistencia: 'Inasistencia' }[kind]);
-        DB.load().catch(() => {});
+        if (kind !== 'anotacion' && res) { if (res.atrasos !== undefined) s.atrasos = res.atrasos; if (res.inasistencias !== undefined) s.inasistencias = res.inasistencias; }
+        else if (!this.isQuickOnly()) DB.load().catch(() => {});
       }
     });
   },

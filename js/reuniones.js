@@ -53,7 +53,7 @@ Object.assign(app, {
       return `<article class="reu-card" data-estado="${r.estado}">
         <div><span class="cell-title">${esc(r.course)} · ${fmtDate(r.fecha)}${r.hora ? ` · ${esc(r.hora)}` : ''}</span>
           <span class="cell-sub">${r.estado === 'abierta' ? chip('En curso', 'warn', 'radio') : chip('Cerrada', 'neutral', 'lock')} ${pres} presente(s) · ${ag.length ? `${hechos} de ${ag.length} acuerdos realizados` : 'sin acuerdos'} · Organiza ${esc(r.creadoPor || '')}${this.reuParticipa(r) ? ' · usted participa' : ''}</span></div>
-        <div class="row-actions"><button class="btn btn--sm" onclick="app.openReunion(${jsq(r.id)})">${ico('folder-open')}${r.estado === 'abierta' && this.reuPuedeEscribir(r) ? 'Continuar' : 'Ver'}</button><button class="btn btn--sm" onclick="app.reuActa(${jsq(r.id)})">${ico('file-down')}Acta</button></div>
+        <div class="row-actions"><button class="btn btn--sm" onclick="app.openReunion(${jsq(r.id)})">${ico('folder-open')}${r.estado === 'abierta' && this.reuPuedeEscribir(r) ? 'Continuar' : 'Ver'}</button><button class="btn btn--sm" onclick="app.reuActa(${jsq(r.id)})">${ico('file-down')}Acta</button>${this.reuOrganiza(r) && !State.verAnio && !r.anioArchivo ? `${r.estado === 'abierta' ? `<button class="icon-btn" title="Editar datos" aria-label="Editar datos de la reunión" onclick="app.reuEditar(${jsq(r.id)})">${ico('edit-2')}</button>` : ''}<button class="icon-btn icon-btn--danger" title="Eliminar reunión" aria-label="Eliminar reunión" onclick="app.reuEliminar(${jsq(r.id)})">${ico('trash-2')}</button>` : ''}</div>
       </article>`;
     };
     el('reu-body').innerHTML = `<article class="entry"><div class="entry__head"><div class="entry__id"><h1 class="entry__name">Reuniones de nivel${course ? ` · ${esc(course)}` : ''}</h1>
@@ -162,7 +162,9 @@ Object.assign(app, {
         <button class="btn" onclick="app.reuRecargar()">${ico('refresh-cw')}Actualizar</button>
         <button class="btn" onclick="app.reuAcuerdosModal(${jsq(r.id)})">${ico('list-checks')}Acuerdos</button>
         <button class="btn" onclick="app.reuActa(${jsq(r.id)})">${ico('file-down')}Acta (PDF o Word)</button>
-        ${org ? `<button class="btn btn--danger" onclick="app.cerrarReunion(${jsq(r.id)})">${ico('lock')}Cerrar reunión</button>` : ''}
+        ${org ? `<button class="btn" onclick="app.reuEditar(${jsq(r.id)})">${ico('edit-2')}Editar datos</button><button class="btn btn--danger" onclick="app.cerrarReunion(${jsq(r.id)})">${ico('lock')}Cerrar reunión</button>` : ''}
+        ${r.estado === 'cerrada' && this.reuOrganiza(r) && !State.verAnio && !r.anioArchivo ? `<button class="btn" onclick="app.reuReabrir(${jsq(r.id)})">${ico('unlock')}Reabrir para corregir</button>` : ''}
+        ${this.reuOrganiza(r) && !State.verAnio && !r.anioArchivo ? `<button class="icon-btn icon-btn--danger" title="Eliminar reunión" aria-label="Eliminar reunión" onclick="app.reuEliminar(${jsq(r.id)})">${ico('trash-2')}</button>` : ''}
       </div>`;
     const pres = (r.participantes || []).filter(p => p.presente);
     el('reu-body').innerHTML = `
@@ -220,7 +222,7 @@ Object.assign(app, {
     const s = r['sec_' + k] || {};
     return `<section class="panel reu-sec">
       <div class="panel__head"><h2>${ico(icon)}${esc(titulo)}</h2><span class="muted small">${esc(quien)}</span></div>
-      <details class="reu-datos"><summary class="small">${ico('database')}Datos de la plataforma para monitorear</summary><div class="reu-datos__body">${this.reuDatosHtml(r.course, k)}</div>
+      <details class="reu-datos" ${s.texto ? '' : 'open'}><summary class="small">${ico('database')}Datos de la plataforma para monitorear</summary><div class="reu-datos__body">${this.reuDatosHtml(r.course, k)}</div>
         ${puede ? `<button type="button" class="btn btn--sm" onclick="app.reuInsertarDatos(${jsq(r.id)}, '${k}')">${ico('corner-down-right')}Insertar estos datos en el texto</button>` : ''}</details>
       <textarea class="input" id="reu-sec-${k}" rows="6" ${puede ? '' : 'readonly'} placeholder="${puede ? 'Escriba lo tratado...' : 'Sin registro.'}" onchange="app.reuGuardarSeccion(${jsq(r.id)}, '${k}', this.value)">${esc(s.texto || '')}</textarea>
       ${s.por ? `<p class="muted small">Última edición: ${esc(s.por)}, ${esc(s.fecha || '')}</p>` : ''}
@@ -228,58 +230,83 @@ Object.assign(app, {
   },
 
   // ---------------- DATOS DE LA PLATAFORMA POR SECCIÓN ----------------
-  reuDatos(course, k) {
+  /** Datos estructurados: indicadores (kpis), grupos de estudiantes con detalle y notas. */
+  reuDatosObj(course, k) {
     const anio = String(this.anioActual ? this.anioActual() : today().slice(0, 4));
     const a = this.computeTraspaso ? this.computeTraspaso(course, anio) : null;
     const studs = this.getStudents().filter(s => s.curso === course && s.status !== 'blocked');
     const n = s => this.clean ? this.clean(s.name) : s.name;
-    const L = [];
+    const pct = v => `${String(v).replace('.', ',')} %`;
+    const nivel = (v, a1, a2, inverso) => inverso ? (v >= a1 ? 'proto' : v >= a2 ? 'warn' : 'conv') : (v < a1 ? 'proto' : v < a2 ? 'warn' : 'conv');
+    const O = { kpis: [], grupos: [], notas: [] };
+    const grupo = (t, tone, icon, items, vacio) => O.grupos.push({ t, tone, icon, items, vacio });
     if (k === 'vision') {
-      L.push(`Profesor(a) jefe: ${this.profJefeOf(course) || 'sin registrar'}. Matrícula activa: ${studs.length}.`);
+      O.kpis.push({ v: studs.length, l: 'Matrícula activa', tone: 'obs' });
       if (a) {
-        L.push(`Asistencia promedio: ${a.promAsis} %. Promedio general: ${a.promCurso || 'sin notas'}.`);
-        if (a.convivencia?.total) L.push(`Registros de convivencia en el año: ${a.convivencia.total} (${a.convivencia.protocolos} protocolos).`);
+        O.kpis.push({ v: pct(a.promAsis), l: 'Asistencia promedio', tone: nivel(+a.promAsis, 85, 90) });
+        O.kpis.push({ v: a.promCurso && a.promCurso !== '-' ? String(a.promCurso).replace('.', ',') : 'Sin notas', l: 'Promedio general', tone: a.promCurso && a.promCurso !== '-' ? nivel(+String(a.promCurso).replace(',', '.'), 5, 5.5) : 'neutral' });
+        O.kpis.push({ v: a.convivencia?.total || 0, l: `Registros de convivencia (${a.convivencia?.protocolos || 0} protocolos)`, tone: 'conv' });
       }
+      O.notas.push(`Profesor(a) jefe: ${this.profJefeOf(course) || 'sin registrar'}`);
       const dia = (State.dia || []).filter(d => d.course === course && String(d.anio) === anio && d.tipo !== 'condiciones');
-      dia.forEach(d => { const c = this.diaCalc(d); L.push(`DIA ${d.asignatura} (${d.periodo}): ${c.areas.map(x => `${x.nombre} ${String(x.pct).replace('.', ',')} %`).join('; ')}.`); });
-      (this.condOf ? this.condOf(course, anio) : []).forEach(d => L.push(`Cuestionario de Condiciones: ${(d.dims || []).map(x => `${x.nombre} ${this.condNum(x.rf)} %`).join('; ')}.`));
+      dia.forEach(d => { const c = this.diaCalc(d); grupo(`DIA ${d.asignatura} · ${d.periodo}`, 'obs', 'bar-chart-3', c.areas.map(x => ({ n: x.nombre, d: pct(x.pct), tone: nivel(x.pct, 50, 75) })), ''); });
+      (this.condOf ? this.condOf(course, anio) : []).forEach(d => grupo('Cuestionario de Condiciones (bienestar)', 'conv', 'heart-handshake', (d.dims || []).map(x => ({ n: x.nombre, d: pct(this.condNum(x.rf)), tone: nivel(x.rf, 50, 70) })), ''));
     }
     if (k === 'casos') {
       const anioIni = `${anio}-01-01`;
       const ints = (State.rawInterventions || []).filter(h => studs.some(s => sameId(s.id, h.studentId)) && String(h.date) >= anioIni && !h.restricted);
       const deriv = ints.filter(h => /deriva/i.test(h.type) || /deriva/i.test(h.background || ''));
-      if (a?.disciplina?.length) L.push(`Estudiantes con alertas de convivencia: ${a.disciplina.slice(0, 12).map(x => `${n(x.s)} (${[x.prot && `${x.prot} protocolo(s)`, x.graves && `${x.graves} falta(s) grave(s)`, x.anot && `${x.anot} anotación(es) negativa(s)`].filter(Boolean).join(', ')})`).join('; ')}.`);
-      if (deriv.length) L.push(`Derivaciones registradas: ${deriv.slice(0, 12).map(h => `${n(studs.find(s => sameId(s.id, h.studentId)) || { name: h.studentName })} (${fmtDate(h.date)}, ${h.type}; acuerdos: ${(h.agreements || []).filter(x => x.text).map(x => this.agreementStatusText(x)).join(', ') || 'sin acuerdos'})`).join('; ')}.`);
-      const pend = studs.map(s => ({ s, n: this.studentAgreements ? this.studentAgreements(s.id).filter(x => this.agreementOpen(x.a)).length : 0 })).filter(x => x.n).sort((x, y) => y.n - x.n);
-      if (pend.length) L.push(`Seguimiento: estudiantes con acuerdos pendientes: ${pend.slice(0, 12).map(x => `${n(x.s)} (${x.n})`).join('; ')}.`);
-      if (a?.socio?.length) L.push(`Con apoyo socioemocional o planes: ${a.socio.slice(0, 12).map(x => n(x.s)).join(', ')}.`);
-      if (!L.length) L.push('No hay casos con registros relevantes en el año.');
+      const pend = studs.map(s => ({ s, c: this.studentAgreements ? this.studentAgreements(s.id).filter(x => this.agreementOpen(x.a)).length : 0 })).filter(x => x.c).sort((x, y) => y.c - x.c);
+      O.kpis.push({ v: a?.disciplina?.length || 0, l: 'Con alertas de convivencia', tone: a?.disciplina?.length ? 'proto' : 'conv' });
+      O.kpis.push({ v: deriv.length, l: 'Derivaciones en el año', tone: deriv.length ? 'warn' : 'conv' });
+      O.kpis.push({ v: pend.length, l: 'Con acuerdos pendientes', tone: pend.length ? 'warn' : 'conv' });
+      O.kpis.push({ v: a?.socio?.length || 0, l: 'Con apoyo socioemocional', tone: 'pie' });
+      grupo('Alertas de convivencia', 'proto', 'shield-alert', (a?.disciplina || []).slice(0, 15).map(x => ({ n: n(x.s), id: x.s.id, d: [x.prot && `${x.prot} protocolo(s)`, x.graves && `${x.graves} falta(s) grave(s)`, x.anot && `${x.anot} anotación(es) negativa(s)`].filter(Boolean).join(' · '), tone: x.prot || x.graves ? 'proto' : 'warn' })), 'Sin estudiantes con alertas de convivencia.');
+      grupo('Derivaciones y su estado', 'warn', 'send', deriv.slice(0, 15).map(h => { const s = studs.find(x => sameId(x.id, h.studentId)); const ags = (h.agreements || []).filter(x => x.text); const ab = ags.filter(x => this.agreementOpen(x)).length; return { n: s ? n(s) : h.studentName, id: s?.id, d: `${fmtDate(h.date)} · ${h.type}${ags.length ? ` · ${ags.length - ab} de ${ags.length} acuerdos realizados` : ''}`, tone: ab ? 'warn' : 'conv' }; }), 'Sin derivaciones registradas este año.');
+      grupo('Seguimiento: acuerdos pendientes', 'warn', 'list-checks', pend.slice(0, 15).map(x => ({ n: n(x.s), id: x.s.id, d: `${x.c} pendiente(s)`, tone: 'warn' })), 'No hay acuerdos pendientes.');
     }
     if (k === 'asistencia') {
       const bajas = studs.filter(s => s.asistencia.real < 85).sort((x, y) => x.asistencia.real - y.asistencia.real);
-      const graves = bajas.filter(s => s.asistencia.real < 70);
       const atr = studs.filter(s => +s.asistencia.atrasos >= 3).sort((x, y) => y.asistencia.atrasos - x.asistencia.atrasos);
-      L.push(a ? `Asistencia promedio del curso: ${a.promAsis} %.` : '');
-      L.push(bajas.length ? `Bajo 85 % de asistencia (${bajas.length}): ${bajas.slice(0, 15).map(s => `${n(s)} ${s.asistencia.real} %`).join('; ')}.` : 'Ningún estudiante bajo 85 % de asistencia.');
-      if (graves.length) L.push(`Casos críticos bajo 70 %: ${graves.map(n).join(', ')}.`);
-      L.push(atr.length ? `Con 3 o más atrasos: ${atr.slice(0, 15).map(s => `${n(s)} (${s.asistencia.atrasos})`).join('; ')}.` : 'Sin estudiantes con 3 o más atrasos.');
+      if (a) O.kpis.push({ v: pct(a.promAsis), l: 'Asistencia promedio', tone: nivel(+a.promAsis, 85, 90) });
+      O.kpis.push({ v: bajas.length, l: 'Bajo 85 % de asistencia', tone: bajas.length ? 'warn' : 'conv' });
+      O.kpis.push({ v: bajas.filter(s => s.asistencia.real < 70).length, l: 'Críticos (bajo 70 %)', tone: bajas.some(s => s.asistencia.real < 70) ? 'proto' : 'conv' });
+      O.kpis.push({ v: atr.length, l: 'Con 3 o más atrasos', tone: atr.length ? 'warn' : 'conv' });
+      grupo('Asistencia bajo 85 %', 'proto', 'calendar-x', bajas.slice(0, 20).map(s => ({ n: n(s), id: s.id, d: `${pct(s.asistencia.real)} · ${s.asistencia.inasistencias} inasistencias`, tone: s.asistencia.real < 70 ? 'proto' : 'warn' })), 'Ningún estudiante bajo 85 %.');
+      grupo('Atrasos reiterados', 'warn', 'clock', atr.slice(0, 20).map(s => ({ n: n(s), id: s.id, d: `${s.asistencia.atrasos} atrasos`, tone: s.asistencia.atrasos >= 6 ? 'proto' : 'warn' })), 'Sin estudiantes con 3 o más atrasos.');
     }
     if (k === 'academica') {
-      if (a) {
-        L.push(`Promedio general del curso: ${a.promCurso || 'sin notas'} (${a.conNotas} estudiantes con notas).`);
-        const crit = (a.rendimiento || []).filter(r => r.bajo).sort((x, y) => y.bajo - x.bajo);
-        if (crit.length) L.push(`Asignaturas con estudiantes bajo 4,0: ${crit.slice(0, 6).map(r => `${r.nombre} (${r.bajo})`).join('; ')}.`);
-        L.push(a.riesgo?.length ? `Riesgo de repitencia (${a.riesgo.length}): ${a.riesgo.map(x => `${n(x.s)} (${x.motivos.join(', ')})`).join('; ')}.` : 'Ningún estudiante en riesgo de repitencia con los datos actuales.');
-        if (a.pie?.length) L.push(`Estudiantes PIE: ${a.pie.length}.`);
-      }
       const planes = (State.studentPlans || []).filter(p => studs.some(s => sameId(s.id, p.studentId)));
-      const rep = (State.rawInclusionReports || []).filter(p => studs.some(s => sameId(s.id, p.studentId)) && p.area === 'REPITENCIA');
-      if (planes.length) L.push(`Planes de apoyo individuales: ${planes.slice(0, 12).map(p => `${n(studs.find(s => sameId(s.id, p.studentId)) || {})} (${p.type || 'plan'}, ${p.status || 'en desarrollo'}${p.evalQuant ? `, logro ${p.evalQuant} %` : ''})`).join('; ')}.`);
-      if (rep.length) L.push(`Planes por riesgo de repitencia: ${rep.length}.`);
+      const rep = (State.rawInclusionReports || []).filter(p => studs.some(s => sameId(s.id, p.studentId)) && this.planArea && this.planArea(p) === 'Repitencia');
+      if (a) {
+        O.kpis.push({ v: a.promCurso && a.promCurso !== '-' ? String(a.promCurso).replace('.', ',') : 'Sin notas', l: `Promedio general (${a.conNotas} con notas)`, tone: a.promCurso && a.promCurso !== '-' ? nivel(+String(a.promCurso).replace(',', '.'), 5, 5.5) : 'neutral' });
+        O.kpis.push({ v: a.riesgo?.length || 0, l: 'Riesgo de repitencia', tone: a.riesgo?.length ? 'proto' : 'conv' });
+        O.kpis.push({ v: a.pie?.length || 0, l: 'Estudiantes PIE', tone: 'pie' });
+      }
+      O.kpis.push({ v: planes.length + rep.length, l: 'Planes de apoyo', tone: 'obs' });
+      if (a) grupo('Asignaturas con estudiantes bajo 4,0', 'proto', 'book-x', (a.rendimiento || []).filter(r => r.bajo).sort((x, y) => y.bajo - x.bajo).slice(0, 8).map(r => ({ n: r.nombre, d: `${r.bajo} estudiante(s) bajo 4,0`, tone: r.bajo >= 5 ? 'proto' : 'warn' })), 'Sin asignaturas con estudiantes bajo 4,0 (o sin notas cargadas).');
+      if (a) grupo('Riesgo de repitencia', 'proto', 'alert-triangle', (a.riesgo || []).map(x => ({ n: n(x.s), id: x.s.id, d: x.motivos.join(' · '), tone: 'proto' })), 'Ningún estudiante en riesgo de repitencia con los datos actuales.');
+      grupo('Planes de apoyo y su avance', 'obs', 'clipboard-list', [...planes.map(p => { const s = studs.find(x => sameId(x.id, p.studentId)); return { n: s ? n(s) : '', id: s?.id, d: `${p.type || 'Plan'} · ${p.status || 'en desarrollo'}${p.evalQuant ? ` · logro ${p.evalQuant} %` : ''}`, tone: +p.evalQuant >= 70 ? 'conv' : 'warn' }; }), ...rep.map(p => { const s = studs.find(x => sameId(x.id, p.studentId)); return { n: s ? n(s) : '', id: s?.id, d: `Plan por riesgo de repitencia${p.date ? ` · ${fmtDate(p.date)}` : ''}`, tone: 'warn' }; })].slice(0, 20), 'Sin planes de apoyo registrados.');
     }
-    return L.filter(Boolean);
+    return O;
   },
-  reuDatosHtml(course, k) { return `<ul class="reu-datos__list">${this.reuDatos(course, k).map(x => `<li>${esc(x)}</li>`).join('')}</ul>`; },
+  /** Versión en texto (para insertar en el acta). */
+  reuDatos(course, k) {
+    const O = this.reuDatosObj(course, k);
+    return [
+      O.kpis.length ? O.kpis.map(x => `${x.l}: ${x.v}`).join(' · ') + '.' : '',
+      ...O.notas.map(x => `${x}.`),
+      ...O.grupos.map(g => g.items.length ? `${g.t}: ${g.items.map(i => `${i.n}${i.d ? ` (${i.d})` : ''}`).join('; ')}.` : (g.vacio ? `${g.vacio}` : ''))
+    ].filter(Boolean);
+  },
+  reuDatosHtml(course, k) {
+    const O = this.reuDatosObj(course, k);
+    const link = !this.isQuickOnly();
+    return `${O.kpis.length ? `<div class="reu-kpis">${O.kpis.map(x => `<div class="reu-kpi" data-tone="${x.tone}"><span class="reu-kpi__v ${/\d/.test(String(x.v)) ? 'num' : 'reu-kpi__v--txt'}">${esc(String(x.v))}</span><span class="reu-kpi__l">${esc(x.l)}</span></div>`).join('')}</div>` : ''}
+      ${O.notas.length ? `<p class="reu-nota">${O.notas.map(esc).join(' · ')}</p>` : ''}
+      ${O.grupos.length ? `<div class="reu-grupos">${O.grupos.map(g => `<div class="reu-grupo" data-tone="${g.tone}"><h4>${ico(g.icon)}${esc(g.t)} ${g.items.length ? `<span class="reu-grupo__n">${g.items.length}</span>` : ''}</h4>
+        ${g.items.length ? `<ul>${g.items.map(i => `<li data-tone="${i.tone || g.tone}"><span class="reu-li__n">${i.id && link ? `<button type="button" class="link-btn" onclick="app.openStudent(${jsq(i.id)})">${esc(i.n)}</button>` : esc(i.n)}</span>${i.d ? `<span class="reu-li__d">${esc(i.d)}</span>` : ''}</li>`).join('')}</ul>` : `<p class="muted small">${esc(g.vacio || 'Sin datos.')}</p>`}</div>`).join('')}</div>` : ''}`;
+  },
   reuInsertarDatos(id, k) {
     const ta = el('reu-sec-' + k);
     const txt = this.reuDatos(this.reunion(id).course, k).map(x => `- ${x}`).join('\n');
@@ -381,6 +408,37 @@ Object.assign(app, {
         <h4>${ico('check-circle')}Esta reunión (${fmtDate(r.fecha)}) <span data-reu-tally="${esc(String(r.id))}">${this.reuTally(r)}</span></h4>
         <div class="stack" data-reu-ags="${esc(String(r.id))}">${(r.agreements || []).map((a, i) => a.text ? this.reuAcuerdoHtml(r, a, i) : '').join('') || '<p class="muted small">Aún no hay acuerdos.</p>'}</div>
       </div>` });
+  },
+
+  // ---------------- EDITAR, REABRIR Y ELIMINAR ----------------
+  reuEditar(id) {
+    const r = this.reunion(id);
+    ui.modal({ title: `Editar reunión · ${r.course}`, icon: 'edit-2', size: 'md', okText: 'Guardar cambios',
+      body: `<div class="grid-3">
+        ${fieldHtml('Fecha', `<input type="date" id="reu-e-fecha" class="input" value="${esc(r.fecha)}">`)}
+        ${fieldHtml('Hora', `<input type="time" id="reu-e-hora" class="input" value="${esc(r.hora || '')}">`)}
+        ${fieldHtml('Lugar', `<input id="reu-e-lugar" class="input" value="${esc(r.lugar || '')}">`)}
+      </div>`,
+      onOk: async () => {
+        if (!el('reu-e-fecha').value) { toast('Indique la fecha', 'error'); return false; }
+        if (await this.reuPatch(id, { fecha: el('reu-e-fecha').value, hora: el('reu-e-hora').value, lugar: el('reu-e-lugar').value.trim() }, 'Reunión actualizada')) this.render();
+      } });
+  },
+  reuReabrir(id) {
+    ui.confirm({ title: 'Reabrir la reunión', icon: 'unlock', tone: 'warn', okText: 'Reabrir', msg: 'La reunión vuelve a quedar abierta para corregirla. El PIN anterior no se reactiva: si necesita registrar asistencia, genere uno nuevo. Recuerde cerrarla de nuevo al terminar.', action: async () => {
+      if (await this.reuPatch(id, { estado: 'abierta', pinActivo: false, reabiertaPor: State.currentUser.name, reabiertaEl: today() }, 'Reunión reabierta')) this.render();
+    } });
+  },
+  reuEliminar(id) {
+    const r = this.reunion(id);
+    ui.confirm({ title: 'Eliminar reunión', msg: `¿Eliminar la reunión de nivel de <strong>${esc(r.course)}</strong> del ${fmtDate(r.fecha)}? Se eliminan sus puntos, participantes y acuerdos. No se puede deshacer.`, okText: 'Sí, eliminar', action: async () => {
+      try {
+        await DB.remove('reuniones', id);
+        State.reunionId = null;
+        notice({ type: 'success', title: 'Reunión eliminada', msg: `${r.course}, ${fmtDate(r.fecha)}.` });
+        this.navigate('reuniones');
+      } catch (e) { notice({ type: 'error', title: 'No se pudo eliminar', msg: e.message }); }
+    } });
   },
 
   // ---------------- CIERRE Y ACTA ----------------

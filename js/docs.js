@@ -12,6 +12,10 @@ const AREAS = {
   Repitencia: { label: 'Riesgo de repitencia', corto: 'Riesgo de repitencia', tone: 'warn', icon: 'alert-triangle', plan: 'Plan de riesgo de repitencia' }
 };
 const RE_PIE_DOC = /\bpaci\b|\bpai\b|plan de apoyo individual|adecuaci[oó]n curricular/i;
+// Documentos claramente del Programa de Integración aunque se hayan subido sin área
+const RE_PIE_AMPLIO = /\bPIE\b|\bpaci\b|\bpai\b|plan de apoyo individual|adecuaci[oó]n curricular|integraci[oó]n escolar|\bNEE[PT]?\b|necesidades educativas|psicopedag|fonoaudi|educador[a]? diferencial|educaci[oó]n diferencial|\bFUDEI\b|formulario [uú]nico|reevaluaci[oó]n|evaluaci[oó]n (integral|diagn[oó]stica) PIE|anamnesis/i;
+// Perfiles o cargos del Equipo PIE
+const RE_ROL_PIE = /\bPIE\b|inclusi[oó]n|integraci[oó]n|diferencial|fonoaudi|psicopedag/i;
 const RE_REPITENCIA = /repitencia|repetir|riesgo de (repet|reprob)|acompa[ñn]amiento|decreto\s*(n[°º.]?\s*)?67|riesgo acad[eé]mico/i;
 
 const IA_AVISO = `Antes de enviar datos a la IA (Groq, servicio externo con servidores fuera de Chile):
@@ -33,7 +37,7 @@ Object.assign(app, {
   },
   /** Área de un documento ('' si es un respaldo general). */
   evArea(e) {
-    if (!e.area) return '';
+    if (!e.area) return RE_PIE_AMPLIO.test(`${e.type || ''} ${e.fileName || ''} ${e.description || ''} ${e.titulo || ''}`) ? 'PIE' : '';
     if (e.areaFija || e.area !== 'PIE') return e.area;
     // El documento de un plan sigue al plan
     const key = `${State.rawInclusionReports.length}|${State.lastSync}|${State.areaVer || 0}`;

@@ -21,7 +21,8 @@ window.app = {
     State.loading = false;
     this.render();
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.refresh(); });
-    setInterval(() => this.refresh(), 120000);
+    // Actualización automática cada 5 minutos y solo con la pestaña visible (menos carga para el servidor)
+    setInterval(() => { if (document.visibilityState === 'visible') this.refresh(); }, 300000);
   },
 
   /** Vuelve a leer los datos del servidor cuando no hay nada a medio editar. */
