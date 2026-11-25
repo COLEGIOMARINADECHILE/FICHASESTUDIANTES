@@ -332,7 +332,7 @@ window.app = {
   },
 
   // ---------------- RENDER GENERAL ----------------
-  RENDERERS: { ov_traspaso: 'renderOvTraspaso', ov_riesgos: 'renderOvRiesgos', dia: 'renderDia', mine: 'renderMine', course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin' },
+  RENDERERS: { ov_traspaso: 'renderOvTraspaso', ov_riesgos: 'renderOvRiesgos', dia: 'renderDia', mine: 'renderMine', course_risk: 'renderCourseRisk', pie: 'renderPie', traspaso: 'renderTraspaso', audit: 'renderAudit', quick: 'renderQuick', dashboard: 'renderDashboard', courses: 'renderCourses', students: 'renderStudents', student_detail: 'renderStudentDetail', course_plans: 'renderCoursePlans', plan_detail: 'renderPlanEditor', alerts: 'renderAlerts', course_summary: 'renderCourseSummary', admin: 'renderAdmin', reuniones: 'renderReuniones' },
 
   render() {
     el('loading-view').hidden = !State.loading;
@@ -366,7 +366,7 @@ window.app = {
   renderNav() {
     const v = State.currentView;
     const quick = this.isQuickOnly();
-    const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']], ['mine', 'list-todo', 'Mis acciones', true, ['mine']]] : [
+    const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']], ['mine', 'list-todo', 'Mis acciones', true, ['mine']], ['reuniones', 'users-round', 'Reuniones de nivel', true, ['reuniones']]] : [
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
       ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
@@ -374,6 +374,7 @@ window.app = {
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
       ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk', 'ov_riesgos']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
+      ['reuniones', 'users-round', 'Reuniones de nivel', hasAccess('ver_fichas') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas'), ['reuniones']],
       ['pick_dia', 'bar-chart-3', 'Resultados DIA', hasAccess('ver_fichas'), ['dia']],
       ['cartas', 'file-check', 'Cartas de compromiso', !!(this.canUploadActas && this.canUploadActas()), []],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
@@ -732,7 +733,7 @@ window.app = {
 
     el('detail-header').innerHTML = `
       <div class="entry__head">
-        <span class="avatar avatar--lg" aria-hidden="true">${esc(s.name.charAt(0))}</span>
+        ${this.studentPhotoHtml ? this.studentPhotoHtml(s) : `<span class="avatar avatar--lg" aria-hidden="true">${esc(s.name.charAt(0))}</span>`}
         <div class="entry__id">
           <h1 class="entry__name">${esc(s.name)} ${this.areaBadges(s)}</h1>
           <div class="chips">${chip(s.rut || 'Sin RUN', 'neutral')}${chip(s.curso, 'conv')}${s.asistencia.alerta ? chip('Alerta de asistencia', 'proto', 'alert-triangle') : ''}${s.status === 'blocked' ? chip(s.egresado ? (s.motivoRetiro || `Egresado(a) ${s.anioEgreso || ''}`) : `Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}${s.motivoRetiro ? ': ' + s.motivoRetiro : ''}`, 'ink') : ''}${this.healthChips(s)}${this.repToggleHtml(s)}</div>

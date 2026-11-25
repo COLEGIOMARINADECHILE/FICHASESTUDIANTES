@@ -9,7 +9,7 @@
 //   El año anterior se consulta en la ficha ("Años anteriores") o en modo
 //   consulta del año completo, y un acuerdo se puede "retomar" como nuevo.
 // =====================================================================
-const ANIO_SEPARAR = { interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', studentPlans: 'studentPlans', evidences: 'rawEvidences', coursePlans: 'coursePlans' };
+const ANIO_SEPARAR = { interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', studentPlans: 'studentPlans', evidences: 'rawEvidences', coursePlans: 'coursePlans', reuniones: 'reuniones' };
 const ANIO_POR_ANIO = { dia: 'dia', traspasos: 'traspasos', riesgos: 'riesgos' };
 const SITUACIONES = [['promovido', 'Promovido(a)'], ['repite', 'Repite'], ['egresa', 'Egresa']];
 

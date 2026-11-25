@@ -250,7 +250,7 @@ const API = {
 };
 
 // Colección del servidor → arreglo en State
-const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences', traspasos: 'traspasos', riesgos: 'riesgos', dia: 'dia' };
+const STORE = { users: 'users', students: 'rawStudents', courses: 'rawCoursesDB', interventions: 'rawInterventions', nursings: 'rawNursings', observations: 'rawObservations', reports: 'rawInclusionReports', knowledgeDocs: 'knowledgeDocs', coursePlans: 'coursePlans', studentPlans: 'studentPlans', evidences: 'rawEvidences', traspasos: 'traspasos', riesgos: 'riesgos', dia: 'dia', reuniones: 'reuniones' };
 
 const DB = {
   async load() {
