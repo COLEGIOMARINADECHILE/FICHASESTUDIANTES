@@ -1431,3 +1431,23 @@ body.is-archivo .main, body.is-archivo main { outline: 3px solid #c98a12; outlin
 .pie-rev__list { margin: 0.6rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.4rem; font-size: 0.88rem; }
 .pie-rev__list > li[data-ok="false"] { color: #9b1c12; }
 .reu-kpi__v--txt { font-size: 1rem; font-weight: 700; padding: 0.25rem 0; }
+
+/* Aviso de reunión en curso */
+.reu-aviso { position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); z-index: 190; display: grid; gap: 0.4rem; width: min(40rem, calc(100vw - 2rem)); }
+.reu-aviso[hidden] { display: none; }
+.reu-aviso__item { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.8rem; border-radius: 999px; background: #3b2f12; color: #fff4d6; box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); font-size: 0.88rem; }
+.reu-aviso__item[data-on="true"] { background: #14402b; color: #e3f7ec; }
+.reu-aviso__item span:nth-child(2) { flex: 1; }
+.reu-aviso__dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: #f5b83d; animation: reuPulse 1.4s ease-in-out infinite; flex: none; }
+.reu-aviso__item[data-on="true"] .reu-aviso__dot { background: #4ade80; }
+@keyframes reuPulse { 50% { opacity: 0.35; transform: scale(0.75); } }
+@media (prefers-reduced-motion: reduce) { .reu-aviso__dot { animation: none; } }
+@media print { .reu-aviso { display: none !important; } }
+.reu-aviso-modal__curso { margin: 0; font-size: 1.4rem; font-weight: 800; color: var(--color-heading); }
+.reu-pin-input { font-size: 1.8rem; letter-spacing: 0.4em; text-align: center; font-weight: 700; }
+/* Participantes invitados sin asistencia y secciones de IA */
+.reu-invitados { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.6rem; padding: 0.5rem 0.6rem; border-radius: 10px; background: var(--color-paper-2, #f4f2ec); }
+.reu-inv { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--color-paper); border: 1px dashed var(--color-rule); font-size: 0.82rem; }
+.reu-incl { margin: 0.2rem 0 0.4rem; }
+.reu-ia { border-left: 5px solid #7c5cc4; }
+.reu-sec .field__label { display: block; margin-top: 0.6rem; }

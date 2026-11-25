@@ -177,12 +177,14 @@ Object.assign(app, {
       ${r.estado === 'abierta' && org ? `<section class="panel reu-pin"><div><span class="cell__label">PIN de asistencia</span><span class="reu-pin__num num">${esc(r.pin || '------')}</span><span class="muted small">Los participantes entran a "Reuniones de nivel" → "Registrar mi asistencia con PIN". Deja de funcionar al cerrar la reunión.</span></div>
         <div class="row-actions"><button class="btn btn--sm" onclick="app.reuPinNuevo(${jsq(r.id)})">${ico('refresh-cw')}Generar otro PIN</button></div></section>` : ''}
 
-      <section class="panel"><div class="panel__head"><h2>${ico('users')}Participantes (${pres.length} presentes de ${(r.participantes || []).length})</h2></div>
-        <div class="table-wrap"><table class="table table--dense"><thead><tr><th>Nombre</th><th>Cargo</th><th>Asistencia</th>${org ? '<th class="t-actions"></th>' : ''}</tr></thead><tbody>
-        ${(r.participantes || []).map((p, i) => `<tr><td><span class="cell-title">${esc(p.nombre)}</span>${p.userId ? '' : '<span class="cell-sub">Externo(a)</span>'}</td><td>${esc(p.cargo || '')}</td>
+      <section class="panel"><div class="panel__head"><h2>${ico('users')}Participantes (${pres.length})</h2></div>
+        ${pres.length ? `<div class="table-wrap"><table class="table table--dense"><thead><tr><th>Nombre</th><th>Cargo</th><th>Asistencia</th>${org ? '<th class="t-actions"></th>' : ''}</tr></thead><tbody>
+        ${(r.participantes || []).map((p, i) => !p.presente ? '' : `<tr><td><span class="cell-title">${esc(p.nombre)}</span>${p.userId ? '' : '<span class="cell-sub">Externo(a)</span>'}</td><td>${esc(p.cargo || '')}</td>
           <td>${org ? `<label class="check"><input type="checkbox" ${p.presente ? 'checked' : ''} onchange="app.reuPresente(${jsq(r.id)}, ${i}, this.checked)"><span>${p.presente ? `Presente${p.via === 'pin' ? ` con PIN (${esc(p.hora)})` : p.hora ? ` (${esc(p.hora)})` : ''}` : 'Ausente'}</span></label>` : (p.presente ? chip(`Presente${p.via === 'pin' ? ' con PIN' : ''}${p.hora ? ' ' + p.hora : ''}`, 'conv', 'check') : chip('Ausente', 'neutral'))}</td>
           ${org ? `<td class="t-actions">${sameId(p.userId, r.creadoPorId) ? '' : `<button class="icon-btn icon-btn--danger" title="Quitar" aria-label="Quitar a ${esc(p.nombre)}" onclick="app.reuQuitar(${jsq(r.id)}, ${i})">${ico('x')}</button>`}</td>` : ''}</tr>`).join('')}
-        </tbody></table></div>
+        </tbody></table></div>` : '<p class="muted small">Aún nadie registra asistencia.</p>'}
+        ${(r.participantes || []).some(p => !p.presente) ? `<div class="reu-invitados"><span class="small"><strong>Invitados que aún no registran asistencia</strong> (no aparecen en el acta):</span>
+          ${(r.participantes || []).map((p, i) => p.presente ? '' : `<span class="reu-inv">${esc(p.nombre)}${p.cargo ? ` <span class="muted">· ${esc(p.cargo)}</span>` : ''}${org ? `<button type="button" class="link-btn" onclick="app.reuPresente(${jsq(r.id)}, ${i}, true)">marcar presente</button><button type="button" class="icon-btn icon-btn--sm" title="Quitar invitación" aria-label="Quitar a ${esc(p.nombre)}" onclick="app.reuQuitar(${jsq(r.id)}, ${i})">${ico('x')}</button>` : ''}</span>`).join('')}</div>` : ''}
         ${org ? `<div class="reu-add">
           <select id="reu-add-staff" class="input" aria-label="Agregar funcionario"><option value="">Agregar funcionario...</option>${options(this.staffList().filter(u => !(r.participantes || []).some(p => sameId(p.userId, u.id))).map(u => [u.id, `${u.name} (${this.cargoDe(u)})`]))}</select>
           <button class="btn btn--sm" onclick="app.reuAgregar(${jsq(r.id)})">${ico('user-plus')}Agregar</button>
@@ -192,6 +194,8 @@ Object.assign(app, {
       </section>
 
       ${prev ? `<section class="panel">${this.reuResumenAnteriorHtml(prev)}</section>` : ''}
+
+      ${this.reuIASeccionHtml(r, 'intro', 'Introducción: análisis del curso', 'Panorama del curso para abrir la reunión, a partir de los datos de la plataforma y de la reunión anterior.', 'sparkles', puede)}
 
       ${REU_SECCIONES.map(([k, t, quien, icon]) => this.reuSeccionHtml(r, k, t, quien, icon, puede)).join('')}
 
@@ -214,7 +218,9 @@ Object.assign(app, {
           ${fieldHtml('Fecha', `<input type="date" class="input" value="${esc(r.proxima?.fecha || '')}" ${puede ? '' : 'disabled'} onchange="app.reuProxima(${jsq(r.id)}, 'fecha', this.value)">`)}
           ${fieldHtml('Temas y acuerdos a revisar en la próxima sesión', `<textarea class="input" rows="2" ${puede ? '' : 'readonly'} onchange="app.reuProxima(${jsq(r.id)}, 'temas', this.value)">${esc(r.proxima?.temas || '')}</textarea>`, 'span-2')}
         </div>
-      </section>`;
+      </section>
+
+      ${this.reuIASeccionHtml(r, 'conclusion', 'Conclusión de la reunión', 'Síntesis de lo tratado, los acuerdos y los focos para la próxima sesión.', 'flag', puede)}`;
     icons();
   },
   reuRecargar() { const id = State.reunionId; DB.load().then(() => { State.reunionId = id; this.render(); toast('Reunión actualizada'); }).catch(e => toast(e.message, 'error')); },
@@ -223,8 +229,9 @@ Object.assign(app, {
     return `<section class="panel reu-sec">
       <div class="panel__head"><h2>${ico(icon)}${esc(titulo)}</h2><span class="muted small">${esc(quien)}</span></div>
       <details class="reu-datos" ${s.texto ? '' : 'open'}><summary class="small">${ico('database')}Datos de la plataforma para monitorear</summary><div class="reu-datos__body">${this.reuDatosHtml(r.course, k)}</div>
-        ${puede ? `<button type="button" class="btn btn--sm" onclick="app.reuInsertarDatos(${jsq(r.id)}, '${k}')">${ico('corner-down-right')}Insertar estos datos en el texto</button>` : ''}</details>
-      <textarea class="input" id="reu-sec-${k}" rows="6" ${puede ? '' : 'readonly'} placeholder="${puede ? 'Escriba lo tratado...' : 'Sin registro.'}" onchange="app.reuGuardarSeccion(${jsq(r.id)}, '${k}', this.value)">${esc(s.texto || '')}</textarea>
+        <label class="check reu-incl"><input type="checkbox" ${r['incl_' + k] === false ? '' : 'checked'} ${puede ? '' : 'disabled'} onchange="app.reuPatch(${jsq(r.id)}, { incl_${k}: this.checked }, this.checked ? 'Los datos se incluirán en el acta' : 'Los datos no se incluirán en el acta')"><span>Incluir estos datos en el acta, ordenados en tablas</span></label></details>
+      <span class="field__label">Lo tratado en la reunión</span>
+      <textarea class="input" id="reu-sec-${k}" rows="5" ${puede ? '' : 'readonly'} placeholder="${puede ? 'Escriba lo conversado, los casos revisados y las decisiones...' : 'Sin registro.'}" onchange="app.reuGuardarSeccion(${jsq(r.id)}, '${k}', this.value)">${esc(s.texto || '')}</textarea>
       ${s.por ? `<p class="muted small">Última edición: ${esc(s.por)}, ${esc(s.fecha || '')}</p>` : ''}
     </section>`;
   },
@@ -410,6 +417,58 @@ Object.assign(app, {
       </div>` });
   },
 
+  // ---------------- INTRODUCCIÓN Y CONCLUSIÓN CON IA (editables) ----------------
+  reuIASeccionHtml(r, campo, titulo, desc, icon, puede) {
+    const s = r['sec_' + campo] || {};
+    return `<section class="panel reu-sec reu-ia" data-campo="${campo}">
+      <div class="panel__head"><h2>${ico(icon)}${esc(titulo)}</h2>
+        ${puede ? `<button type="button" class="btn btn--sm" onclick="app.reuIA(${jsq(r.id)}, '${campo}')">${ico('sparkles')}${s.texto ? 'Proponer de nuevo con IA' : 'Generar con IA'}</button>` : ''}</div>
+      <p class="muted small">${esc(desc)} La IA solo recibe datos del curso sin nombres de estudiantes; el texto se puede editar y queda en el acta.</p>
+      <textarea class="input" id="reu-sec-${campo}" rows="6" ${puede ? '' : 'readonly'} placeholder="${puede ? 'Escriba o genere el texto con IA...' : 'Sin registro.'}" onchange="app.reuGuardarSeccion(${jsq(r.id)}, '${campo}', this.value)">${esc(s.texto || '')}</textarea>
+      ${s.por ? `<p class="muted small">Última edición: ${esc(s.por)}, ${esc(s.fecha || '')}${s.ia ? ' · propuesta inicial de la IA' : ''}</p>` : ''}
+    </section>`;
+  },
+  /** Datos del curso para la IA: indicadores y cantidades, sin nombres. */
+  reuDatosIA(r) {
+    const studs = this.getStudents().filter(s => s.curso === r.course);
+    const anon = t => this.anonimizar ? this.anonimizar(String(t || '').slice(0, 1500), studs) : String(t || '').slice(0, 1500);
+    const secciones = {};
+    REU_SECCIONES.forEach(([k, t]) => {
+      const O = this.reuDatosObj(r.course, k);
+      secciones[t] = { indicadores: O.kpis.map(x => `${x.l}: ${x.v}`), resumen: O.grupos.map(g => ({ tema: g.t, cantidad: g.items.length, detalle_sin_nombres: g.items.every(i => !i.id) ? g.items.map(i => `${i.n} ${i.d || ''}`).slice(0, 8) : undefined })), lo_tratado: anon(r['sec_' + k]?.texto) };
+    });
+    const prev = r.anterior ? this.reunion(r.anterior.reunionId) : null;
+    return {
+      curso: r.course, fecha: r.fecha, secciones,
+      reunion_anterior: prev ? { fecha: prev.fecha, acuerdos: (prev.agreements || []).filter(a => a.text).map(a => ({ acuerdo: anon(a.text), estado: this.agreementStatusText(a) })), temas_previstos: anon(prev.proxima?.temas) } : null,
+      acuerdos_de_esta_reunion: (r.agreements || []).filter(a => a.text).map(a => ({ acuerdo: anon(a.text), responsable: a.responsable ? 'asignado' : 'sin responsable', plazo: a.plazo || '' })),
+      introduccion: anon(r.sec_intro?.texto)
+    };
+  },
+  async reuIA(id, campo) {
+    if (!AI.ready()) return;
+    const r = this.reunion(id);
+    const ok = await this.iaConsent(`Reunión de nivel de ${esc(r.course)}: indicadores del curso (matrícula, asistencia, convivencia, notas, DIA), cantidades de casos y, para la conclusión, lo escrito en la reunión y sus acuerdos. Los nombres de estudiantes se reemplazan antes de enviar.`);
+    if (!ok) return;
+    const datos = this.reuDatosIA(r);
+    const pide = campo === 'intro'
+      ? 'Redacta la INTRODUCCIÓN de la reunión: un análisis breve del curso que oriente la conversación. Incluye (1) panorama general con las cifras clave, (2) fortalezas, (3) focos de preocupación con su evidencia (asistencia, convivencia, rendimiento, DIA), (4) estado de los acuerdos de la reunión anterior y (5) 3 preguntas para guiar la reunión. Entre 10 y 16 líneas.'
+      : 'Redacta la CONCLUSIÓN de la reunión: síntesis de lo tratado en cada punto, decisiones y acuerdos tomados (con su responsable y plazo si existen), estado de los acuerdos anteriores y focos a monitorear en la próxima reunión. Entre 8 y 14 líneas.';
+    AI.run(campo === 'intro' ? 'Preparando la introducción' : 'Preparando la conclusión', 'La IA analiza los datos del curso...', async () => {
+      const res = await API.call('ai', { motivo: `Reunión de nivel ${r.course} (${campo === 'intro' ? 'introducción' : 'conclusión'})`, json: true, prompt: `Eres parte del equipo de gestión de un colegio público en Chile (profesor jefe, convivencia escolar, inspectoría, orientación y coordinación de ciclo). ${pide}
+Reglas: usa solo los datos entregados y cita las cifras; no inventes casos ni nombres; "[estudiante]" reemplaza nombres y no debes deducirlos; lenguaje profesional, claro y preventivo; usa viñetas cortas cuando ayude; no hagas diagnósticos clínicos.
+
+DATOS (JSON): ${JSON.stringify(datos).slice(0, 12000)}
+
+Devuelve SOLO un JSON: {"texto": "..."}` });
+      const texto = String(res.json?.texto || '').trim();
+      if (!texto) throw new Error('La IA no devolvió texto. Intente de nuevo.');
+      await this.reuPatch(id, { ['sec_' + campo]: { texto, por: State.currentUser.name, fecha: new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }), ia: true } });
+      this.render();
+      toast('Propuesta lista: revísela y edítela si es necesario');
+    });
+  },
+
   // ---------------- EDITAR, REABRIR Y ELIMINAR ----------------
   reuEditar(id) {
     const r = this.reunion(id);
@@ -448,7 +507,9 @@ Object.assign(app, {
       const prev = r.anterior ? this.reunion(r.anterior.reunionId) : null;
       const ahora = new Date();
       const campos = { estado: 'cerrada', pinActivo: false, fechaCierre: today(), horaCierre: ahora.toTimeString().slice(0, 5), cerradaPor: State.currentUser.name,
-        revisionAnterior: prev ? (prev.agreements || []).filter(a => a.text).map(a => ({ text: a.text, responsable: a.responsable || '', plazo: this.fmtPlazo(a), estado: this.agreementStatusText(a) })) : [] };
+        revisionAnterior: prev ? (prev.agreements || []).filter(a => a.text).map(a => ({ text: a.text, responsable: a.responsable || '', plazo: this.fmtPlazo(a), estado: this.agreementStatusText(a) })) : [],
+        // Los datos de la plataforma quedan fijos en el acta tal como estaban al cerrar
+        datosCierre: Object.fromEntries(REU_SECCIONES.map(([k]) => [k, this.reuDatosObj(r.course, k)])) };
       if (await this.reuPatch(id, campos)) {
         notice({ type: 'success', title: 'Reunión cerrada', msg: 'Quedó como acta. Puede descargarla en PDF o Word para imprimir y firmar.', actions: [['Descargar acta', () => this.reuActa(id)]] });
         this.render();
@@ -461,23 +522,105 @@ Object.assign(app, {
   }
 });
 
-// Acta de la reunión (PDF o Word)
+// Acta de la reunión (PDF o Word): mismo orden que en pantalla, con los datos en tablas
+app.reuDatosDocHtml = function (O) {
+  if (!O) return '';
+  const kpis = (O.kpis || []).length ? docTable(O.kpis.map(x => esc(x.l)), [O.kpis.map(x => `<strong>${esc(String(x.v))}</strong>`)], '') : '';
+  const notas = (O.notas || []).length ? `<p class="doc-muted">${O.notas.map(esc).join(' · ')}</p>` : '';
+  const grupos = (O.grupos || []).map(g => g.items.length
+    ? `<p><strong>${esc(g.t)}</strong> (${g.items.length})</p>${docTable(['Nombre o ítem', 'Detalle'], g.items.map(i => [esc(i.n || ''), esc(i.d || '')]), '')}`
+    : `<p class="doc-muted"><strong>${esc(g.t)}:</strong> ${esc(g.vacio || 'Sin datos.')}</p>`).join('');
+  return `<div class="doc-avoid"><p class="doc-muted"><em>Datos de la plataforma${O.fecha ? ` al ${esc(O.fecha)}` : ''}</em></p>${kpis}${notas}</div>${grupos}`;
+};
 app.REPORTS.reunion_nivel = function () {
   const r = app.reunion(State.export.tempReunionId) || {};
   const prev = r.anterior ? app.reunion(r.anterior.reunionId) : null;
   const revision = r.revisionAnterior && r.revisionAnterior.length ? r.revisionAnterior : (prev ? (prev.agreements || []).filter(a => a.text).map(a => ({ text: a.text, responsable: a.responsable || '', plazo: app.fmtPlazo(a), estado: app.agreementStatusText(a) })) : []);
-  const asis = p => p.presente ? `Presente${p.via === 'pin' ? ` (PIN ${p.hora || ''})` : p.hora ? ` (${p.hora})` : ''}` : 'Ausente';
+  const presentes = (r.participantes || []).filter(p => p.presente);
+  const asis = p => p.via === 'pin' ? `Con PIN${p.hora ? ` (${p.hora})` : ''}` : p.via === 'organiza' ? `Organiza${p.hora ? ` (${p.hora})` : ''}` : `Presente${p.hora ? ` (${p.hora})` : ''}`;
+  const caja = (t, vacio = 'Sin registro.') => `<div class="doc-box doc-pre">${esc(t || vacio)}</div>`;
+  let n = 0;
+  const titulo = t => docH(`${++n}. ${t}`);
+  const seccion = ([k, t, quien]) => {
+    const datos = r['incl_' + k] === false ? '' : app.reuDatosDocHtml(r.datosCierre?.[k] ? { ...r.datosCierre[k], fecha: fmtDate(r.fechaCierre) } : app.reuDatosObj(r.course, k));
+    return `<div class="doc-avoid">${titulo(t.replace(/^[a-d]\)\s*/, ''))}<p class="doc-muted">Responsable: ${esc(quien)}</p></div>${datos}<p><strong>Lo tratado:</strong></p>${caja(r['sec_' + k]?.texto)}`;
+  };
   return {
     filename: `Acta_reunion_nivel_${String(r.course || '').replace(/\s+/g, '_')}_${r.fecha || ''}.pdf`, title: 'ACTA DE REUNIÓN DE NIVEL',
-    body: `${docKv([[['Curso', esc(r.course || '')], ['Fecha', `${fmtDate(r.fecha)}${r.hora ? ` · ${esc(r.hora)}` : ''}`]], [['Lugar', esc(r.lugar || '-')], ['Profesor(a) jefe', esc(app.profJefeOf(r.course) || '-')]], [['Organiza', esc(r.creadoPor || '')], ['Estado', r.estado === 'cerrada' ? `Cerrada el ${fmtDate(r.fechaCierre)} a las ${esc(r.horaCierre || '')}` : 'En curso (acta preliminar)']], [['PIN de asistencia', esc(r.pin || 'No disponible')], ['Asistentes', String((r.participantes || []).filter(p => p.presente).length)]]])}
-      <div class="doc-avoid">${docH('Participantes')}${docTable(['Nombre', 'Cargo', 'Asistencia', 'Firma'], (r.participantes || []).map(p => [esc(p.nombre), esc(p.cargo || ''), asis(p), '']), '')}</div>
-      ${revision.length ? `<div class="doc-avoid">${docH(`Revisión de acuerdos de la reunión anterior${prev ? ` (${fmtDate(prev.fecha)})` : ''}`)}${docTable(['Acuerdo', 'Responsable', 'Plazo', 'Estado'], revision.map(a => [esc(a.text), esc(a.responsable || '-'), esc(a.plazo || '-'), esc(a.estado)]), '')}</div>` : ''}
-      ${REU_SECCIONES.map(([k, t, quien]) => `<div class="doc-avoid">${docH(t)}<p class="doc-muted">${esc(quien)}</p><div class="doc-box doc-pre">${esc(r['sec_' + k]?.texto || 'Sin registro.')}</div></div>`).join('')}
-      <div class="doc-avoid">${docH('Acuerdos')}${(r.agreements || []).filter(a => a.text).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], r.agreements.filter(a => a.text).map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>
-      ${r.proxima?.fecha || r.proxima?.temas ? `<p><strong>Próxima reunión:</strong> ${r.proxima.fecha ? fmtDate(r.proxima.fecha) + '. ' : ''}${esc(r.proxima.temas || '')}</p>` : ''}
-      <p class="doc-muted">Acta generada desde la plataforma. La asistencia con PIN quedó registrada con la hora de ingreso. Información confidencial (Ley N° 21.719).</p>`
+    body: `${docKv([[['Curso', esc(r.course || '')], ['Fecha y hora', `${fmtDate(r.fecha)}${r.hora ? ` · ${esc(r.hora)}` : ''}`]], [['Lugar', esc(r.lugar || '-')], ['Profesor(a) jefe', esc(app.profJefeOf(r.course) || '-')]], [['Organiza', esc(r.creadoPor || '')], ['Estado', r.estado === 'cerrada' ? `Cerrada el ${fmtDate(r.fechaCierre)} a las ${esc(r.horaCierre || '')}` : 'En curso (acta preliminar)']], [['PIN de asistencia', esc(r.pin || 'No disponible')], ['Asistentes', String(presentes.length)]]])}
+      <div class="doc-avoid">${titulo('Participantes')}${presentes.length ? docTable(['N°', 'Nombre', 'Cargo', 'Asistencia'], presentes.map((p, i) => [i + 1, esc(p.nombre), esc(p.cargo || ''), esc(asis(p))]), '') : '<p class="doc-muted">Sin asistentes registrados.</p>'}</div>
+      ${r.sec_intro?.texto ? `<div class="doc-avoid">${titulo('Introducción: análisis del curso')}${caja(r.sec_intro.texto)}</div>` : ''}
+      ${revision.length ? `<div class="doc-avoid">${titulo(`Revisión de acuerdos de la reunión anterior${prev ? ` (${fmtDate(prev.fecha)})` : ''}`)}${docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], revision.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(a.plazo || '-'), esc(a.estado)]), '')}</div>` : ''}
+      ${REU_SECCIONES.map(seccion).join('')}
+      <div class="doc-avoid">${titulo('Acuerdos')}${(r.agreements || []).filter(a => a.text).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], r.agreements.filter(a => a.text).map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>
+      ${r.proxima?.fecha || r.proxima?.temas ? `<div class="doc-avoid">${titulo('Próxima reunión')}${docKv([[['Fecha', r.proxima.fecha ? fmtDate(r.proxima.fecha) : 'Por definir'], ['Temas a revisar', esc(r.proxima.temas || '-')]]])}</div>` : ''}
+      ${r.sec_conclusion?.texto ? `<div class="doc-avoid">${titulo('Conclusión')}${caja(r.sec_conclusion.texto)}</div>` : ''}
+      <p class="doc-muted">Acta generada desde la plataforma. Solo figuran los participantes que registraron asistencia; la asistencia con PIN quedó registrada con su hora. Información confidencial (Ley N° 21.719).</p>`
   };
 };
+// ---------------- AVISO: "ESTÁ EN REUNIÓN" ----------------
+// Cada 45 segundos se revisa (con una consulta liviana) si hay una reunión abierta en la que el
+// funcionario está invitado. Si aún no registra asistencia, aparece una ventana para escribir el PIN
+// que le entrega en persona quien dirige la reunión; si ya está presente, queda una barra fija.
+Object.assign(app, {
+  async reuCheckActivas() {
+    if (!State.currentUser || State.verAnio || document.visibilityState !== 'visible') return;
+    let lista = [];
+    try {
+      if (API.demo) {
+        const me = State.currentUser.id;
+        lista = (Demo.db?.reuniones || []).filter(r => r.estado === 'abierta' && (r.participantes || []).some(p => sameId(p.userId, me))).map(r => ({ id: r.id, course: r.course, fecha: r.fecha, hora: r.hora, lugar: r.lugar, creadoPor: r.creadoPor, organiza: sameId(r.creadoPorId, me), presente: (r.participantes || []).some(p => sameId(p.userId, me) && p.presente) }));
+      } else lista = (await API.call('reunionesActivas')).reuniones || [];
+    } catch (e) { return; }
+    State.reuActivas = lista;
+    this.renderReuAviso();
+    const pendiente = lista.find(x => !x.presente && !(State.reuAvisadas || new Set()).has(String(x.id)));
+    if (pendiente && el('modal').hidden && el('busy').hidden) this.reuAvisoModal(pendiente);
+  },
+  renderReuAviso() {
+    let b = el('reu-aviso');
+    const lista = State.reuActivas || [];
+    if (!lista.length || !State.currentUser) { if (b) b.hidden = true; return; }
+    if (!b) { b = document.createElement('div'); b.id = 'reu-aviso'; b.className = 'reu-aviso'; b.setAttribute('role', 'status'); document.body.appendChild(b); }
+    b.hidden = false;
+    b.innerHTML = lista.map(x => x.presente
+      ? `<div class="reu-aviso__item" data-on="true"><span class="reu-aviso__dot"></span><span><strong>En reunión de nivel</strong> · ${esc(x.course)}${x.lugar ? ` · ${esc(x.lugar)}` : ''}</span><button type="button" class="btn btn--sm" onclick="app.openReunion(${jsq(x.id)})">Ir a la reunión</button></div>`
+      : `<div class="reu-aviso__item"><span class="reu-aviso__dot"></span><span><strong>Reunión de nivel en curso</strong> · ${esc(x.course)}. Usted está invitado(a).</span><button type="button" class="btn btn--sm btn--primary" onclick="app.reuAvisoModal(State.reuActivas.find(r => String(r.id) === ${jsq(x.id)}))">Registrar asistencia</button></div>`).join('');
+  },
+  reuAvisoModal(x) {
+    if (!x) return;
+    (State.reuAvisadas = State.reuAvisadas || new Set()).add(String(x.id));
+    ui.modal({
+      title: 'Está invitado(a) a una reunión de nivel', icon: 'users-round', tone: 'warn', size: 'sm', okText: 'Registrar mi asistencia', cancelText: 'Ahora no',
+      body: `<div class="stack">
+        <p class="reu-aviso-modal__curso">${esc(x.course)}</p>
+        <p class="modal__msg">${fmtDate(x.fecha)}${x.hora ? ` · ${esc(x.hora)}` : ''}${x.lugar ? ` · ${esc(x.lugar)}` : ''}. Dirige: <strong>${esc(x.creadoPor || '')}</strong>.</p>
+        ${fieldHtml('PIN que le entrega quien dirige la reunión', '<input id="reu-aviso-pin" class="input reu-pin-input num" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="000000">')}
+        <p class="muted small">El PIN se entrega en persona en la reunión. Con él queda registrada su asistencia y podrá escribir en la reunión.</p>
+      </div>`,
+      onOk: async () => {
+        const pin = String(el('reu-aviso-pin').value || '').replace(/\D/g, '');
+        if (pin.length !== 6) { toast('Escriba el PIN de 6 dígitos', 'error'); return false; }
+        try {
+          const r = await API.call('reunionPin', { pin });
+          await DB.load();
+          notice({ type: 'success', title: 'Asistencia registrada', msg: `Reunión de nivel de ${r.course}.` });
+          this.reuCheckActivas();
+          this.openReunion(r.reunionId);
+        } catch (e) { toast(e.message, 'error'); return false; }
+      }
+    });
+    setTimeout(() => el('reu-aviso-pin')?.focus(), 50);
+  }
+});
+
+(() => {
+  // Primera revisión al ingresar y luego cada 45 segundos
+  const start = app.startSession;
+  app.startSession = async function (r) { const out = await start.call(this, r); setTimeout(() => this.reuCheckActivas(), 1500); return out; };
+  setInterval(() => app.reuCheckActivas(), 45000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') app.reuCheckActivas(); });
+})();
 
 // Firmas del acta: todos los participantes presentes
 (() => {
