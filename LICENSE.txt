@@ -1,0 +1,16 @@
+TRAYECTORIA EDUCATIVA
+© 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
+
+Esta aplicación (su código fuente, diseño, textos, estructura, flujos de trabajo e imágenes propias)
+es una obra protegida por la Ley N° 17.336 sobre Propiedad Intelectual de la República de Chile.
+
+Queda prohibido, sin autorización previa y por escrito del autor:
+  - copiar, clonar, descargar o reproducir total o parcialmente el código o el diseño;
+  - adaptar, traducir, modificar o crear obras derivadas;
+  - distribuir, publicar, vender, arrendar o poner a disposición de terceros;
+  - eliminar, ocultar o alterar los créditos y avisos de autoría.
+
+El uso por parte del establecimiento al que el autor entregó la aplicación no transfiere la
+propiedad intelectual ni autoriza su copia a otros establecimientos o personas.
+
+Solicitudes de autorización: leandro.bascunan@andaliensur.cl

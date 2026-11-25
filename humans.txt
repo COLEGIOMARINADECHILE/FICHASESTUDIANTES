@@ -1,0 +1,9 @@
+/* TEAM */
+Autor y desarrollador: Leandro Bascuñán Valdebenito
+Contacto: leandro.bascunan@andaliensur.cl
+Ubicación: Concepción, Chile
+
+/* SITE */
+Nombre: Trayectoria Educativa
+Derechos: © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
+Licencia: uso y copia solo con autorización escrita del autor (ver LICENSE.txt).
