@@ -449,11 +449,11 @@ app.REPORTS.entrevista = function () {
           .filter(h => sameId(h.studentId, iv.studentId) && !sameId(h.id, iv.id) && String(h.date || '') <= String(iv.date || '9999') && !app.isCarta?.(h) && (!app.canSeeConfidential || app.canSeeConfidential(h)))
           .sort((x, y) => String(x.date).localeCompare(String(y.date)))
           .flatMap(h => (h.agreements || []).filter(a => a.text).map(a => ({ ...a, fechaIv: h.date })));
-        if (!prev.length) return '';
+        if (!prev.length || State.export.incluirSeguimiento === false) return '';
         const hechos = prev.filter(a => app.agreementState(a) === 'si').length;
         return `<div class="doc-avoid">${docH('Seguimiento de acuerdos anteriores')}<p class="doc-muted">${hechos} de ${prev.length} acuerdo(s) realizados. Estado a la fecha de impresión (${fmtDate(today())}).</p>${docTable(['Entrevista', 'Acuerdo', 'Responsable', 'Plazo', 'Estado y cumplimiento'], prev.map(a => [fmtDate(a.fechaIv), esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '')}</div>`;
       })()}
-      <div class="doc-avoid">${docH('Acuerdos de esta entrevista')}${(iv.agreements || []).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], iv.agreements.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>
+      ${State.export.incluirAcuerdos === false ? '' : `<div class="doc-avoid">${docH('Acuerdos de esta entrevista')}${(iv.agreements || []).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], iv.agreements.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>`}
       ${e.proxima ? `<p><strong>Próxima entrevista:</strong> ${fmtDate(e.proxima.fecha)}${e.proxima.hora ? ` a las ${esc(e.proxima.hora)}` : ''}${e.proxima.con ? `, con ${esc(e.proxima.con)}` : ''}${e.proxima.lugar ? `, en ${esc(e.proxima.lugar)}` : ''}.</p>` : ''}
       <p class="doc-muted">Los participantes declaran conocer el contenido de esta acta. Información confidencial, protegida por la Ley N° 21.719 sobre protección de datos personales.</p>`
   };

@@ -165,7 +165,8 @@ Object.assign(app, {
   },
   async procesarMinis() {
     this._miniCorriendo = true;
-    while ((State.miniCola || []).length && State.miniHechas.size < 120) {
+    while ((State.miniCola || []).length && State.miniHechas.size < 30) {
+      await new Promise(r => setTimeout(r, 1500)); // de a una y con pausa, para no recargar el servidor
       const id = State.miniCola.shift();
       State.miniHechas.add(id);
       const s = State.rawStudents.find(x => sameId(x.id, id));

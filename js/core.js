@@ -267,9 +267,17 @@ const API = {
   async call(action, payload = {}) {
     if (this.demo) return Demo.handle(action, payload);
     let res;
+    // Tiempo máximo de espera: si el servidor no responde, la página no queda bloqueada
+    const largas = ['ai', 'cerrarAnio', 'exportarTodo', 'restaurarTodo', 'indexarCarpeta', 'upload', 'ocrPagina', 'subirCertificado', 'convertirWord', 'exportarDocumento', 'crearDocumento', 'guardarDocumento', 'archivarDocumentos', 'import', 'batch'];
+    const ms = largas.includes(action) ? 300000 : action === 'getAll' ? 120000 : 60000;
+    const ctrl = window.AbortController ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
     try {
-      res = await fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, token: this.token, ...payload }) });
-    } catch (e) { throw new Error('Sin conexión con el servidor. Revise su internet.'); }
+      res = await fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, token: this.token, ...payload }), signal: ctrl?.signal });
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error(`El servidor tardó más de ${Math.round(ms / 60000)} minuto(s) en responder. Revise su conexión e intente de nuevo; si guardaba algo, actualice la página para confirmar si quedó registrado.`);
+      throw new Error('Sin conexión con el servidor. Revise su internet.');
+    } finally { if (timer) clearTimeout(timer); }
     let out;
     try { out = await res.json(); } catch (e) { throw new Error('El servidor no respondió correctamente. Revise la publicación del Apps Script.'); }
     if (!out.ok) {

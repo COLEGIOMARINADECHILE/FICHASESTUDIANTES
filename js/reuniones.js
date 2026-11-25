@@ -696,9 +696,9 @@ app.REPORTS.reunion_nivel = function () {
     body: `${docKv([[['Curso', esc(r.course || '')], ['Fecha y hora', `${fmtDate(r.fecha)}${r.hora ? ` · ${esc(r.hora)}` : ''}`]], [['Lugar', esc(r.lugar || '-')], ['Profesor(a) jefe', esc(app.profJefeOf(r.course) || '-')]], [['Organiza', esc(r.creadoPor || '')], ['Estado', r.estado === 'cerrada' ? `Cerrada el ${fmtDate(r.fechaCierre)} a las ${esc(r.horaCierre || '')}` : 'En curso (acta preliminar)']], [['PIN de asistencia', esc(r.pin || 'No disponible')], ['Asistentes', String(presentes.length)]]])}
       <div class="doc-avoid">${titulo('Participantes')}${presentes.length ? docTable(['N°', 'Nombre', 'Cargo', 'Asistencia'], presentes.map((p, i) => [i + 1, esc(p.nombre), esc(p.cargo || ''), esc(asis(p))]), '') : '<p class="doc-muted">Sin asistentes registrados.</p>'}${justificados.length ? `<p class="doc-muted"><strong>Justificaron su inasistencia:</strong> ${justificados.map(p => esc(`${p.nombre}${p.cargo ? ` (${p.cargo})` : ''}`)).join(', ')}.</p>` : ''}</div>
       ${r.sec_intro?.texto ? `<div class="doc-avoid">${titulo('Introducción: análisis del curso')}${app.reuIADocHtml('intro', r.sec_intro)}</div>` : ''}
-      ${revision.length ? `<div class="doc-avoid">${titulo(`Revisión de acuerdos de la reunión anterior${prev ? ` (${fmtDate(prev.fecha)})` : ''}`)}${docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], revision.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(a.plazo || '-'), esc(a.estado)]), '')}</div>` : ''}
+      ${revision.length && State.export.incluirSeguimiento ? `<div class="doc-avoid">${titulo(`Revisión de acuerdos de la reunión anterior${prev ? ` (${fmtDate(prev.fecha)})` : ''}`)}${docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], revision.map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(a.plazo || '-'), esc(a.estado)]), '')}</div>` : ''}
       ${REU_SECCIONES.map(seccion).join('')}
-      <div class="doc-avoid">${titulo('Acuerdos')}${(r.agreements || []).filter(a => a.text).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], r.agreements.filter(a => a.text).map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>
+      ${State.export.incluirAcuerdos ? `<div class="doc-avoid">${titulo('Acuerdos')}${(r.agreements || []).filter(a => a.text).length ? docTable(['N°', 'Acuerdo', 'Responsable', 'Plazo', 'Estado'], r.agreements.filter(a => a.text).map((a, i) => [i + 1, esc(a.text), esc(a.responsable || '-'), esc(app.fmtPlazo(a)), esc(app.agreementStatusText(a))]), '') : '<p class="doc-muted">Sin acuerdos.</p>'}</div>` : ''}
       ${r.proxima?.fecha || r.proxima?.temas ? `<div class="doc-avoid">${titulo('Próxima reunión')}${docKv([[['Fecha', r.proxima.fecha ? fmtDate(r.proxima.fecha) : 'Por definir'], ['Temas a revisar', esc(r.proxima.temas || '-')]]])}</div>` : ''}
       ${r.sec_conclusion?.texto ? `<div class="doc-avoid">${titulo('Conclusión')}${app.reuIADocHtml('conclusion', r.sec_conclusion)}</div>` : ''}
       <p class="doc-muted">Acta generada desde la plataforma. Solo figuran los participantes que registraron asistencia; la asistencia con PIN quedó registrada con su hora. Información confidencial (Ley N° 21.719).</p>`
@@ -771,7 +771,12 @@ Object.assign(app, {
   app.render = function () { const out = rnd.apply(this, arguments); this.renderReuAviso && this.renderReuAviso(); return out; };
   const start = app.startSession;
   app.startSession = async function (r) { const out = await start.call(this, r); setTimeout(() => this.reuCheckActivas(), 1500); return out; };
-  setInterval(() => app.reuCheckActivas(), 45000);
+  // Revisión rápida (45 s) solo cuando hay alguna reunión abierta; si no, cada 3 minutos (menos carga para el servidor)
+  let ultima = 0;
+  setInterval(() => {
+    const hayAbierta = (State.reuniones || []).some(r => r.estado === 'abierta') || (State.reuActivas || []).length;
+    if (Date.now() - ultima >= (hayAbierta ? 45000 : 180000)) { ultima = Date.now(); app.reuCheckActivas(); }
+  }, 15000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') app.reuCheckActivas(); });
 })();
 
@@ -803,6 +808,17 @@ Object.assign(app, {
   const exp = app.openExportModal;
   app.openExportModal = function (ctx) {
     exp.call(this, ctx);
+    // Acuerdos en el documento impreso: solo si se marcan (en la entrevista vienen marcados porque se firman)
+    if (ctx === 'reunion_nivel' || ctx === 'entrevista') {
+      const ex = State.export, reu = ctx === 'reunion_nivel';
+      ex.incluirAcuerdos = !reu; ex.incluirSeguimiento = !reu;
+      const box = document.querySelector('#modal-body .stack');
+      box?.insertAdjacentHTML('afterbegin', `<div class="subpanel export-acuerdos"><h4>${ico('list-checks')}Acuerdos en el documento</h4>
+        <label class="check"><input type="checkbox" ${ex.incluirAcuerdos ? 'checked' : ''} onchange="State.export.incluirAcuerdos=this.checked"><span>Incluir los acuerdos de esta ${reu ? 'reunión' : 'entrevista'}</span></label>
+        <label class="check"><input type="checkbox" ${ex.incluirSeguimiento ? 'checked' : ''} onchange="State.export.incluirSeguimiento=this.checked"><span>Incluir la revisión de los acuerdos ${reu ? 'de la reunión anterior' : 'de entrevistas anteriores'}</span></label>
+        <p class="muted small">Si no son necesarios, déjelos sin marcar: no aparecerán en el documento impreso (siguen guardados en la plataforma).</p></div>`);
+      icons();
+    }
     if (ctx === 'reunion_nivel') {
       const r = this.reunion(State.export.tempReunionId) || {};
       State.export.customSignatures = (r.participantes || []).filter(p => p.presente).map(p => ({ id: newId(), role: String(p.cargo || 'PARTICIPANTE').toUpperCase(), name: String(p.nombre).toUpperCase(), checked: true }));
