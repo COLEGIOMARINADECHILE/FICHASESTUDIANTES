@@ -148,6 +148,7 @@ Object.assign(app, {
       const datos = {
         curso: State.riskCourse, nivel: ctx.nivel, matricula: a.activos.length, retirados: a.retirados.length,
         academico: { promedio_curso: a.promCurso, estudiantes_con_notas: a.conNotas, asignaturas: a.rendimiento.map(r => ({ asignatura: r.nombre, bajo_4: r.bajo, total: r.n, promedio: r.promedio })), en_riesgo_repitencia: a.riesgo.length, asistencia_promedio: a.promAsis, bajo_85: a.asisDist.bajo85, entre_85_89: a.asisDist.entre, estudiantes_pie: a.pie.length,
+          cuestionario_condiciones_dia: (a.condiciones || []).map(d => this.condDatosIA(d)),
           resultados_dia: (a.dia || []).map(d => { const c = this.diaCalc(d); return { asignatura: d.asignatura, periodo: d.periodo, areas: c.areas.map(x => ({ area: x.nombre, porcentaje_curso: x.pct })), estudiantes_que_requieren_apoyo: c.apoyo.length }; }) },
         convivencia: a.convivencia, estudiantes_monitoreo_disciplina: a.disciplina.length, apoyos_socioemocionales: a.socio.length,
         textos_ficha_traspaso: tr ? Object.fromEntries(Object.entries(tr.secciones || {}).map(([k, s]) => [k, this.anonimizar(String(s.texto || '').slice(0, 600), a.activos)]).filter(([, t]) => t)) : {}

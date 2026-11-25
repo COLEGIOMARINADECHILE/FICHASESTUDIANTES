@@ -248,7 +248,7 @@ Object.assign(app, {
     ui.modal({
       title: 'Subir informes DIA', icon: 'upload', tone: 'obs', size: 'md', hideOk: true, cancelText: 'Cerrar',
       body: `<div class="stack">
-        <p class="modal__msg">Puede subir <strong>varios informes a la vez</strong> (de distintos cursos, asignaturas y periodos). El sistema identifica en cada PDF el curso, la asignatura, el periodo y sus propios ejes.</p>
+        <p class="modal__msg">Puede subir <strong>varios informes a la vez</strong> (de distintos cursos, asignaturas y periodos). El sistema identifica en cada PDF el curso, la asignatura, el periodo y sus propios ejes. También acepta el <strong>Cuestionario de Condiciones para la formación integral</strong> (bienestar, ansiedad ante evaluaciones y convivencia digital).</p>
         <div id="dia-drop" class="drop-zone" tabindex="0" role="button" aria-label="Arrastre aquí los informes DIA o presione para elegirlos">${ico('file-up')}<strong>Arrastre aquí los PDF del DIA</strong><span class="muted small">o use los botones</span></div>
         <div class="grid-2">
           <button type="button" class="btn btn--primary" onclick="ui.close(); app.pickFiles({ accept: '.pdf,application/pdf', onPick: f => app.handleDiaFiles(f) })">${ico('files')}Elegir archivos (varios)</button>
@@ -288,6 +288,7 @@ Object.assign(app, {
   },
   renderDiaImport() {
     el('dia-import').innerHTML = `<div class="stack">${State.diaImport.map((it, i) => {
+      if (it.tipo === 'condiciones') return this.condImportHtml(it, i);
       const est = this.diaMatch(it);
       const ya = (State.dia || []).find(d => d.id === this.diaId(it.course, it.anio, it.asignatura, it.periodo));
       return `<article class="iv-block">
@@ -337,6 +338,7 @@ Object.assign(app, {
         const id = this.diaId(it.course, it.anio, it.asignatura, it.periodo);
         const prev = (State.dia || []).find(d => d.id === id);
         const up = await API.call('upload', { folderName: `${it.course} - Resultados DIA`, fileName: it.file.name, mimeType: 'application/pdf', base64: String(await readFileAsDataURL(it.file)).split(',')[1] });
+        if (it.tipo === 'condiciones') { await DB.save('dia', this.condDoc(it, up, prev)); ok.push(`Cuestionario de Condiciones · ${it.periodo} · ${it.course}`); continue; }
         await DB.save('dia', {
           id, course: it.course, anio: String(it.anio), asignatura: it.asignatura, periodo: it.periodo, docente: it.docente, nInforme: it.nInforme, fechaInforme: it.fechaInforme,
           columnas: it.columnas, ejeDe: it.ejeDe || [], grupos: [], preguntas: it.preguntas, ejePreguntas: it.ejePreguntas || '', estudiantes: this.diaMatch(it), areasManual: prev?.areasManual || [],
@@ -364,9 +366,10 @@ Object.assign(app, {
     (this._diaCharts || []).forEach(c => c.destroy());
     this._diaCharts = [];
     el('dia-body').innerHTML = `<article class="entry"><div class="entry__head"><div class="entry__id"><h1 class="entry__name">Resultados DIA · ${esc(course)}</h1>
-        <div class="chips">${chip(`${lista.length} informe(s)`, 'obs', 'bar-chart-3')}${chip('Diagnóstico Integral de Aprendizajes', 'neutral')}</div></div></div>
+        <div class="chips">${chip(`${lista.length + (this.condOf ? this.condOf(course).length : 0)} informe(s)`, 'obs', 'bar-chart-3')}${chip('Diagnóstico Integral de Aprendizajes', 'neutral')}</div></div></div>
         <p class="entry__note entry__note--info">${ico('info')}Los resultados del DIA orientan la planificación. Según la Agencia de Calidad, no deben usarse para calificar a los estudiantes ni para comparar cursos.</p></article>
-      ${lista.length ? lista.map(d => this.diaCardHtml(d)).join('') : empty('bar-chart-3', 'Aún no hay informes DIA para este curso. Súbalos con "Subir informes DIA" (puede elegir varios a la vez).', 'obs')}`;
+      ${lista.length ? lista.map(d => this.diaCardHtml(d)).join('') : (this.condOf && this.condOf(course).length ? '' : empty('bar-chart-3', 'Aún no hay informes DIA para este curso. Súbalos con "Subir informes DIA" (puede elegir varios a la vez).', 'obs'))}
+      ${this.condOf ? this.condOf(course).map(d => this.condCardHtml(d)).join('') : ''}`;
     icons();
     lista.forEach(d => this.drawDiaChart(d));
   },

@@ -21,7 +21,7 @@ Object.assign(app, {
   renderDiaAll() {
     const f = State.diaFiltro = State.diaFiltro || { anio: '', asignatura: '', periodo: '' };
     const cursos = this.myCourses();
-    const todos = (State.dia || []).filter(d => cursos.includes(d.course));
+    const todos = (State.dia || []).filter(d => cursos.includes(d.course) && d.tipo !== 'condiciones');
     const anios = [...new Set(todos.map(d => String(d.anio)))].sort().reverse();
     const asigs = [...new Set(todos.map(d => d.asignatura))].sort();
     const lista = todos.filter(d => (!f.anio || String(d.anio) === f.anio) && (!f.asignatura || d.asignatura === f.asignatura) && (!f.periodo || d.periodo === f.periodo))
@@ -46,7 +46,8 @@ Object.assign(app, {
           <td class="t-num num">${c.apoyo.length}</td>
           <td class="t-actions"><button class="btn btn--sm" onclick="app.openDia(${jsq(d.course)})">${ico('folder-open')}Ver curso</button></td></tr>`; }).join('')}</tbody></table></div>`
         : empty('bar-chart-3', todos.length ? 'Ningún informe coincide con los filtros.' : 'Aún no hay informes DIA. Súbalos con "Subir informes DIA" (puede elegir varios a la vez).', 'obs')}
-      ${cursos.filter(c => !conInforme.has(c)).length && lista.length ? `<p class="muted small">Sin informes con estos filtros: ${esc(cursos.filter(c => !conInforme.has(c)).join(', '))}.</p>` : ''}`;
+      ${cursos.filter(c => !conInforme.has(c)).length && lista.length ? `<p class="muted small">Sin informes con estos filtros: ${esc(cursos.filter(c => !conInforme.has(c)).join(', '))}.</p>` : ''}
+      ${this.condOverviewHtml ? this.condOverviewHtml() : ''}`;
     icons();
   },
 
