@@ -389,7 +389,8 @@ window.app = {
       ['cartas', 'file-check', 'Cartas de compromiso', !!(this.canUploadActas && this.canUploadActas()), []],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
-      ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), []],
+      ['sin_reportes', 'user-search', 'Estudiantes sin reportes', hasAccess('ver_fichas'), ['sin_reportes']],
+      ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), ['staff_report']],
       ['audit', 'scroll-text', 'Bitácora', this.canSeeAudit(), ['audit']],
       ['admin', 'settings', 'Administración', hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'), ['admin']]
     ];
@@ -1528,7 +1529,7 @@ window.app = {
     const email = String(f.email || '').trim().toLowerCase();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('El correo no es válido', 'error'); return false; }
     if (email && State.users.some(u => !sameId(u.id, State.editingUserId) && String(u.email || '').toLowerCase() === email)) { toast('Ese correo ya está asignado a otro funcionario', 'error'); return false; }
-    const data = { id: State.editingUserId || String(Date.now()), name: f.name.trim(), role: f.role, customRole: f.customRole || '', email, active: f.active !== false, functions: f.functions, assignedCourses: f.assignedCourses };
+    const data = { id: State.editingUserId || String(Date.now()), name: f.name.trim(), role: f.role, customRole: f.customRole || '', email, active: f.active !== false, functions: f.functions, assignedCourses: f.assignedCourses, cursosAtiende: f.cursosAtiende || [] };
     if (pass) data.password = pass;
     else if (isNew) data.password = newId().slice(-8); // clave provisoria: se reemplaza al enviar el aviso de acceso
     await DB.save('users', data);
