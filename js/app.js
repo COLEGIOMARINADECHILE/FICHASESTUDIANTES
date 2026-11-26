@@ -381,6 +381,7 @@ window.app = {
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
+      ['presentaciones', 'presentation', 'Crear presentaciones', hasAccess('ver_fichas') || hasAccess('ver_resumen_cursos'), ['presentaciones']],
       ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk', 'ov_riesgos']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['reuniones', 'users-round', 'Reuniones de nivel', hasAccess('ver_fichas') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas'), ['reuniones']],

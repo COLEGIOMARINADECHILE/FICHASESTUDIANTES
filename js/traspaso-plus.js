@@ -40,10 +40,10 @@ const TR_GUIAS = {
   foco_disc: { preguntas: ['¿Quiénes requieren monitoreo de conducta o convivencia?', '¿Hubo protocolos, cartas de compromiso o derivaciones?', '¿Qué estrategias funcionaron con cada uno?'], ejemplo: 'Estudiante con conflictos reiterados en recreos: funcionó el refuerzo positivo y la mediación; mantener seguimiento con inspectoría.' }
 };
 const TR_ESTILOS = {
-  marina: { nombre: 'Marina institucional', fondo: 'FFFFFF', portada: '16285A', primario: '16285A', acento: 'E0B341', suave: 'EEF2FA', texto: '1F2937', claro: 'FFFFFF', titulo: 'Georgia', cuerpo: 'Calibri', graf: ['B42318', 'E0B341', '1F7A4D', '2F6FB3', '7C5CC4'] },
-  moderno: { nombre: 'Moderno turquesa', fondo: 'FFFFFF', portada: '0F766E', primario: '0F766E', acento: 'F59E0B', suave: 'ECFDF5', texto: '134E4A', claro: 'FFFFFF', titulo: 'Arial Black', cuerpo: 'Arial', graf: ['DC2626', 'F59E0B', '0F766E', '0EA5E9', '8B5CF6'] },
-  calido: { nombre: 'Cálido coral', fondo: 'FFF7ED', portada: '9A3412', primario: '9A3412', acento: 'F97316', suave: 'FFEDD5', texto: '431407', claro: 'FFFFFF', titulo: 'Trebuchet MS', cuerpo: 'Trebuchet MS', graf: ['B91C1C', 'F97316', '65A30D', '0369A1', 'A21CAF'] },
-  noche: { nombre: 'Noche moderna', fondo: '0B1220', portada: '0B1220', primario: '38BDF8', acento: 'A78BFA', suave: '1E293B', texto: 'E5E7EB', claro: 'FFFFFF', titulo: 'Segoe UI Semibold', cuerpo: 'Segoe UI', graf: ['F87171', 'FBBF24', '34D399', '38BDF8', 'A78BFA'] }
+  marina: { nombre: 'Marina institucional', fondo: 'FFFFFF', portada: '16285A', primario: '16285A', acento: 'E0B341', suave: 'EEF2FA', texto: '1F2937', claro: 'FFFFFF', titulo: 'Georgia', cuerpo: 'Calibri', graf: ['B42318', 'FACC15', '1F7A4D', '2F6FB3', '7C5CC4'] },
+  moderno: { nombre: 'Moderno turquesa', fondo: 'FFFFFF', portada: '0F766E', primario: '0F766E', acento: 'F59E0B', suave: 'ECFDF5', texto: '134E4A', claro: 'FFFFFF', titulo: 'Arial Black', cuerpo: 'Arial', graf: ['DC2626', 'FACC15', '0F766E', '0EA5E9', '8B5CF6'] },
+  calido: { nombre: 'Cálido coral', fondo: 'FFF7ED', portada: '9A3412', primario: '9A3412', acento: 'F97316', suave: 'FFEDD5', texto: '431407', claro: 'FFFFFF', titulo: 'Trebuchet MS', cuerpo: 'Trebuchet MS', graf: ['B91C1C', 'FACC15', '65A30D', '0369A1', 'A21CAF'] },
+  noche: { nombre: 'Noche moderna', fondo: '0B1220', portada: '0B1220', primario: '38BDF8', acento: 'A78BFA', suave: '1E293B', texto: 'E5E7EB', claro: 'FFFFFF', titulo: 'Segoe UI Semibold', cuerpo: 'Segoe UI', graf: ['F87171', 'FDE047', '34D399', '38BDF8', 'A78BFA'] }
 };
 
 // Las observaciones docentes se suman a las secciones de la ficha (avance, asignaciones, IA)

@@ -305,7 +305,7 @@ Object.assign(app, {
     let note = panel.querySelector('.dash-note');
     if (!note) { note = document.createElement('p'); note.className = 'dash-note muted small'; panel.appendChild(note); }
     note.textContent = metric === 'pct' ? 'Porcentaje de los estudiantes de cada curso que tienen al menos un registro (convivencia, PIE, protocolos, observaciones o enfermería). Así se comparan cursos con distinta matrícula. Pinche una barra para abrir el curso.' : 'Registros por estudiante, separados en Convivencia (incluye protocolos), PIE, y observaciones y enfermería. Se calcula dividiendo por la matrícula del curso, así se comparan cursos de distinto tamaño. Pinche una barra para abrir el curso.';
-    const col = v => metric === 'pct' ? (v >= 50 ? '#b42318' : v >= 25 ? '#d18a14' : '#1f7a4d') : (v >= 2 ? '#b42318' : v >= 1 ? '#d18a14' : '#1f7a4d');
+    const col = v => metric === 'pct' ? (v >= 50 ? '#b42318' : v >= 25 ? '#eab308' : '#1f7a4d') : (v >= 2 ? '#b42318' : v >= 1 ? '#eab308' : '#1f7a4d');
     const etiqueta = { id: 'dashLabels', afterDatasetsDraw(ch) {
       const { ctx } = ch;
       ctx.save();
@@ -344,7 +344,7 @@ Object.assign(app, {
     if (pc && this.pieC) {
       const labels = this.pieC.data.labels.slice(), valores = this.pieC.data.datasets[0].data.slice();
       const total = valores.reduce((a, b) => a + b, 0);
-      const colores = ['#7c5cc4', '#d18a14', '#1f7a4d', '#2f6fb3', '#8a8f98'];
+      const colores = ['#7c5cc4', '#facc15', '#1f7a4d', '#2f6fb3', '#8a8f98'];
       this.pieC.destroy();
       pc.closest('.panel')?.classList.add('dash-cycles');
       const font = cssVar('--font-body') || 'sans-serif';
