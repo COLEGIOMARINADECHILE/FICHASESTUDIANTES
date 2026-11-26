@@ -30,40 +30,41 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="css/app.css?v=2026-12-19a">
+  <link rel="stylesheet" href="css/app.css?v=2026-12-21b">
 
   <script defer src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=2026-12-19a"></script>
-  <script defer src="js/core.js?v=2026-12-19a"></script>
-  <script defer src="js/autoria.js?v=2026-12-19a"></script>
-  <script defer src="js/app.js?v=2026-12-19a"></script>
-  <script defer src="js/plans.js?v=2026-12-19a"></script>
-  <script defer src="js/export.js?v=2026-12-19a"></script>
-  <script defer src="js/imports.js?v=2026-12-19a"></script>
-  <script defer src="js/people.js?v=2026-12-19a"></script>
-  <script defer src="js/audit.js?v=2026-12-19a"></script>
-  <script defer src="js/pie.js?v=2026-12-19a"></script>
-  <script defer src="js/docs.js?v=2026-12-19a"></script>
-  <script defer src="js/actas.js?v=2026-12-19a"></script>
-  <script defer src="js/riesgos.js?v=2026-12-19a"></script>
-  <script defer src="js/entrevista.js?v=2026-12-19a"></script>
-  <script defer src="js/acuerdos.js?v=2026-12-19a"></script>
-  <script defer src="js/misacciones.js?v=2026-12-19a"></script>
-  <script defer src="js/resaltado.js?v=2026-12-19a"></script>
-  <script defer src="js/salud.js?v=2026-12-19a"></script>
-  <script defer src="js/dia.js?v=2026-12-19a"></script>
-  <script defer src="js/resumenes.js?v=2026-12-19a"></script>
-  <script defer src="js/sige.js?v=2026-12-19a"></script>
-  <script defer src="js/traspaso.js?v=2026-12-19a"></script>
-  <script defer src="js/condiciones.js?v=2026-12-19a"></script>
-  <script defer src="js/anio.js?v=2026-12-19a"></script>
-  <script defer src="js/reuniones.js?v=2026-12-19a"></script>
-  <script defer src="js/mejoras.js?v=2026-12-19a"></script>
-  <script defer src="js/pwa.js?v=2026-12-19a"></script>
+  <script defer src="js/config.js?v=2026-12-21b"></script>
+  <script defer src="js/core.js?v=2026-12-21b"></script>
+  <script defer src="js/autoria.js?v=2026-12-21b"></script>
+  <script defer src="js/app.js?v=2026-12-21b"></script>
+  <script defer src="js/plans.js?v=2026-12-21b"></script>
+  <script defer src="js/export.js?v=2026-12-21b"></script>
+  <script defer src="js/imports.js?v=2026-12-21b"></script>
+  <script defer src="js/people.js?v=2026-12-21b"></script>
+  <script defer src="js/audit.js?v=2026-12-21b"></script>
+  <script defer src="js/pie.js?v=2026-12-21b"></script>
+  <script defer src="js/docs.js?v=2026-12-21b"></script>
+  <script defer src="js/actas.js?v=2026-12-21b"></script>
+  <script defer src="js/riesgos.js?v=2026-12-21b"></script>
+  <script defer src="js/entrevista.js?v=2026-12-21b"></script>
+  <script defer src="js/acuerdos.js?v=2026-12-21b"></script>
+  <script defer src="js/misacciones.js?v=2026-12-21b"></script>
+  <script defer src="js/resaltado.js?v=2026-12-21b"></script>
+  <script defer src="js/salud.js?v=2026-12-21b"></script>
+  <script defer src="js/dia.js?v=2026-12-21b"></script>
+  <script defer src="js/resumenes.js?v=2026-12-21b"></script>
+  <script defer src="js/sige.js?v=2026-12-21b"></script>
+  <script defer src="js/traspaso.js?v=2026-12-21b"></script>
+  <script defer src="js/condiciones.js?v=2026-12-21b"></script>
+  <script defer src="js/anio.js?v=2026-12-21b"></script>
+  <script defer src="js/reuniones.js?v=2026-12-21b"></script>
+  <script defer src="js/mejoras.js?v=2026-12-21b"></script>
+  <script defer src="js/pwa.js?v=2026-12-21b"></script>
+  <script defer src="js/traspaso-plus.js?v=2026-12-21b"></script>
   <script async src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
@@ -185,6 +186,7 @@
       </section>
 
       <!-- TODOS LOS CURSOS: FICHAS DE TRASPASO Y RIESGOS -->
+      <section data-view="mis_traspasos" class="page" hidden><div id="mtr-body" class="stack"></div></section>
       <section data-view="ov_traspaso" class="page" hidden><div id="ovt-body" class="stack"></div></section>
       <section data-view="ov_riesgos" class="page" hidden><div id="ovr-body" class="stack"></div></section>
 

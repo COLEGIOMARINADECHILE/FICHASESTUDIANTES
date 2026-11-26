@@ -93,7 +93,11 @@ Object.assign(app, {
       const primeraX = cols[0].x;
       // Filas de preguntas: empiezan con un número a la izquierda de la primera columna con título
       const debajo = pg.items.filter(i => i.y < head.y - 2);
-      const inicios = debajo.filter(i => /^\d{1,3}$/.test(i.s) && i.x < primeraX - 2)
+      // El número de pregunta es el número más a la izquierda de la tabla (en algunos informes, como Historia,
+      // la columna se titula "N° pregunta" y el número queda bajo ese título, no a su izquierda)
+      const nums = debajo.filter(i => /^\d{1,3}$/.test(i.s) && i.x < pctX);
+      const xMin = nums.length ? Math.min(...nums.map(i => i.x)) : 0;
+      const inicios = debajo.filter(i => /^\d{1,3}$/.test(i.s) && (i.x < primeraX - 2 || (nums.length && Math.abs(i.x - xMin) < 12 && xMin < primeraX + 25)))
         .sort((a, b) => b.y - a.y)
         .filter((it, k, arr) => !arr.slice(0, k).some(o => Math.abs(o.y - it.y) < 3));
       inicios.forEach((ini, k) => {

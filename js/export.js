@@ -297,7 +297,7 @@ Object.assign(app, {
         pie: listaSimple(a.pie, x => `${n(x.s)}: ${esc(x.tipos.join(', ') || 'Documentos PIE')} (${x.docs} documento(s))`),
         ritmo: `<p><strong>Evaluación:</strong> ${esc((RITMO_OPCIONES.find(o => o[0] === d.ritmo) || [, 'Sin definir'])[1])}</p>`,
         talleres: listaSimple(a.talleres, t => esc(t)),
-        dia: app.diaReportHtml(State.traspasoCourse, State.traspasoAnio, true) || '<p class="doc-muted">Sin informes DIA cargados.</p>',
+        dia: app.diaReportHtml(State.traspasoCourse, State.traspasoAnio, true) || '<p class="doc-muted">El curso no tiene informes DIA cargados este año.</p>',
         convivencia: (v => v ? `${docKv([[['Registros de convivencia', v.total], ['Protocolos', v.protocolos]], [['Faltas graves o gravísimas', v.faltas.GRAVE + v.faltas['GRAVÍSIMA']], ['Concentración en 3 estudiantes', `${v.concentracion} %`]], [['Cartas de compromiso', v.cartas], ['Anotaciones positivas / negativas', `${v.anot.positivas} / ${v.anot.negativas}`]]])}
           ${v.porTipo.length ? `<p class="doc-muted"><strong>Tipos más frecuentes:</strong> ${v.porTipo.slice(0, 5).map(([t, n]) => `${esc(t)} (${n})`).join('; ')}.</p>` : ''}
           ${d.convivenciaIA ? `<div class="doc-box"><strong>Análisis de convivencia (IA${d.convivenciaIA.revisado ? `, revisado por ${esc(d.convivenciaIA.revisadoPor || '')}` : ', pendiente de revisión'}):</strong> ${esc(d.convivenciaIA.clima || '')}

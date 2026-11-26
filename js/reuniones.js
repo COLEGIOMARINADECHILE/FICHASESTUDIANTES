@@ -276,6 +276,7 @@ Object.assign(app, {
       O.notas.push(`Profesor(a) jefe: ${this.profJefeOf(course) || 'sin registrar'}`);
       const dia = (State.dia || []).filter(d => d.course === course && String(d.anio) === anio && d.tipo !== 'condiciones');
       dia.forEach(d => { const c = this.diaCalc(d); grupo(`DIA ${d.asignatura} · ${d.periodo}`, 'obs', 'bar-chart-3', c.areas.map(x => ({ n: x.nombre, d: pct(x.pct), tone: nivel(x.pct, 50, 75) })), ''); });
+      if (!dia.length) O.notas.push('Sin informes DIA cargados este año para el curso');
       (this.condOf ? this.condOf(course, anio) : []).forEach(d => grupo('Cuestionario de Condiciones (bienestar)', 'conv', 'heart-handshake', (d.dims || []).map(x => ({ n: x.nombre, d: pct(this.condNum(x.rf)), tone: nivel(x.rf, 50, 70) })), ''));
     }
     if (k === 'casos') {

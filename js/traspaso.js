@@ -184,6 +184,7 @@ Object.assign(app, {
     if (sec.texto && sec.texto.trim() && !silent && !window.confirm('La sección ya tiene texto. ¿Agregar los datos de la plataforma al final?')) return;
     sec.texto = sec.texto && sec.texto.trim() ? `${sec.texto.trim()}\n\n${txt}` : txt;
     sec.auto = { fecha: today(), por: State.currentUser.name, revisado: false };
+    sec.mod = Date.now();
     if (sec.estado === 'completo') sec.estado = 'pendiente';
     if (!silent) { toast('Borrador agregado. Revíselo y corrija lo que no corresponda antes de guardar.'); this.renderTraspaso(); icons(); }
   },
@@ -279,7 +280,7 @@ Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del c
       pie: lista(a.pie, x => `<li>${nombre(x.s)} <span class="muted small">${esc(x.tipos.join(', ') || 'Documentos PIE')}. ${x.ambitos} estrategia(s), ${x.docs} documento(s). Último registro: ${fmtDate(x.ultima) || '-'}</span></li>`, 'Sin estudiantes PIE con planes o documentos cargados.'),
       aprendizaje: '',
       ritmo: `${fieldHtml('Evaluación del ritmo de trabajo', `<select class="input" ${this.canEditTrSection('ritmo') ? '' : 'disabled'} onchange="State.trDraft.ritmo=this.value">${options(RITMO_OPCIONES, d.ritmo || '')}</select>`)}`,
-      dia: (this.condChipsHtml ? this.condChipsHtml(a.condiciones) : '') + ((a.dia || []).length ? (a.dia || []).map(d => { const c = this.diaCalc(d); return `<div class="tr-dia"><h4>${ico('bar-chart-3')}${esc(d.asignatura)} · ${esc(d.periodo)}</h4><div class="chips">${c.areas.map(x => `<span class="dia-pct" data-level="${x.pct < 50 ? 'bajo' : x.pct < 75 ? 'medio' : 'alto'}">${esc(x.nombre)}: ${String(x.pct).replace('.', ',')} %</span>`).join(' ')}</div>${c.apoyo.length ? `<p class="muted small">${c.apoyo.length} estudiante(s) requieren apoyo: ${c.apoyo.map(e => esc(e.ficha || e.nombre)).join(', ')}.</p>` : ''}</div>`; }).join('') + `<button type="button" class="btn btn--sm" onclick="app.openDia(${jsq(State.traspasoCourse)})">${ico('external-link')}Ver Resultados DIA del curso</button>` : `<p class="muted small">No hay informes DIA ${esc(State.traspasoAnio)} cargados para este curso. <button type="button" class="link-btn" onclick="app.openDia(${jsq(State.traspasoCourse)})">Cargarlos en Resultados DIA</button></p>`),
+      dia: (this.condChipsHtml ? this.condChipsHtml(a.condiciones) : '') + ((a.dia || []).length ? (a.dia || []).map(d => { const c = this.diaCalc(d); return `<div class="tr-dia"><h4>${ico('bar-chart-3')}${esc(d.asignatura)} · ${esc(d.periodo)}</h4><div class="chips">${c.areas.map(x => `<span class="dia-pct" data-level="${x.pct < 50 ? 'bajo' : x.pct < 75 ? 'medio' : 'alto'}">${esc(x.nombre)}: ${String(x.pct).replace('.', ',')} %</span>`).join(' ')}</div>${c.apoyo.length ? `<p class="muted small">${c.apoyo.length} estudiante(s) requieren apoyo: ${c.apoyo.map(e => esc(e.ficha || e.nombre)).join(', ')}.</p>` : ''}</div>`; }).join('') + `<button type="button" class="btn btn--sm" onclick="app.openDia(${jsq(State.traspasoCourse)})">${ico('external-link')}Ver Resultados DIA del curso</button>` : `<p class="muted small">Este curso no tiene informes DIA ${esc(State.traspasoAnio)} cargados (no todos los cursos rinden el DIA en todas las asignaturas). Si los tiene, <button type="button" class="link-btn" onclick="app.openDia(${jsq(State.traspasoCourse)})">cárguelos en Resultados DIA</button>.</p>`),
       talleres: lista(a.talleres, t => `<li>${esc(t)}</li>`, 'No hay acciones de planes de curso registradas este año.'),
       convivencia: (v => `<div class="stats stats--4">
           <div class="stat" data-tone="conv"><span class="stat__num num">${v.total}</span><span class="stat__label">Registros de convivencia</span></div>
@@ -332,7 +333,7 @@ Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del c
 
   canEditTrSection(k) {
     const as = State.trDraft?.asignaciones?.[k];
-    return this.canManageTraspaso() || (as && sameId(as.userId, State.currentUser.id));
+    return this.canManageTraspaso() || (as && (sameId(as.userId, State.currentUser.id) || (as.otros || []).some(o => sameId(o.userId, State.currentUser.id))));
   },
   traspasoSectionHtml(k, titulo, icon, ayuda, autoHtml, d) {
     const sec = d.secciones[k] || {};
@@ -347,7 +348,7 @@ Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del c
       ${k === 'convivencia' ? this.convivenciaIAHtml(d.convivenciaIA, can) : ''}
       ${sec.auto && !sec.auto.revisado ? `<p class="tr-review">${ico('alert-triangle')}<span>Texto autocompletado el ${fmtDate(sec.auto.fecha)} con datos de la plataforma: <strong>revise que la información sea correcta y esté completa</strong> antes de dar la sección por completa.</span></p>` : ''}
       ${d.analisis?.interpretaciones?.[k] ? `<div class="tr-interp"><h4>${ico('sparkles')}Interpretación con IA</h4><p>${esc(d.analisis.interpretaciones[k])}</p></div>` : ''}
-      ${fieldHtml(ayuda, `<textarea class="input" rows="3" ${can ? '' : 'readonly'} placeholder="${can ? 'Escriba aquí los antecedentes...' : 'Solo lectura'}" oninput="(State.trDraft.secciones['${k}'] = State.trDraft.secciones['${k}'] || {}).texto=this.value">${esc(sec.texto || '')}</textarea>`)}
+      ${fieldHtml(ayuda, `<textarea class="input" rows="3" ${can ? '' : 'readonly'} placeholder="${can ? 'Escriba aquí los antecedentes...' : 'Solo lectura'}" oninput="const s=(State.trDraft.secciones['${k}'] = State.trDraft.secciones['${k}'] || {}); s.texto=this.value; s.mod=Date.now()">${esc(sec.texto || '')}</textarea>`)}
       ${can && (this.trAutoText(k, State.trData) || k === 'convivencia') ? `<div class="row-actions">${this.trAutoText(k, State.trData) ? `<button type="button" class="btn btn--sm" onclick="app.autofillTrSection('${k}')">${ico('wand-2')}Autocompletar con datos de la plataforma</button>` : ''}${k === 'convivencia' ? `<button type="button" class="btn btn--sm" onclick="app.analyzeConvivenciaAI()">${ico('sparkles')}${d.convivenciaIA ? 'Volver a analizar con IA' : 'Analizar convivencia con IA'}</button>` : ''}</div>` : ''}
       ${sec.actualizado ? `<p class="note">Actualizado el ${fmtDate(sec.actualizado)} por ${esc(sec.por || '')}.</p>` : ''}
       <div class="form-foot">
@@ -394,7 +395,7 @@ Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del c
       return;
     }
     s.estado = s.estado === 'completo' ? 'pendiente' : 'completo';
-    s.actualizado = today(); s.por = State.currentUser.name;
+    s.actualizado = today(); s.por = State.currentUser.name; s.mod = Date.now();
     await this.saveTraspaso(true).catch(() => {});
     toast(s.estado === 'completo' ? 'Sección marcada como completa' : 'Sección reabierta');
     this.renderTraspaso(); icons();
@@ -433,7 +434,7 @@ ${b.tagline}`;
     const me = String(State.currentUser?.id || '');
     const tareas = [];
     (State.traspasos || []).forEach(t => Object.entries(t.asignaciones || {}).forEach(([k, a]) => {
-      if (String(a.userId) === me && t.secciones?.[k]?.estado !== 'completo') tareas.push({ t, k, titulo: TRASPASO_SECCIONES.find(s => s[0] === k)?.[1] || k });
+      if ((String(a.userId) === me || (a.otros || []).some(o => String(o.userId) === me)) && t.secciones?.[k]?.estado !== 'completo') tareas.push({ t, k, titulo: TRASPASO_SECCIONES.find(s => s[0] === k)?.[1] || k });
     }));
     return tareas;
   },

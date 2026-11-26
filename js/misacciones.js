@@ -51,7 +51,7 @@ Object.assign(app, {
     State.coursePlans.forEach(p => { if (String(p.creatorId) === yo || (p.responsibles || []).some(r => soy(r.name))) push({ id: p.id, tipo: 'plan', sub: 'curso', fecha: p.date, titulo: 'Plan de curso', detalle: corto(p.objective), curso: p.course }, null); });
     (State.traspasos || []).forEach(t => {
       const mias = Object.entries(t.secciones || {}).filter(([, s]) => soy(s.por)).map(([k]) => k);
-      const asignadas = Object.entries(t.asignaciones || {}).filter(([, a]) => String(a.userId) === yo).map(([k]) => k);
+      const asignadas = Object.entries(t.asignaciones || {}).filter(([, a]) => String(a.userId) === yo || (a.otros || []).some(o => String(o.userId) === yo)).map(([k]) => k);
       if (mias.length || asignadas.length || soy(t.actualizadoPor)) push({ id: t.id, tipo: 'curso', sub: 'traspaso', fecha: t.actualizado, titulo: `Ficha de traspaso ${t.anio}`, detalle: asignadas.length ? `${asignadas.length} sección(es) asignada(s) a usted` : `${mias.length} sección(es) completada(s) por usted`, curso: t.course, anio: t.anio }, null);
     });
     (State.riesgos || []).forEach(r => { if (soy(r.actualizadoPor) || soy(r.revisadoPor)) push({ id: r.id, tipo: 'curso', sub: 'riesgos', fecha: r.actualizado, titulo: `Riesgos del curso ${r.anio}`, detalle: `${(r.academico || []).length} académicos, ${(r.convivencia || []).length} de convivencia`, curso: r.course, anio: r.anio }, null); });
