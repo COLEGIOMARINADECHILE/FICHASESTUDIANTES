@@ -1742,3 +1742,16 @@ body { overscroll-behavior-y: none; }
 .gs-curso__t { display: grid; gap: 0.1rem; }
 .gs-meta .filters { margin: 0; }
 tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
+
+/* ===== Asignación rápida de cursos ===== */
+.asg-wrap { max-height: 70vh; overflow: auto; }
+.asg { border-collapse: separate; border-spacing: 0; }
+.asg th, .asg td { white-space: nowrap; }
+.asg .asg-name { position: sticky; left: 0; z-index: 2; background: var(--color-paper, #fff); min-width: 11rem; max-width: 14rem; white-space: normal; box-shadow: 1px 0 0 var(--color-rule); }
+.asg thead th { position: sticky; top: 0; z-index: 3; background: var(--color-paper-2, #f4f1ea); }
+.asg thead .asg-name { z-index: 4; }
+.asg .asg-c { text-align: center; padding: 0.25rem 0.2rem; min-width: 2.2rem; }
+.asg-h { border: 0; background: none; font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer; padding: 0.2rem 0.15rem; border-radius: 6px; }
+.asg-h:hover { background: color-mix(in oklab, var(--color-accent) 25%, transparent); }
+.asg tr.is-sel .asg-name { background: var(--tone-warn-soft, #fff7d6); }
+.asg-ciclos { display: flex; gap: 0.25rem; flex-wrap: nowrap; }

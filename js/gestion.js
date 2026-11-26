@@ -128,21 +128,8 @@ Object.assign(app, {
       const patch = { email: i.email }; if (i.u.email) patch.accesoNotificado = ''; // el aviso anterior fue a otra dirección
       await DB.patch('users', i.u.id, patch); resumen.correos++;
     }
-    // 2) Nombres: uno a uno
-    let dejarResto = false;
-    for (let k = 0; k < res.nombre.length && !dejarResto; k++) {
-      const i = res.nombre[k];
-      const r = await this.gsPreguntar({
-        title: `Actualizar nombre (${k + 1} de ${res.nombre.length})`, icon: 'user-pen', okText: 'Actualizar nombre', cancelText: 'Dejar el actual',
-        body: `<div class="stack"><p class="modal__msg">Nombre registrado: <strong>${esc(i.u.name)}</strong><br>Nombre completo en el Excel: <strong>${esc(i.nombreProp)}</strong></p>
-          <label class="field"><span class="field__label">Nombre que quedará (puede quitar los nombres que no use)</span><input id="imp-nombre" class="input" value="${esc(i.nombreProp)}"></label>
-          <p class="muted small">Se conserva su sesión, su clave y toda su información.</p>
-          <button type="button" class="btn btn--sm" onclick="State.imp.resto=true; ui.close()">Dejar el resto de nombres sin cambios</button></div>`,
-        leer: () => 'ok'
-      });
-      if (State.imp.resto) { dejarResto = true; State.imp.resto = false; break; }
-      if (r === 'ok') { const n = (document.getElementById('imp-nombre')?.value || i.nombreProp).trim() || i.nombreProp; await DB.patch('users', i.u.id, { name: n }); resumen.nombres++; }
-    }
+    // 2) Nombres: todos juntos en una sola ventana (se puede editar cada uno y desmarcar los que no se cambian)
+    if (res.nombre.length) await this.gsActualizarNombres(res.nombre, resumen);
     // 3) No registrados: ventana para crear sesión
     if (res.nuevos.length) await this.gsCrearNuevos(res.nuevos, resumen);
     this.renderAdmin();
@@ -150,6 +137,21 @@ Object.assign(app, {
       <ul><li><strong>${resumen.correos}</strong> correo(s) actualizados.</li><li><strong>${resumen.nombres}</strong> nombre(s) actualizados.</li><li><strong>${resumen.creados}</strong> funcionario(s) nuevos con sesión.</li></ul>
       ${resumen.omitidos.length ? `<div class="subpanel" data-tone="warn"><h4>No se pudieron actualizar</h4><ul class="small">${resumen.omitidos.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
       <p class="muted small">Cuando quiera, use "Enviar avisos pendientes" para que cada funcionario reciba su acceso.</p></div>` });
+  },
+  gsActualizarNombres(lista, resumen) {
+    State.imp.nombres = lista.map(i => ({ id: i.u.id, actual: i.u.name, nuevo: i.nombreProp, ok: true }));
+    return new Promise(resolve => {
+      const previo = ui.close; ui.close = function () { ui.close = previo; previo.call(ui); resolve(); };
+      ui.modal({
+        title: `Actualizar nombres (${lista.length})`, icon: 'user-pen', size: 'lg', okText: 'Actualizar los marcados', cancelText: 'Dejar todos como están',
+        body: `<div class="stack"><p class="modal__msg">Estos funcionarios tienen un nombre incompleto. Quedará el nombre completo del Excel; edítelo si alguien no usa alguno de sus nombres y desmarque a quien no quiera cambiar. Se conserva su sesión, clave e información.</p>
+          <label class="check"><input type="checkbox" checked onchange="State.imp.nombres.forEach(n => n.ok = this.checked); document.querySelectorAll('.imp-ok').forEach(c => c.checked = this.checked)"><span><strong>Marcar o desmarcar todos</strong></span></label>
+          <div class="table-wrap"><table class="table table--dense"><thead><tr><th></th><th>Nombre registrado</th><th>Nombre que quedará</th></tr></thead><tbody>
+          ${State.imp.nombres.map((n, i) => `<tr><td><input type="checkbox" class="imp-ok" checked aria-label="Actualizar ${esc(n.actual)}" onchange="State.imp.nombres[${i}].ok=this.checked"></td><td class="small">${esc(n.actual)}</td><td><input class="input" value="${esc(n.nuevo)}" oninput="State.imp.nombres[${i}].nuevo=this.value"></td></tr>`).join('')}
+          </tbody></table></div></div>`,
+        onOk: async () => { for (const n of State.imp.nombres.filter(x => x.ok && x.nuevo.trim() && x.nuevo.trim() !== x.actual)) { await DB.patch('users', n.id, { name: n.nuevo.trim() }); resumen.nombres++; } }
+      });
+    });
   },
   gsCrearNuevos(nuevos, resumen) {
     State.imp.nuevos = nuevos.map(n => ({ ...n, crear: true, role: 'Docente' }));
@@ -190,6 +192,73 @@ Object.assign(app, {
     const cursoDe = new Map(), por = {};
     State.rawStudents.forEach(s => { const c = this.courseNameOf(s); cursoDe.set(String(s.id), c); if (s.status !== 'blocked') (por[c] = por[c] || []).push(String(s.id)); });
     return { cursoDe, por };
+  },
+  // ---------------- ASIGNACIÓN RÁPIDA DE CURSOS (ADMINISTRACIÓN) ----------------
+  asgState() { return State.asg = State.asg || { modo: 'atiende', q: '', perfil: '', draft: {} }; },
+  asgCorto(c) { return String(c).replace(/Pre\s*-?\s*Kínder/i, 'PK').replace(/Kínder/i, 'K').replace('Básico', 'B').replace('Medio', 'M').replace(/\s+/g, ''); },
+  asgKey(u) { return `${this.asgState().modo}|${u.id}`; },
+  asgLista(u) { const a = this.asgState(), d = a.draft[this.asgKey(u)]; return d || (a.modo === 'atiende' ? (u.cursosAtiende || []) : (u.assignedCourses || [])); },
+  asgJefeDe(u) {
+    const t = GS_TOK(u.name).filter(w => !GS_PART.has(w)); if (t.length < 2) return [];
+    return ALL_COURSES.filter(c => { const j = GS_TOK(this.profJefeOf(c)).filter(w => !GS_PART.has(w)); return j.length >= 2 && (t.every(w => j.includes(w)) || j.every(w => t.includes(w))); });
+  },
+  asgVisibles() {
+    const a = this.asgState(), q = GS_NORM(a.q);
+    return State.users.filter(u => !u.eliminado && u.active !== false && (!a.perfil || u.role === a.perfil) && (!q || GS_NORM(`${u.name} ${u.customRole || ''} ${u.role}`).includes(q))).sort((x, y) => x.name.localeCompare(y.name, 'es'));
+  },
+  asgFijo(u) { return this.asgState().modo === 'acceso' && (u.functions || []).includes('acceso_total'); },
+  asgPon(u, lista) { const a = this.asgState(); const base = a.modo === 'atiende' ? (u.cursosAtiende || []) : (u.assignedCourses || []); const ord = ALL_COURSES.filter(c => lista.includes(c)); if (ord.length === base.length && ord.every(c => base.includes(c))) delete a.draft[this.asgKey(u)]; else a.draft[this.asgKey(u)] = ord; },
+  asgRefresh() {
+    const w = document.querySelector('.asg-wrap'), l = w ? w.scrollLeft : 0, t = w ? w.scrollTop : 0, y = window.scrollY;
+    this.renderAdmin();
+    const n = document.querySelector('.asg-wrap'); if (n) { n.scrollLeft = l; n.scrollTop = t; } window.scrollTo(0, y);
+  },
+  asgToggle(uid, c) { const u = State.users.find(x => sameId(x.id, uid)); const l = new Set(this.asgLista(u)); l.has(c) ? l.delete(c) : l.add(c); this.asgPon(u, [...l]); this.asgRefresh(); },
+  asgCiclo(uid, k) { const u = State.users.find(x => sameId(x.id, uid)); const cs = CYCLES[k].courses, l = new Set(this.asgLista(u)); const todos = cs.every(c => l.has(c)); cs.forEach(c => todos ? l.delete(c) : l.add(c)); this.asgPon(u, [...l]); this.asgRefresh(); },
+  asgLimpiar(uid) { const u = State.users.find(x => sameId(x.id, uid)); this.asgPon(u, []); this.asgRefresh(); },
+  asgCol(c) {
+    const us = this.asgVisibles().filter(u => !this.asgFijo(u)), todos = us.every(u => this.asgLista(u).includes(c));
+    us.forEach(u => { const l = new Set(this.asgLista(u)); todos ? l.delete(c) : l.add(c); this.asgPon(u, [...l]); });
+    this.asgRefresh();
+  },
+  asgJefes() {
+    let n = 0;
+    State.users.filter(u => !u.eliminado && u.active !== false).forEach(u => { const j = this.asgJefeDe(u); if (!j.length) return; const l = new Set(this.asgLista(u)); j.forEach(c => l.add(c)); this.asgPon(u, [...l]); n++; });
+    toast(n ? `Se propusieron cursos para ${n} profesor(es) jefe. Revise y guarde.` : 'No encontré profesores jefe que coincidan con los funcionarios.', n ? undefined : 'error');
+    this.asgRefresh();
+  },
+  asgDescartar() { this.asgState().draft = {}; this.asgRefresh(); },
+  asgGuardar() {
+    const a = this.asgState(), campo = a.modo === 'atiende' ? 'cursosAtiende' : 'assignedCourses';
+    const ops = Object.entries(a.draft).filter(([k]) => k.startsWith(a.modo + '|')).map(([k, l]) => ({ col: 'users', id: k.split('|')[1], data: { [campo]: l }, merge: true }));
+    if (!ops.length) return toast('No hay cambios por guardar', 'error');
+    const vaciados = ops.filter(o => !o.data[campo].length && (State.users.find(u => sameId(u.id, o.id))?.[campo] || []).length).length;
+    const guardar = async () => { try { await DB.batch(ops); Object.keys(a.draft).filter(k => k.startsWith(a.modo + '|')).forEach(k => delete a.draft[k]); toast(`Cursos guardados para ${ops.length} funcionario(s)`); } catch (e) { toast(e.message, 'error'); } this.asgRefresh(); };
+    if (a.modo === 'acceso' && vaciados) ui.confirm({ title: 'Funcionarios sin cursos', tone: 'warn', icon: 'alert-triangle', okText: 'Guardar igual', msg: `${vaciados} funcionario(s) quedarán <strong>sin cursos asignados</strong> y por eso verán <strong>todos</strong> los cursos que su perfil permite. ¿Guardar de todos modos?`, action: guardar });
+    else guardar();
+  },
+  admin_asignar() {
+    const a = this.asgState(), us = this.asgVisibles(), pend = Object.keys(a.draft).filter(k => k.startsWith(a.modo + '|')).length;
+    const roles = State.variables.roles || [];
+    const ciclos = Object.keys(CYCLES);
+    return `<section class="panel"><div class="panel__head"><h2>${ico('table-properties')}Asignar cursos a los funcionarios</h2><div class="row-actions">
+        <button class="btn" ${pend ? '' : 'disabled'} onclick="app.asgDescartar()">${ico('undo-2')}Descartar</button>
+        <button class="btn btn--primary" ${pend ? '' : 'disabled'} onclick="app.asgGuardar()">${ico('save')}Guardar cambios${pend ? ` (${pend})` : ''}</button></div></div>
+      <div class="segs" role="group" aria-label="Qué asignar">
+        <button type="button" class="seg" aria-pressed="${a.modo === 'atiende'}" onclick="State.asg.modo='atiende'; app.asgRefresh()">${ico('messages-square')}Cursos que atiende (meta de entrevistas)</button>
+        <button type="button" class="seg" aria-pressed="${a.modo === 'acceso'}" onclick="State.asg.modo='acceso'; app.asgRefresh()">${ico('lock-keyhole')}Cursos a los que tiene acceso</button></div>
+      <p class="muted small">${a.modo === 'atiende' ? 'Marque los cursos que cada funcionario debe entrevistar: de ahí sale su porcentaje de logro. No cambia lo que puede ver.' : 'Un funcionario con cursos marcados solo ve esos cursos. Si no tiene ninguno, ve todos los que su perfil permite.'}
+        Haga clic en el nombre de un curso para marcarlo o desmarcarlo en toda la lista visible, o use los botones de ciclo de cada fila. Nada se guarda hasta presionar "Guardar cambios".</p>
+      <div class="filters">
+        ${fieldHtml('Buscar funcionario', `<input type="search" class="input" value="${esc(a.q)}" placeholder="Nombre, cargo o perfil" oninput="State.asg.q=this.value; clearTimeout(app._asgT); app._asgT=setTimeout(() => { app.asgRefresh(); const i = document.querySelector('#admin-content input[type=search]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250)">`)}
+        ${fieldHtml('Perfil', `<select class="input" onchange="State.asg.perfil=this.value; app.asgRefresh()">${options([['', 'Todos los perfiles'], ...roles], a.perfil)}</select>`)}
+        ${a.modo === 'atiende' ? `<div class="field-end"><button class="btn" onclick="app.asgJefes()">${ico('wand-sparkles')}Proponer según profesor jefe</button></div>` : ''}
+        <span class="muted small field-end">${us.length} funcionario(s)</span></div>
+      <div class="table-wrap asg-wrap"><table class="table table--dense asg"><thead><tr><th class="asg-name">Funcionario</th>${ALL_COURSES.map(c => `<th class="asg-c"><button type="button" class="asg-h" title="Marcar o desmarcar ${esc(c)} para todos los visibles" onclick="app.asgCol(${jsq(c)})">${esc(this.asgCorto(c))}</button></th>`).join('')}<th>Ciclos</th></tr></thead><tbody>
+      ${us.length ? us.map(u => { const l = this.asgLista(u), fijo = this.asgFijo(u), cambio = !!a.draft[this.asgKey(u)]; return `<tr class="${cambio ? 'is-sel' : ''}"><td class="asg-name"><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${fijo ? 'Acceso total' : esc(u.customRole || u.role)} · ${l.length} curso(s)</span></td>
+        ${ALL_COURSES.map(c => `<td class="asg-c"><input type="checkbox" aria-label="${esc(u.name)}: ${esc(c)}" ${l.includes(c) ? 'checked' : ''} ${fijo ? 'disabled' : ''} onchange="app.asgToggle(${jsq(u.id)}, ${jsq(c)})"></td>`).join('')}
+        <td class="asg-ciclos">${fijo ? '' : `${ciclos.map(k => `<button type="button" class="btn btn--sm" title="${esc(k)}" onclick="app.asgCiclo(${jsq(u.id)}, ${jsq(k)})">${esc(k.replace(/\s*\(.*\)/, '').replace('Enseñanza Media', 'Media').replace('Primer Ciclo', '1° ciclo').replace('Segundo Ciclo', '2° ciclo'))}</button>`).join('')}<button type="button" class="btn btn--sm" onclick="app.asgLimpiar(${jsq(u.id)})">${ico('eraser')}Limpiar</button>`}</td></tr>`; }).join('') : `<tr><td colspan="${ALL_COURSES.length + 2}">${empty('search-x', 'Ningún funcionario coincide.')}</td></tr>`}
+      </tbody></table></div></section>`;
   },
   gsYo() { return State.users.find(u => sameId(u.id, State.currentUser.id)) || State.currentUser; },
   gsPeriodo() { const p = State.gsPer = State.gsPer || { anio: today().slice(0, 4), mes: '' }; return p; },
@@ -359,6 +428,23 @@ Object.assign(app.REPORTS, {
   const adm = app.admin_users;
   app.admin_users = function () {
     return adm.apply(this, arguments).replace('<button class="btn btn--primary" onclick="app.openUserModal()">', `<button class="btn" onclick="app.gsAbrirCarga()">${ico('file-spreadsheet')}Cargar desde Excel</button><button class="btn btn--primary" onclick="app.openUserModal()">`);
+  };
+
+  // Pestaña "Asignar cursos" en Administración, junto a "Funcionarios"
+  const admin = app.renderAdmin;
+  app.renderAdmin = function () {
+    admin.call(this);
+    if (!hasAccess('gestionar_usuarios')) return;
+    const tabs = el('admin-tabs');
+    if (tabs && !tabs.querySelector('[data-asg-tab]')) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'tab'); b.className = 'tab'; b.dataset.asgTab = '1';
+      b.setAttribute('aria-selected', State.adminTab === 'asignar');
+      b.innerHTML = `${ico('table-properties')}Asignar cursos`;
+      b.onclick = () => this.setAdminTab('asignar');
+      if (tabs.firstElementChild) tabs.firstElementChild.after(b); else tabs.appendChild(b);
+      icons();
+    }
   };
 
   // Cursos que atiende, dentro de la ficha del funcionario
