@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -95,14 +95,79 @@ Object.assign(app, {
         return s;
       },
       /** Tarjeta con título y texto (letra 15; si el texto no cabe se acorta con "…"). */
-      tarjeta(s, x, y, w, h, titulo, texto, color, pt = 15) {
-        s.addShape(p.ShapeType.roundRect, { x, y, w, h, fill: { color: E.suave }, line: { color: color || E.acento, width: 1 }, rectRadius: 0.12 });
-        s.addShape(p.ShapeType.rect, { x, y: y + 0.15, w: 0.08, h: 0.5, fill: { color: color || E.acento }, line: { color: color || E.acento } });
-        s.addText(titulo, { x: x + 0.25, y: y + 0.1, w: w - 0.4, h: 0.5, fontFace: E.titulo, fontSize: 17, bold: true, color: E.primario });
-        const cap = app.pptCabe(w - 0.45, h - 0.8, pt);
-        let t = String(texto || '').trim() || 'Sin información registrada.';
-        if (t.length > cap) t = t.slice(0, cap - 1).replace(/\s+\S*$/, '') + '…';
-        s.addText(t, { x: x + 0.25, y: y + 0.62, w: w - 0.45, h: h - 0.75, fontFace: E.cuerpo, fontSize: pt, color: E.texto, valign: 'top', fit: 'none' });
+      tarjeta(s, x, y, w, h, titulo, texto, color, pt = 16) {
+        const c = color || E.acento, amar = c === 'FACC15' || c === 'FDE047';
+        s.addShape(p.ShapeType.roundRect, { x, y, w, h, fill: { color: E.suave }, line: { color: c, width: 1.5 }, rectRadius: 0.12 });
+        s.addShape(p.ShapeType.rect, { x: x + 0.06, y: y + 0.06, w: w - 0.12, h: 0.55, fill: { color: c }, line: { color: c } });
+        s.addText(titulo, { x: x + 0.2, y: y + 0.06, w: w - 0.4, h: 0.55, fontFace: E.titulo, fontSize: 17, bold: true, color: amar ? E.primario : 'FFFFFF', valign: 'middle' });
+        s.addText(String(texto || '').trim() || 'Sin información registrada.', { x: x + 0.25, y: y + 0.72, w: w - 0.5, h: h - 0.85, fontFace: E.cuerpo, fontSize: pt, color: E.texto, valign: 'top', fit: 'none', paraSpaceAfter: 5 });
+      },
+      /** ¿Cabe el texto completo en la caja a ese tamaño de letra? (cuenta los saltos de línea) */
+      cabe(texto, w, h, pt) {
+        const cpl = Math.floor(w * 72 / (pt * 0.5)), filas = Math.floor(h * 72 / (pt * 1.42));
+        return String(texto || '').split('\n').reduce((t, l) => t + Math.max(1, Math.ceil(l.length / cpl)), 0) <= filas;
+      },
+      /** Varias secciones juntas en una diapositiva, con el texto completo; si no caben, una por diapositiva. */
+      tarjetas(titulo, sub, items) {
+        const n = items.length, cols = n === 1 ? 1 : 2, rows = Math.ceil(n / cols), gap = 0.25;
+        const w = (12.3 - (cols - 1) * gap) / cols, h = (5.3 - (rows - 1) * gap) / rows;
+        const tx = it => String(it[1] || '').trim() || 'Sin información registrada.';
+        for (let pt = 18; pt >= 13; pt--) {
+          if (items.every(it => k.cabe(tx(it), w - 0.5, h - 0.85, pt))) {
+            const s = k.base(titulo, sub);
+            items.forEach((it, i) => k.tarjeta(s, 0.5 + (i % cols) * (w + gap), 1.6 + Math.floor(i / cols) * (h + gap), w, h, it[0], tx(it), it[2], pt));
+            return;
+          }
+        }
+        items.forEach(it => k.textoLargo(`${titulo} · ${it[0]}`, sub, tx(it), 20));
+      },
+      /** Gráfico como imagen nítida: números con contraste, letras grandes y colores del estilo. */
+      chart(s, tipo, data, o = {}) {
+        if (typeof Chart === 'undefined') { s.addChart(p.ChartType[tipo], data, k.chartOpts(o)); return; }
+        const S = 160 / 72, font = `${E.cuerpo}, Arial, sans-serif`;
+        const cv = document.createElement('canvas'); cv.width = Math.round(o.w * 160); cv.height = Math.round(o.h * 160);
+        const hex = c => '#' + String(c).replace('#', '');
+        const lum = c => { const h = String(c).replace('#', ''); const [r, g, b] = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+        const ink = c => lum(c) > 0.35 ? '#1F2937' : '#FFFFFF';
+        const isDo = tipo === 'doughnut', horiz = o.barDir === 'bar', stacked = o.barGrouping === 'stacked';
+        const cols = o.chartColors || E.graf, labels = data[0].labels;
+        const datasets = data.map((d, i) => ({ label: d.name, data: d.values, backgroundColor: isDo || (data.length === 1 && cols.length > 1) ? labels.map((_, j) => hex(cols[j % cols.length])) : hex(cols[i % cols.length]), borderWidth: isDo ? 3 : 0, borderColor: hex(E.fondo), ...(isDo ? {} : { borderRadius: 4, maxBarThickness: 90 }) }));
+        const fmt = v => { const code = o.dataLabelFormatCode || ''; const suf = (code.match(/"([^"]*)"/) || [])[1] || ''; const dec = ((code.split('.')[1] || '').match(/0/g) || []).length; return Number(v).toLocaleString('es-CL', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + suf; };
+        const total = isDo ? data[0].values.reduce((t, v) => t + (+v || 0), 0) : 0;
+        const plugin = {
+          id: 'etq',
+          beforeDraw(c) { c.ctx.save(); c.ctx.fillStyle = hex(E.fondo); c.ctx.fillRect(0, 0, c.width, c.height); c.ctx.restore(); },
+          afterDatasetsDraw(c) {
+            if (!(o.showValue || o.showPercent)) return;
+            const x = c.ctx; x.save(); x.font = `bold ${Math.round(14 * S)}px ${font}`; x.textBaseline = 'middle'; x.textAlign = 'center';
+            c.data.datasets.forEach((ds, di) => c.getDatasetMeta(di).data.forEach((el, i) => {
+              const v = +ds.data[i]; if (isNaN(v)) return;
+              const bg = Array.isArray(ds.backgroundColor) ? ds.backgroundColor[i] : ds.backgroundColor;
+              if (isDo) { if (!total || v / total < 0.04) return; const q = el.tooltipPosition(); x.fillStyle = ink(bg); x.fillText(o.showPercent ? `${Math.round(v / total * 100)} %` : fmt(v), q.x, q.y); return; }
+              if (stacked) { if (!v) return; const q = el.getCenterPoint(); x.fillStyle = ink(bg); x.fillText(fmt(v), q.x, q.y); return; }
+              x.fillStyle = hex(E.texto);
+              if (horiz) { x.textAlign = 'left'; x.fillText(fmt(v), el.x + 10, el.y); } else { x.textAlign = 'center'; x.textBaseline = 'bottom'; x.fillText(fmt(v), el.x, el.y - 8); x.textBaseline = 'middle'; }
+            }));
+            x.restore();
+          }
+        };
+        const tick = n => ({ color: hex(E.texto), font: { size: Math.round(n * S), family: font } });
+        const scales = isDo ? {} : {
+          [horiz ? 'y' : 'x']: { stacked, grid: { display: false }, ticks: { ...tick(13), autoSkip: false } },
+          [horiz ? 'x' : 'y']: { stacked, beginAtZero: true, min: o.valAxisMinVal, max: o.valAxisMaxVal, grid: { color: 'rgba(120,120,120,.25)' }, ticks: tick(12) }
+        };
+        const verLeyenda = o.showLegend !== undefined ? o.showLegend : isDo;
+        const g = new Chart(cv, {
+          type: isDo ? 'doughnut' : 'bar', data: { labels, datasets }, plugins: [plugin],
+          options: {
+            responsive: false, animation: false, devicePixelRatio: 1, indexAxis: horiz ? 'y' : 'x', cutout: isDo ? `${o.holeSize || 55}%` : undefined,
+            layout: { padding: { right: horiz && !stacked ? 120 : 24, top: !horiz && !stacked ? 56 : 14, left: 10, bottom: 10 } },
+            plugins: { tooltip: { enabled: false }, legend: { display: !!verLeyenda, position: o.legendPos === 'r' ? 'right' : 'bottom', labels: { color: hex(E.texto), font: { size: Math.round(14 * S), family: font }, boxWidth: 30, boxHeight: 22, padding: 22 } }, title: { display: !!o.showTitle, text: o.title || '', color: hex(E.primario), font: { size: Math.round(16 * S), weight: 'bold', family: font }, padding: { bottom: 12 } } },
+            scales
+          }
+        });
+        const img = cv.toDataURL('image/png'); g.destroy();
+        s.addImage({ data: img, x: o.x, y: o.y, w: o.w, h: o.h });
       },
       /** Texto largo en letra grande: si no cabe, continúa en las diapositivas siguientes. */
       textoLargo(titulo, sub, texto, pt = 20) {
@@ -139,34 +204,26 @@ Object.assign(app, {
       if (a.rendimiento.length) {
         const s = k.base('Rendimiento por asignatura', `Promedio general del curso: ${String(a.promCurso).replace('.', ',')}`);
         const lab = a.rendimiento.map(r => r.nombre);
-        s.addChart(p.ChartType.bar, [{ name: 'Bajo 4,0', labels: lab, values: a.rendimiento.map(r => r.bajo) }, { name: '4,0 a 5,9', labels: lab, values: a.rendimiento.map(r => r.medio) }, { name: '6,0 o más', labels: lab, values: a.rendimiento.map(r => r.alto) }], k.chartOpts({ x: 0.5, y: 1.6, w: 12.3, h: 4.9, barDir: 'bar', barGrouping: 'stacked', chartColors: [E.graf[0], E.graf[1], E.graf[2]], showLegend: true, legendPos: 'b', showValue: true }));
+        k.chart(s, 'bar', [{ name: 'Bajo 4,0', labels: lab, values: a.rendimiento.map(r => r.bajo) }, { name: '4,0 a 5,9', labels: lab, values: a.rendimiento.map(r => r.medio) }, { name: '6,0 o más', labels: lab, values: a.rendimiento.map(r => r.alto) }], k.chartOpts({ x: 0.5, y: 1.6, w: 12.3, h: 4.9, barDir: 'bar', barGrouping: 'stacked', chartColors: [E.graf[0], E.graf[1], E.graf[2]], showLegend: true, legendPos: 'b', showValue: true }));
         const peor = [...a.rendimiento].sort((x, y) => y.bajo - x.bajo)[0];
         k.lectura(s, peor?.bajo ? `${peor.nombre} concentra más estudiantes bajo 4,0 (${peor.bajo}); conviene priorizarla al planificar.` : 'No hay asignaturas con estudiantes bajo 4,0.');
       }
       const s4 = k.base('Asistencia y convivencia', `Asistencia promedio ${a.promAsis}% · ${a.convivencia.total} registros de convivencia`);
-      s4.addChart(p.ChartType.doughnut, [{ name: 'Asistencia', labels: ['Bajo 85 %', '85 % a 89 %', '90 % o más'], values: [a.asisDist.bajo85, a.asisDist.entre, a.asisDist.sobre] }], k.chartOpts({ x: 0.5, y: 1.6, w: 6, h: 4.9, holeSize: 55, chartColors: [E.graf[0], E.graf[1], E.graf[2]], showLegend: true, legendPos: 'b', showPercent: true, showTitle: true, title: 'Estudiantes según asistencia', titleColor: E.primario, titleFontSize: 15 }));
-      s4.addChart(p.ChartType.bar, [{ name: 'Registros', labels: ['Protocolos', 'Convivencia', 'PIE', 'Observaciones', 'Enfermería'], values: ['proto', 'conv', 'pie', 'obs', 'enf'].map(x => a.registros[x]) }], k.chartOpts({ x: 6.8, y: 1.6, w: 6, h: 4.9, barDir: 'col', chartColors: E.graf, showValue: true, showTitle: true, title: 'Registros del año', titleColor: E.primario, titleFontSize: 15, showLegend: false }));
+      k.chart(s4, 'doughnut', [{ name: 'Asistencia', labels: ['Bajo 85 %', '85 % a 89 %', '90 % o más'], values: [a.asisDist.bajo85, a.asisDist.entre, a.asisDist.sobre] }], k.chartOpts({ x: 0.5, y: 1.6, w: 6, h: 4.9, holeSize: 55, chartColors: [E.graf[0], E.graf[1], E.graf[2]], showLegend: true, legendPos: 'b', showPercent: true, showTitle: true, title: 'Estudiantes según asistencia', titleColor: E.primario, titleFontSize: 15 }));
+      k.chart(s4, 'bar', [{ name: 'Registros', labels: ['Protocolos', 'Convivencia', 'PIE', 'Observaciones', 'Enfermería'], values: ['proto', 'conv', 'pie', 'obs', 'enf'].map(x => a.registros[x]) }], k.chartOpts({ x: 6.8, y: 1.6, w: 6, h: 4.9, barDir: 'col', chartColors: E.graf, showValue: true, showTitle: true, title: 'Registros del año', titleColor: E.primario, titleFontSize: 15, showLegend: false }));
       k.lectura(s4, a.asistencia.length ? `${a.asistencia.length} estudiante(s) bajo 85 % de asistencia: requieren seguimiento desde el inicio del año.` : 'Ningún estudiante bajo 85 % de asistencia.');
-      (a.dia || []).slice(0, 3).forEach(di => { const c = this.diaCalc(di); if (!c.areas.length) return; const s = k.base(`Resultados DIA · ${di.asignatura}`, di.periodo); s.addChart(p.ChartType.bar, [{ name: '% de logro', labels: c.areas.map(x => x.nombre), values: c.areas.map(x => x.pct) }], k.chartOpts({ x: 0.5, y: 1.6, w: 12.3, h: 4.9, barDir: 'bar', chartColors: [E.primario], valAxisMaxVal: 100, showValue: true, dataLabelFormatCode: '0"%"', showLegend: false })); const baja = [...c.areas].sort((x, y) => x.pct - y.pct)[0]; k.lectura(s, `Eje más descendido: ${baja.nombre} (${String(baja.pct).replace('.', ',')} %).`); });
-      const s6 = k.base('Trayectoria del curso', 'Cómo se inició y cómo termina el año, según los docentes');
-      k.tarjeta(s6, 0.5, 1.6, 6, 5.25, 'Pedagógica', sec('tray_ped'), E.graf[3]);
-      k.tarjeta(s6, 6.8, 1.6, 6, 5.25, 'Convivencia y clima de aula', sec('tray_conv'), E.graf[2]);
-      const s7 = k.base('Proyección para el próximo año', 'Fortalezas para mantener y desafíos para trabajar');
-      k.tarjeta(s7, 0.5, 1.6, 6, 2.55, 'Fortalezas pedagógicas', sec('fort_ped'), E.graf[2], 14);
-      k.tarjeta(s7, 6.8, 1.6, 6, 2.55, 'Fortalezas en convivencia', sec('fort_conv'), E.graf[2], 14);
-      k.tarjeta(s7, 0.5, 4.3, 6, 2.55, 'Desafíos pedagógicos', sec('des_ped'), E.graf[0], 14);
-      k.tarjeta(s7, 6.8, 4.3, 6, 2.55, 'Desafíos en convivencia', sec('des_conv'), E.graf[0], 14);
+      (a.dia || []).slice(0, 3).forEach(di => { const c = this.diaCalc(di); if (!c.areas.length) return; const s = k.base(`Resultados DIA · ${di.asignatura}`, di.periodo); k.chart(s, 'bar', [{ name: '% de logro', labels: c.areas.map(x => x.nombre), values: c.areas.map(x => x.pct) }], k.chartOpts({ x: 0.5, y: 1.6, w: 12.3, h: 4.9, barDir: 'bar', chartColors: [E.primario], valAxisMaxVal: 100, showValue: true, dataLabelFormatCode: '0"%"', showLegend: false })); const baja = [...c.areas].sort((x, y) => x.pct - y.pct)[0]; k.lectura(s, `Eje más descendido: ${baja.nombre} (${String(baja.pct).replace('.', ',')} %).`); });
+      k.tarjetas('Trayectoria del curso', 'Cómo se inició y cómo termina el año, según los docentes', [['Pedagógica', sec('tray_ped'), E.graf[3]], ['Convivencia y clima de aula', sec('tray_conv'), E.graf[2]]]);
+      k.tarjetas('Proyección para el próximo año', 'Fortalezas para mantener y desafíos para trabajar', [['Fortalezas pedagógicas', sec('fort_ped'), E.graf[2]], ['Fortalezas en convivencia', sec('fort_conv'), E.graf[2]], ['Desafíos pedagógicos', sec('des_ped'), E.graf[0]], ['Desafíos en convivencia', sec('des_conv'), E.graf[0]]]);
       const fp = d.secciones.foco_ped?.estudiantes || [], fd = d.secciones.foco_disc?.estudiantes || [];
       const lista = arr => conNombres ? (arr.map(e => `• ${e.nombre}${e.motivo ? `: ${e.motivo}` : ''}`).join('\n') || 'Sin estudiantes indicados.') : `${arr.length} estudiante(s)`;
-      const s8 = k.base('Estudiantes a focalizar el próximo año', conNombres ? '' : 'Cantidades (sin nombres)');
-      k.tarjeta(s8, 0.5, 1.6, 6, 5.25, 'Ámbito pedagógico', lista(fp), E.graf[3]);
-      k.tarjeta(s8, 6.8, 1.6, 6, 5.25, 'Ámbito disciplinario', lista(fd), E.graf[0]);
+      k.tarjetas('Estudiantes a focalizar el próximo año', conNombres ? '' : 'Cantidades (sin nombres)', [['Ámbito pedagógico', lista(fp), E.graf[3]], ['Ámbito disciplinario', lista(fd), E.graf[0]]]);
       // Conclusión en letra grande (continúa en otra diapositiva si es larga)
       if (d.analisis?.conclusion_general) k.textoLargo('Conclusión', `Revisada por el equipo${d.analisisFecha ? ` · ${fmtDate(d.analisisFecha)}` : ''}`, d.analisis.conclusion_general, 20);
       const elegidas = (d.sugerencias || []).filter(s => s.seleccionada);
-      for (let i = 0; i < elegidas.length; i += 4) {
+      for (let i = 0; i < elegidas.length; i += 3) {
         const s = k.base(i ? 'Acciones para el próximo año (continuación)' : 'Acciones para el próximo año', i ? '' : `${elegidas.length} acción(es) seleccionadas por el equipo`);
-        elegidas.slice(i, i + 4).forEach((g, j) => { const y = 1.6 + j * 1.3; const c = E.graf[(i + j) % E.graf.length]; s.addShape(p.ShapeType.roundRect, { x: 0.5, y, w: 12.3, h: 1.18, fill: { color: E.suave }, line: { color: c, width: 1.5 }, rectRadius: 0.1 }); s.addText(String(i + j + 1), { x: 0.6, y: y + 0.2, w: 0.75, h: 0.78, align: 'center', fontFace: E.titulo, fontSize: 30, bold: true, color: c === 'FACC15' || c === 'FDE047' ? E.primario : c }); s.addText([{ text: g.titulo, options: { bold: true, breakLine: true, color: E.primario, fontSize: 18 } }, { text: String(g.detalle || '').slice(0, 170), options: { fontSize: 15 } }], { x: 1.45, y: y + 0.06, w: 11.2, h: 1.06, fontFace: E.cuerpo, color: E.texto, valign: 'middle', fit: 'none' }); });
+        elegidas.slice(i, i + 3).forEach((g, j) => { const y = 1.6 + j * 1.75; const c = E.graf[(i + j) % E.graf.length]; s.addShape(p.ShapeType.roundRect, { x: 0.5, y, w: 12.3, h: 1.6, fill: { color: E.suave }, line: { color: c, width: 1.5 }, rectRadius: 0.1 }); s.addText(String(i + j + 1), { x: 0.6, y: y + 0.4, w: 0.75, h: 0.78, align: 'center', fontFace: E.titulo, fontSize: 30, bold: true, color: c === 'FACC15' || c === 'FDE047' ? E.primario : c }); s.addText([{ text: g.titulo, options: { bold: true, breakLine: true, color: E.primario, fontSize: 18 } }, { text: String(g.detalle || '').slice(0, 420), options: { fontSize: 15 } }], { x: 1.45, y: y + 0.08, w: 11.2, h: 1.44, fontFace: E.cuerpo, color: E.texto, valign: 'middle', fit: 'none' }); });
       }
       await p.writeFile({ fileName: `Presentacion_Traspaso_${String(State.traspasoCourse).replace(/\s+/g, '_')}_${State.traspasoAnio}.pptx` });
       notice({ type: 'success', title: 'Presentación descargada', msg: `Estilo "${E.nombre}". Puede abrirla en PowerPoint o Google Slides, o subirla a Canva.` });
@@ -271,36 +328,36 @@ Object.assign(app, {
           k.kpis(k.base('Panel principal', 'Indicadores generales'), [['Estudiantes', est], ['Registros', tot], ['Convivencia', datos.reduce((t, d) => t + d.conv, 0)], ['Protocolos', datos.reduce((t, d) => t + d.proto, 0)], ['Registros PIE', datos.reduce((t, d) => t + d.pie, 0)], ['Con registros', `${est ? Math.round(datos.reduce((t, d) => t + d.con, 0) / est * 100) : 0}%`]]);
           const ord = [...datos].sort((a, b) => b.pct - a.pct);
           const s1 = k.base('Estudiantes con registros, por curso', 'Porcentaje de la matrícula de cada curso con al menos un registro');
-          s1.addChart(p.ChartType.bar, [{ name: '% de estudiantes', labels: ord.map(d => d.curso), values: ord.map(d => d.pct) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', chartColors: ord.map(d => d.pct >= 50 ? E.graf[0] : d.pct >= 25 ? E.graf[1] : E.graf[2]), valAxisMaxVal: 100, showValue: true, dataLabelFormatCode: '0.0"%"', showLegend: false, catAxisOrientation: 'maxMin' }));
+          k.chart(s1, 'bar', [{ name: '% de estudiantes', labels: ord.map(d => d.curso), values: ord.map(d => d.pct) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', chartColors: ord.map(d => d.pct >= 50 ? E.graf[0] : d.pct >= 25 ? E.graf[1] : E.graf[2]), valAxisMaxVal: 100, showValue: true, dataLabelFormatCode: '0.0"%"', showLegend: false, catAxisOrientation: 'maxMin' }));
           L(s1, ord[0] ? `${ord[0].curso} tiene la mayor proporción de estudiantes con registros (${String(ord[0].pct).replace('.', ',')} %). Rojo: 50 % o más; amarillo: 25 % a 49 %.` : '');
           const ord2 = [...datos].sort((a, b) => b.porEst - a.porEst);
           const r2 = v => Math.round(v * 100) / 100;
           const s2 = k.base('Registros por estudiante, por curso', 'Convivencia, PIE y otros registros divididos por la matrícula');
-          s2.addChart(p.ChartType.bar, [{ name: 'Convivencia y protocolos', labels: ord2.map(d => d.curso), values: ord2.map(d => r2((d.conv + d.proto) / d.n)) }, { name: 'PIE', labels: ord2.map(d => d.curso), values: ord2.map(d => r2(d.pie / d.n)) }, { name: 'Observaciones y enfermería', labels: ord2.map(d => d.curso), values: ord2.map(d => r2((d.obs + d.enf) / d.n)) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', barGrouping: 'stacked', chartColors: [E.graf[0], E.graf[3], '8A8F98'], showLegend: true, legendPos: 'b', catAxisOrientation: 'maxMin' }));
+          k.chart(s2, 'bar', [{ name: 'Convivencia y protocolos', labels: ord2.map(d => d.curso), values: ord2.map(d => r2((d.conv + d.proto) / d.n)) }, { name: 'PIE', labels: ord2.map(d => d.curso), values: ord2.map(d => r2(d.pie / d.n)) }, { name: 'Observaciones y enfermería', labels: ord2.map(d => d.curso), values: ord2.map(d => r2((d.obs + d.enf) / d.n)) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', barGrouping: 'stacked', chartColors: [E.graf[0], E.graf[3], '8A8F98'], showLegend: true, legendPos: 'b', catAxisOrientation: 'maxMin' }));
           L(s2, ord2[0] ? `${ord2[0].curso} es el curso con más registros por estudiante (${String(ord2[0].porEst).replace('.', ',')}).` : '');
           if (!f.alcance) {
             const ciclos = Object.keys(CYCLES).map(c => [c, datos.filter(d => CYCLES[c].courses.includes(d.curso)).reduce((x, d) => x + d.total, 0)]).filter(x => x[1]);
-            if (ciclos.length) { const s3 = k.base('Registros por ciclo', ''); s3.addChart(p.ChartType.doughnut, [{ name: 'Registros', labels: ciclos.map(c => c[0]), values: ciclos.map(c => c[1]) }], k.chartOpts({ x: 2.2, y: 1.45, w: 8.9, h: 5.1, holeSize: 55, chartColors: ['7C5CC4', 'FACC15', '1F7A4D', '2F6FB3'], showLegend: true, legendPos: 'r', showPercent: true })); }
+            if (ciclos.length) { const s3 = k.base('Registros por ciclo', ''); k.chart(s3, 'doughnut', [{ name: 'Registros', labels: ciclos.map(c => c[0]), values: ciclos.map(c => c[1]) }], k.chartOpts({ x: 2.2, y: 1.45, w: 8.9, h: 5.1, holeSize: 55, chartColors: ['7C5CC4', 'FACC15', '1F7A4D', '2F6FB3'], showLegend: true, legendPos: 'r', showPercent: true })); }
           }
           if (f.interp) { const it = this.presInterpretacion(datos); k.textoLargo('¿Qué nos dicen los datos?', 'Interpretación breve de los gráficos', [...it.lineas, '', 'Qué hacer:', ...it.acciones.map(a => `• ${a}`)].join('\n'), 18); }
         }
         if (key === 'asistencia') {
           const ord = [...datos].sort((a, b) => a.asisProm - b.asisProm);
           const s = k.base('Asistencia por curso', 'Asistencia promedio de cada curso');
-          s.addChart(p.ChartType.bar, [{ name: 'Asistencia promedio', labels: ord.map(d => d.curso), values: ord.map(d => d.asisProm) }], k.chartOpts({ x: 0.5, y: 1.55, w: 7.6, h: 4.95, barDir: 'bar', chartColors: ord.map(d => d.asisProm < 85 ? E.graf[0] : d.asisProm < 90 ? E.graf[1] : E.graf[2]), valAxisMinVal: 50, valAxisMaxVal: 100, showValue: true, dataLabelFormatCode: '0"%"', showLegend: false, catAxisOrientation: 'maxMin' }));
-          s.addChart(p.ChartType.bar, [{ name: 'Estudiantes bajo 85 %', labels: ord.map(d => d.curso), values: ord.map(d => d.bajo85) }], k.chartOpts({ x: 8.3, y: 1.55, w: 4.5, h: 4.95, barDir: 'bar', chartColors: [E.graf[0]], showValue: true, showLegend: false, showTitle: true, title: 'Bajo 85 %', titleColor: E.primario, catAxisOrientation: 'maxMin' }));
+          k.chart(s, 'bar', [{ name: 'Asistencia promedio', labels: ord.map(d => d.curso), values: ord.map(d => d.asisProm) }], k.chartOpts({ x: 0.5, y: 1.55, w: 7.6, h: 4.95, barDir: 'bar', chartColors: ord.map(d => d.asisProm < 85 ? E.graf[0] : d.asisProm < 90 ? E.graf[1] : E.graf[2]), valAxisMinVal: 50, valAxisMaxVal: 100, showValue: true, dataLabelFormatCode: '0"%"', showLegend: false, catAxisOrientation: 'maxMin' }));
+          k.chart(s, 'bar', [{ name: 'Estudiantes bajo 85 %', labels: ord.map(d => d.curso), values: ord.map(d => d.bajo85) }], k.chartOpts({ x: 8.3, y: 1.55, w: 4.5, h: 4.95, barDir: 'bar', chartColors: [E.graf[0]], showValue: true, showLegend: false, showTitle: true, title: 'Bajo 85 %', titleColor: E.primario, catAxisOrientation: 'maxMin' }));
           L(s, ord[0] ? `${ord[0].curso} tiene la asistencia más baja (${ord[0].asisProm} %). Hay ${datos.reduce((t, d) => t + d.bajo85, 0)} estudiante(s) bajo 85 % en total.` : '');
         }
         if (key === 'convivencia') {
           const ord = [...datos].sort((a, b) => (b.conv + b.proto) - (a.conv + a.proto));
           const s = k.base('Convivencia escolar por curso', 'Registros de convivencia y protocolos');
-          s.addChart(p.ChartType.bar, [{ name: 'Convivencia', labels: ord.map(d => d.curso), values: ord.map(d => d.conv) }, { name: 'Protocolos', labels: ord.map(d => d.curso), values: ord.map(d => d.proto) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', barGrouping: 'stacked', chartColors: [E.graf[1], E.graf[0]], showLegend: true, legendPos: 'b', showValue: true, catAxisOrientation: 'maxMin' }));
+          k.chart(s, 'bar', [{ name: 'Convivencia', labels: ord.map(d => d.curso), values: ord.map(d => d.conv) }, { name: 'Protocolos', labels: ord.map(d => d.curso), values: ord.map(d => d.proto) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', barGrouping: 'stacked', chartColors: [E.graf[1], E.graf[0]], showLegend: true, legendPos: 'b', showValue: true, catAxisOrientation: 'maxMin' }));
           L(s, ord[0] ? `${ord[0].curso} concentra más registros de convivencia (${ord[0].conv + ord[0].proto}, ${ord[0].proto} protocolo(s)).` : '');
         }
         if (key === 'pie') {
           const ord = [...datos].sort((a, b) => b.esPie - a.esPie);
           const s = k.base('Estudiantes PIE por curso', `${datos.reduce((t, d) => t + d.esPie, 0)} estudiantes con apoyo PIE`);
-          s.addChart(p.ChartType.bar, [{ name: 'Estudiantes PIE', labels: ord.map(d => d.curso), values: ord.map(d => d.esPie) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', chartColors: [E.graf[3]], showValue: true, showLegend: false, catAxisOrientation: 'maxMin' }));
+          k.chart(s, 'bar', [{ name: 'Estudiantes PIE', labels: ord.map(d => d.curso), values: ord.map(d => d.esPie) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'bar', chartColors: [E.graf[3]], showValue: true, showLegend: false, catAxisOrientation: 'maxMin' }));
           L(s, 'Considere la cantidad de estudiantes PIE al distribuir horas de apoyo y coordinar con los docentes de aula.');
         }
         if (key === 'dia') {
@@ -313,7 +370,7 @@ Object.assign(app, {
             const cs = ALL_COURSES.filter(c => ult[c]);
             const ejes = [...new Set(cs.flatMap(c => this.diaCalc(ult[c]).areas.map(a => a.nombre)))].slice(0, 6);
             const s = k.base(`Resultados DIA · ${asig}`, `% de logro por eje (informe más reciente de cada curso)`);
-            s.addChart(p.ChartType.bar, ejes.map(e => ({ name: e, labels: cs, values: cs.map(c => this.diaCalc(ult[c]).areas.find(a => a.nombre === e)?.pct || 0) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'clustered', chartColors: E.graf.concat(['0EA5E9']), valAxisMaxVal: 100, showLegend: true, legendPos: 'b', showValue: cs.length * ejes.length <= 18, dataLabelFormatCode: '0' }));
+            k.chart(s, 'bar', ejes.map(e => ({ name: e, labels: cs, values: cs.map(c => this.diaCalc(ult[c]).areas.find(a => a.nombre === e)?.pct || 0) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'clustered', chartColors: E.graf.concat(['0EA5E9']), valAxisMaxVal: 100, showLegend: true, legendPos: 'b', showValue: cs.length * ejes.length <= 18, dataLabelFormatCode: '0' }));
             const prom = ejes.map(e => ({ e, v: cs.reduce((t, c) => t + (this.diaCalc(ult[c]).areas.find(a => a.nombre === e)?.pct || 0), 0) / cs.length })).sort((a, b) => a.v - b.v);
             L(s, prom[0] ? `Eje más descendido en promedio: ${prom[0].e} (${Math.round(prom[0].v)} %). No se usa para comparar cursos ni calificar.` : '');
           });
@@ -325,7 +382,7 @@ Object.assign(app, {
             const ult = c => lista.filter(d => d.course === c).sort((a, b) => DIA_PERIODOS.indexOf(b.periodo) - DIA_PERIODOS.indexOf(a.periodo))[0];
             const dims = [...new Set(cs.flatMap(c => (ult(c).dims || []).map(x => x.nombre)))];
             const s = k.base('Cuestionario de Condiciones (bienestar)', '% de respuestas favorables por dimensión');
-            s.addChart(p.ChartType.bar, dims.map(dn => ({ name: dn, labels: cs, values: cs.map(c => (ult(c).dims || []).find(x => x.nombre === dn)?.rf || 0) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'clustered', chartColors: E.graf, valAxisMaxVal: 100, showLegend: true, legendPos: 'b' }));
+            k.chart(s, 'bar', dims.map(dn => ({ name: dn, labels: cs, values: cs.map(c => (ult(c).dims || []).find(x => x.nombre === dn)?.rf || 0) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'clustered', chartColors: E.graf, valAxisMaxVal: 100, showLegend: true, legendPos: 'b' }));
             L(s, 'Menos de 50 % es prioridad; 50 % a 69 %, atención; 70 % o más, fortaleza.');
           }
         }
@@ -335,7 +392,7 @@ Object.assign(app, {
           if (cs.length) {
             const cnt = (c, n) => { const r = lista.find(x => x.course === c); return [...(r.academico || []), ...(r.convivencia || [])].filter(x => x.nivel === n).length; };
             const s = k.base('Riesgos de los cursos', 'Riesgos académicos y de convivencia según nivel');
-            s.addChart(p.ChartType.bar, [['alto', 'Alto', E.graf[0]], ['medio', 'Medio', E.graf[1]], ['bajo', 'Bajo', E.graf[2]]].map(([n, l]) => ({ name: l, labels: cs, values: cs.map(c => cnt(c, n)) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'stacked', chartColors: [E.graf[0], E.graf[1], E.graf[2]], showLegend: true, legendPos: 'b', showValue: true }));
+            k.chart(s, 'bar', [['alto', 'Alto', E.graf[0]], ['medio', 'Medio', E.graf[1]], ['bajo', 'Bajo', E.graf[2]]].map(([n, l]) => ({ name: l, labels: cs, values: cs.map(c => cnt(c, n)) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'stacked', chartColors: [E.graf[0], E.graf[1], E.graf[2]], showLegend: true, legendPos: 'b', showValue: true }));
             const peor = [...cs].sort((a, b) => cnt(b, 'alto') - cnt(a, 'alto'))[0];
             L(s, cnt(peor, 'alto') ? `${peor} registra más riesgos de nivel alto (${cnt(peor, 'alto')}); conviene revisar sus medidas preventivas.` : 'No hay riesgos de nivel alto registrados.');
           }
@@ -346,7 +403,7 @@ Object.assign(app, {
           if (cs.length) {
             const ag = c => lista.filter(r => r.course === c).flatMap(r => (r.agreements || []).filter(a => a.text));
             const s = k.base('Reuniones de nivel', 'Cumplimiento de los acuerdos por curso');
-            s.addChart(p.ChartType.bar, [['si', 'Realizados', E.graf[2]], ['proceso', 'En proceso', E.graf[1]], ['pendiente', 'Pendientes', '8A8F98'], ['no', 'No realizados', E.graf[0]]].map(([st, l]) => ({ name: l, labels: cs, values: cs.map(c => ag(c).filter(a => this.agreementState(a) === st).length) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'stacked', chartColors: [E.graf[2], E.graf[1], '8A8F98', E.graf[0]], showLegend: true, legendPos: 'b', showValue: true }));
+            k.chart(s, 'bar', [['si', 'Realizados', E.graf[2]], ['proceso', 'En proceso', E.graf[1]], ['pendiente', 'Pendientes', '8A8F98'], ['no', 'No realizados', E.graf[0]]].map(([st, l]) => ({ name: l, labels: cs, values: cs.map(c => ag(c).filter(a => this.agreementState(a) === st).length) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'stacked', chartColors: [E.graf[2], E.graf[1], '8A8F98', E.graf[0]], showLegend: true, legendPos: 'b', showValue: true }));
             const totA = cs.reduce((t, c) => t + ag(c).length, 0), hechos = cs.reduce((t, c) => t + ag(c).filter(a => this.agreementState(a) === 'si').length, 0);
             L(s, `${lista.length} reunión(es); ${hechos} de ${totA} acuerdos realizados (${totA ? Math.round(hechos / totA * 100) : 0} %).`);
           }
