@@ -48,9 +48,11 @@ Object.assign(app, {
   pptPartir(texto, cap) {
     const t = String(texto || '').trim();
     if (t.length <= cap) return [t];
-    const partes = [], frases = t.split(/(?<=[.!?…])\s+|\n+/);
+    // Respeta los párrafos: cada salto de línea del original se conserva
+    const unidades = [], partes = [];
+    t.split(/\n+/).forEach(par => par.split(/(?<=[.!?…])\s+/).forEach((f, i) => unidades.push({ f, nl: i === 0 })));
     let act = '';
-    frases.forEach(f => { if ((act + ' ' + f).trim().length > cap && act) { partes.push(act.trim()); act = f; } else act = `${act} ${f}`; });
+    unidades.forEach(u => { const add = (act ? (u.nl ? '\n' : ' ') : '') + u.f; if (act && (act + add).length > cap) { partes.push(act.trim()); act = u.f; } else act += add; });
     if (act.trim()) partes.push(act.trim());
     return partes.flatMap(p => p.length <= cap ? [p] : p.match(new RegExp(`.{1,${cap}}(\\s|$)`, 'g')).map(x => x.trim()));
   },
@@ -232,7 +234,43 @@ Object.assign(app, {
         s.addImage({ data: img, x: o.x, y: o.y, w: o.w, h: o.h });
       },
       /** Texto largo en letra grande: si no cabe, continúa en las diapositivas siguientes. */
+      /** Punteos: cada punto en su propia fila con círculo de color; si hay muchos, continúan en otra hoja. */
+      puntos(titulo, sub, grupos, destacado = true) {
+        const cpl = Math.floor(11.0 * 72 / (16 * 0.5)), LIM = 6.95;
+        const alto = tx => Math.max(0.62, Math.ceil(String(tx).length / cpl) * 0.3 + 0.26);
+        let s = null, y = 0, pag = 0;
+        const nueva = () => { s = k.base(pag ? `${titulo} (continuación)` : titulo, pag ? '' : sub); if (destacado) s.background = { color: E.suave }; y = 1.65; pag++; };
+        grupos.forEach(g => {
+          let cab = false;
+          g.items.forEach((tx, i) => {
+            const h = alto(tx), c = g.color || E.acento, amar = c === 'FACC15' || c === 'FDE047';
+            if (!s || y + (cab || !g.t ? 0 : 0.55) + h > LIM) { nueva(); cab = false; }
+            if (!cab && g.t) {
+              s.addShape(p.ShapeType.roundRect, { x: 0.5, y, w: 5.2, h: 0.42, fill: { color: c }, line: { color: c }, rectRadius: 0.2 });
+              s.addText(String(g.t).toUpperCase(), { x: 0.65, y, w: 4.9, h: 0.42, fontFace: E.cuerpo, fontSize: 13, bold: true, charSpacing: 1, color: amar ? E.primario : 'FFFFFF', valign: 'middle' });
+              y += 0.55; cab = true;
+            }
+            s.addShape(p.ShapeType.roundRect, { x: 0.5, y, w: 12.3, h, fill: { color: E.fondo }, line: { color: c, width: 1.2 }, rectRadius: 0.1 });
+            s.addShape(p.ShapeType.ellipse, { x: 0.72, y: y + (h - 0.38) / 2, w: 0.38, h: 0.38, fill: { color: c }, line: { color: c } });
+            s.addText(String(i + 1), { x: 0.72, y: y + (h - 0.38) / 2, w: 0.38, h: 0.38, align: 'center', valign: 'middle', fontFace: E.titulo, fontSize: 12, bold: true, color: amar ? E.primario : 'FFFFFF' });
+            s.addText(String(tx), { x: 1.3, y, w: 11.3, h, fontFace: E.cuerpo, fontSize: 16, color: E.texto, valign: 'middle', fit: 'none' });
+            y += h + 0.12;
+          });
+        });
+      },
+      /** Convierte un texto con "•" o "-" en grupos de punteos (las líneas que terminan en ":" abren un grupo). */
+      aPuntos(texto) {
+        const grupos = []; let g = { t: '', items: [], color: E.graf[3] };
+        String(texto || '').split(/\n+/).map(l => l.trim()).filter(Boolean).forEach(l => {
+          if (/^[•\-–*]\s+/.test(l)) g.items.push(l.replace(/^[•\-–*]\s+/, ''));
+          else if (/:$/.test(l)) { if (g.items.length) grupos.push(g); g = { t: l.replace(/:$/, ''), items: [], color: E.graf[(grupos.length + 2) % E.graf.length] }; }
+          else g.items.push(l);
+        });
+        if (g.items.length) grupos.push(g);
+        return grupos;
+      },
       textoLargo(titulo, sub, texto, pt = 20) {
+        if ((String(texto).match(/^\s*[•\-–*]\s+/gm) || []).length >= 2) return k.puntos(titulo, sub, k.aPuntos(texto));
         const cap = app.pptCabe(11.8, 5.0, pt);
         const partes = app.pptPartir(texto, cap);
         partes.forEach((parte, i) => {
@@ -246,7 +284,12 @@ Object.assign(app, {
         items.forEach(([l, v], i) => { const x = 0.5 + (i % cols) * (w + 0.25), yy = y + Math.floor(i / cols) * (hh + 0.25); const c = E.graf[i % E.graf.length]; s.addShape(p.ShapeType.roundRect, { x, y: yy, w, h: hh, fill: { color: E.suave }, line: { color: c, width: 2 }, rectRadius: 0.15 }); s.addText(String(v), { x, y: yy + hh * 0.15, w, h: hh * 0.5, align: 'center', fontFace: E.titulo, fontSize: 42, bold: true, color: c === 'FACC15' || c === 'FDE047' ? E.primario : c }); s.addText(l, { x: x + 0.15, y: yy + hh * 0.62, w: w - 0.3, h: hh * 0.3, align: 'center', fontFace: E.cuerpo, fontSize: 15, color: E.texto }); });
       },
       /** Nota de lectura al pie de un gráfico. */
-      lectura(s, texto) { if (texto) s.addText([{ text: 'Lectura: ', options: { bold: true, color: E.primario } }, { text: texto }], { x: 0.5, y: 6.55, w: 12.3, h: 0.5, fontFace: E.cuerpo, fontSize: 13, color: E.texto, valign: 'middle', fit: 'none' }); },
+      lectura(s, texto) {
+        if (!texto) return;
+        s.addShape(p.ShapeType.roundRect, { x: 0.5, y: 6.5, w: 12.3, h: 0.6, fill: { color: E.suave }, line: { color: E.acento, width: 1.2 }, rectRadius: 0.1 });
+        s.addShape(p.ShapeType.rect, { x: 0.5, y: 6.58, w: 0.09, h: 0.44, fill: { color: E.acento }, line: { color: E.acento } });
+        s.addText([{ text: 'LECTURA  ', options: { bold: true, color: E.primario, fontSize: 11, charSpacing: 1 } }, { text: texto }], { x: 0.75, y: 6.5, w: 11.9, h: 0.6, fontFace: E.cuerpo, fontSize: 14, color: E.texto, valign: 'middle', fit: 'none' });
+      },
       chartOpts(extra = {}) { return { catAxisLabelColor: E.texto, valAxisLabelColor: E.texto, legendColor: E.texto, catAxisLabelFontSize: 12, valAxisLabelFontSize: 11, legendFontSize: 13, dataLabelColor: E.texto, dataLabelFontSize: 11, ...extra }; }
     };
     return k;
@@ -401,7 +444,7 @@ Object.assign(app, {
             const ciclos = Object.keys(CYCLES).map(c => [c, datos.filter(d => CYCLES[c].courses.includes(d.curso)).reduce((x, d) => x + d.total, 0)]).filter(x => x[1]);
             if (ciclos.length) { const s3 = k.base('Registros por ciclo', ''); k.chart(s3, 'doughnut', [{ name: 'Registros', labels: ciclos.map(c => c[0]), values: ciclos.map(c => c[1]) }], k.chartOpts({ x: 2.2, y: 1.45, w: 8.9, h: 5.1, holeSize: 55, chartColors: ['7C5CC4', 'FACC15', '1F7A4D', '2F6FB3'], showLegend: true, legendPos: 'r', showPercent: true })); }
           }
-          if (f.interp) { const it = this.presInterpretacion(datos); k.textoLargo('¿Qué nos dicen los datos?', 'Interpretación breve de los gráficos', [...it.lineas, '', 'Qué hacer:', ...it.acciones.map(a => `• ${a}`)].join('\n'), 18); }
+          if (f.interp) { const it = this.presInterpretacion(datos); k.puntos('¿Qué nos dicen los datos?', 'Interpretación breve de los gráficos', [{ t: 'Lo que muestran los datos', color: E.graf[3], items: it.lineas }, ...(it.acciones.length ? [{ t: 'Qué hacer con estos datos', color: E.graf[2], items: it.acciones }] : [])]); }
         }
         if (key === 'asistencia') {
           const ord = [...datos].sort((a, b) => a.asisProm - b.asisProm);
