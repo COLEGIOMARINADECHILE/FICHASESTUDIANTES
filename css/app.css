@@ -1716,3 +1716,10 @@ body { overscroll-behavior-y: none; }
 .dash-interp__l, .dash-interp__a { margin: 0.4rem 0 0.8rem; padding-left: 1.2rem; display: grid; gap: 0.35rem; }
 .dash-interp h4 { display: flex; align-items: center; gap: 0.4rem; margin: 0.6rem 0 0; }
 @media (max-width: 640px) { .pres-estilo { grid-template-columns: 1fr; } }
+
+/* Créditos del autor en la portada: discretos, pequeños y translúcidos */
+.login .autoria { border-top: 0; margin-top: 0.6rem; padding-top: 0; gap: 0.25rem; }
+.login .autoria__img { padding: 0.2rem 0.5rem; border-radius: 999px; background: rgb(255 255 255 / 0.82); box-shadow: 0 2px 10px rgb(0 0 0 / 0.18); opacity: 0.8; transition: opacity 0.2s, transform 0.2s; backdrop-filter: blur(6px); }
+.login .autoria__img:hover, .login .autoria__img:focus-visible { opacity: 1; transform: translateY(-1px); }
+.login .autoria__img img { width: min(8.5rem, 45vw); }
+.login .autoria__txt { font-size: 0.62rem; opacity: 0.7; }

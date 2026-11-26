@@ -71,27 +71,89 @@ Object.assign(app, {
         if (h > mh) { h = mh; w = mh * logo.r; }
         s.addImage({ data: logo.data, x: x + (mw - w) / 2, y: y + (mh - h) / 2, w, h });
       },
+      /** Franja de damero (cuadros alternados) de ancho completo. */
+      damero(s, y, sz, filas) {
+        for (let r = 0; r < filas; r++) for (let c = 0; c * sz < W; c++) {
+          const col = (r + c) % 2 === 0 ? E.primario : E.suave;
+          s.addShape(p.ShapeType.rect, { x: c * sz, y: y + r * sz, w: sz, h: sz, fill: { color: col }, line: { color: col, width: 0 } });
+        }
+      },
       base(titulo, sub) {
         const s = p.addSlide();
         s.background = { color: E.fondo };
-        s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.18, fill: { color: E.primario }, line: { color: E.primario } });
+        if (E.diseno === 'damero') k.damero(s, 0, 0.12, 2);
+        else if (E.diseno === 'circulo') s.addShape(p.ShapeType.ellipse, { x: W - 1.75, y: 0.12, w: 1.5, h: 1.3, fill: { color: E.suave }, line: { color: E.suave } });
+        else if (E.diseno === 'lateral') s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 0.22, h: H, fill: { color: E.primario }, line: { color: E.primario } });
+        else s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.18, fill: { color: E.primario }, line: { color: E.primario } });
         s.addShape(p.ShapeType.rect, { x: 0.5, y: 0.98, w: 1.1, h: 0.07, fill: { color: E.acento }, line: { color: E.acento } });
-        s.addText(titulo, { x: 0.5, y: 0.32, w: 10.9, h: 0.66, fontFace: E.titulo, fontSize: 28, bold: true, color: E.primario });
+        s.addText(E.diseno === 'circulo' ? String(titulo).toUpperCase() : titulo, { x: 0.5, y: 0.32, w: 10.9, h: 0.66, fontFace: E.titulo, fontSize: 28, bold: true, color: E.primario });
         if (sub) s.addText(sub, { x: 0.5, y: 1.08, w: 10.9, h: 0.42, fontFace: E.cuerpo, fontSize: 15, color: E.texto });
         k.logoEn(s, W - 1.35, 0.25, 0.95, 1.05);
         if (k.pie) s.addText(k.pie, { x: 0.5, y: H - 0.45, w: 10, h: 0.3, fontFace: E.cuerpo, fontSize: 10, color: E.texto });
         return s;
       },
       portada({ kicker, titulo, sub, lineas = [] }) {
-        const s = p.addSlide();
-        s.background = { color: E.portada };
-        s.addShape(p.ShapeType.rect, { x: 0, y: H - 1.1, w: W, h: 1.1, fill: { color: E.acento }, line: { color: E.acento } });
-        k.logoEn(s, 0.8, 1.0, 2.3, 3.2);
-        if (kicker) s.addText(kicker, { x: 3.6, y: 1.15, w: 9.2, h: 0.5, fontFace: E.cuerpo, fontSize: 17, bold: true, color: E.acento, charSpacing: 2 });
-        s.addText(titulo, { x: 3.6, y: 1.7, w: 9.2, h: 1.2, fontFace: E.titulo, fontSize: titulo.length > 28 ? 40 : 52, bold: true, color: E.claro, fit: 'none' });
-        if (sub) s.addText(sub, { x: 3.6, y: 2.9, w: 9.2, h: 0.55, fontFace: E.cuerpo, fontSize: 21, color: E.claro });
-        if (lineas.length) s.addText(lineas.flatMap(([a, b], i) => [{ text: `${a}: `, options: { bold: true } }, { text: String(b), options: { breakLine: i < lineas.length - 1 } }]), { x: 3.6, y: 3.6, w: 9.2, h: 1.9, fontFace: E.cuerpo, fontSize: 19, color: E.claro, valign: 'top' });
-        s.addText(app.brand().tagline, { x: 0.8, y: H - 0.85, w: 11.5, h: 0.6, fontFace: E.titulo, fontSize: 20, bold: true, color: E.portada });
+        const s = p.addSlide(), d = E.diseno || 'banda', tag = app.brand().tagline;
+        const tx = lineas.flatMap(([a, b], i) => [{ text: `${a}: `, options: { bold: true } }, { text: String(b), options: { breakLine: i < lineas.length - 1 } }]);
+        const tam = titulo.length > 28 ? 38 : 50;
+        if (d === 'damero') {
+          // Panel celeste a la izquierda, título grande en azul y franja de damero
+          s.background = { color: E.fondo };
+          s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 4.4, h: H - 0.6, fill: { color: E.suave }, line: { color: E.suave } });
+          if (kicker) s.addText(kicker, { x: 0.5, y: 0.7, w: 3.6, h: 0.9, fontFace: E.cuerpo, fontSize: 14, color: E.primario, valign: 'top' });
+          s.addText(sub || ' ', { x: 0.5, y: 1.6, w: 3.6, h: 0.7, fontFace: E.titulo, fontSize: 28, bold: true, color: E.primario });
+          s.addShape(p.ShapeType.line, { x: 0.5, y: 2.45, w: 3.2, h: 0, line: { color: E.acento, width: 1.5, dashType: 'dash' } });
+          k.logoEn(s, 0.7, 3.0, 3.0, 3.2);
+          s.addShape(p.ShapeType.ellipse, { x: 4.9, y: 2.2, w: 7.9, h: 2.5, fill: { type: 'none' }, line: { color: E.acento, width: 2 } });
+          s.addText(titulo, { x: 5.1, y: 2.4, w: 7.5, h: 2.1, align: 'center', valign: 'middle', fontFace: E.titulo, fontSize: titulo.length > 22 ? 36 : 46, bold: true, color: E.primario, fit: 'none' });
+          if (lineas.length) s.addText(lineas.map(([a, b]) => `${a}: ${b}`).join('   ·   '), { x: 4.8, y: 5.0, w: 8.1, h: 0.7, align: 'center', fontFace: E.cuerpo, fontSize: 14, color: E.texto });
+          s.addText(tag, { x: 4.8, y: 5.75, w: 8.1, h: 0.35, align: 'center', fontFace: E.cuerpo, fontSize: 10, italic: true, color: E.texto });
+          k.damero(s, H - 0.6, 0.3, 2);
+        } else if (d === 'circulo') {
+          // Círculo grande con la insignia; título en mayúsculas espaciadas
+          s.background = { color: E.fondo };
+          s.addShape(p.ShapeType.ellipse, { x: 7.5, y: 0.9, w: 5.4, h: 5.4, fill: { color: E.suave }, line: { color: E.suave } });
+          s.addShape(p.ShapeType.ellipse, { x: 7.2, y: 0.6, w: 6.0, h: 6.0, fill: { type: 'none' }, line: { color: E.primario, width: 2.5, dashType: 'dash' } });
+          k.logoEn(s, 8.5, 1.9, 3.4, 3.4);
+          if (kicker) s.addText(kicker, { x: 0.8, y: 1.5, w: 6.4, h: 0.45, fontFace: E.cuerpo, fontSize: 13, bold: true, color: E.acento, charSpacing: 3 });
+          s.addText(String(titulo).toUpperCase(), { x: 0.8, y: 2.0, w: 6.5, h: 1.9, valign: 'middle', fontFace: E.titulo, fontSize: titulo.length > 22 ? 34 : 42, bold: true, color: E.primario, charSpacing: 1, fit: 'none' });
+          s.addShape(p.ShapeType.line, { x: 0.8, y: 4.05, w: 3, h: 0, line: { color: E.primario, width: 1.5 } });
+          if (sub) s.addText(sub, { x: 0.8, y: 4.2, w: 6.4, h: 0.5, fontFace: E.cuerpo, fontSize: 18, bold: true, color: E.acento, charSpacing: 2 });
+          if (lineas.length) s.addText(lineas.map(([a, b]) => `${a}: ${b}`).join('\n'), { x: 0.8, y: 4.8, w: 6.4, h: 1.3, valign: 'top', fontFace: E.cuerpo, fontSize: 14, color: E.texto });
+          s.addText(tag, { x: 0.8, y: H - 0.65, w: 6.4, h: 0.35, fontFace: E.cuerpo, fontSize: 10, italic: true, color: E.texto });
+        } else if (d === 'lateral') {
+          // Panel de color con la insignia a la izquierda; contenido sobre fondo claro
+          s.background = { color: E.fondo };
+          s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 4.6, h: H, fill: { color: E.portada }, line: { color: E.portada } });
+          s.addShape(p.ShapeType.rect, { x: 4.6, y: 0, w: 0.14, h: H, fill: { color: E.acento }, line: { color: E.acento } });
+          k.logoEn(s, 0.7, 1.7, 3.2, 3.6);
+          if (kicker) s.addText(kicker, { x: 5.4, y: 1.3, w: 7.4, h: 0.5, fontFace: E.cuerpo, fontSize: 15, bold: true, color: E.primario, charSpacing: 2 });
+          s.addText(titulo, { x: 5.4, y: 1.85, w: 7.4, h: 1.3, fontFace: E.titulo, fontSize: tam, bold: true, color: E.primario, fit: 'none' });
+          s.addShape(p.ShapeType.rect, { x: 5.4, y: 3.2, w: 1.3, h: 0.07, fill: { color: E.acento }, line: { color: E.acento } });
+          if (sub) s.addText(sub, { x: 5.4, y: 3.4, w: 7.4, h: 0.5, fontFace: E.cuerpo, fontSize: 20, color: E.texto });
+          if (lineas.length) s.addText(tx, { x: 5.4, y: 4.15, w: 7.4, h: 1.9, fontFace: E.cuerpo, fontSize: 18, color: E.texto, valign: 'top' });
+          s.addText(tag, { x: 5.4, y: H - 0.65, w: 7.4, h: 0.35, fontFace: E.cuerpo, fontSize: 11, italic: true, color: E.texto });
+        } else if (d === 'centrado') {
+          // Todo centrado sobre el color de portada
+          s.background = { color: E.portada };
+          s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.2, fill: { color: E.acento }, line: { color: E.acento } });
+          k.logoEn(s, (W - 2.4) / 2, 0.55, 2.4, 2.3);
+          if (kicker) s.addText(kicker, { x: 1, y: 3.0, w: W - 2, h: 0.45, align: 'center', fontFace: E.cuerpo, fontSize: 15, bold: true, color: E.acento, charSpacing: 3 });
+          s.addText(titulo, { x: 1, y: 3.45, w: W - 2, h: 1.1, align: 'center', fontFace: E.titulo, fontSize: tam, bold: true, color: E.claro, fit: 'none' });
+          s.addShape(p.ShapeType.rect, { x: (W - 1.3) / 2, y: 4.6, w: 1.3, h: 0.06, fill: { color: E.acento }, line: { color: E.acento } });
+          if (sub) s.addText(sub, { x: 1, y: 4.75, w: W - 2, h: 0.5, align: 'center', fontFace: E.cuerpo, fontSize: 20, color: E.claro });
+          if (lineas.length) s.addText(lineas.map(([a, b]) => `${a}: ${b}`).join('     ·     '), { x: 0.8, y: 5.4, w: W - 1.6, h: 0.6, align: 'center', fontFace: E.cuerpo, fontSize: 16, color: E.claro });
+          s.addText(tag, { x: 1, y: H - 0.65, w: W - 2, h: 0.35, align: 'center', fontFace: E.cuerpo, fontSize: 11, italic: true, color: E.claro });
+        } else {
+          s.background = { color: E.portada };
+          s.addShape(p.ShapeType.rect, { x: 0, y: H - 0.22, w: W, h: 0.22, fill: { color: E.acento }, line: { color: E.acento } });
+          k.logoEn(s, 0.8, 1.0, 2.3, 3.2);
+          if (kicker) s.addText(kicker, { x: 3.6, y: 1.15, w: 9.2, h: 0.5, fontFace: E.cuerpo, fontSize: 17, bold: true, color: E.acento, charSpacing: 2 });
+          s.addText(titulo, { x: 3.6, y: 1.7, w: 9.2, h: 1.2, fontFace: E.titulo, fontSize: titulo.length > 28 ? 40 : 52, bold: true, color: E.claro, fit: 'none' });
+          if (sub) s.addText(sub, { x: 3.6, y: 2.9, w: 9.2, h: 0.55, fontFace: E.cuerpo, fontSize: 21, color: E.claro });
+          if (lineas.length) s.addText(tx, { x: 3.6, y: 3.6, w: 9.2, h: 1.9, fontFace: E.cuerpo, fontSize: 19, color: E.claro, valign: 'top' });
+          s.addText(tag, { x: 0.8, y: H - 0.7, w: 11.5, h: 0.35, fontFace: E.cuerpo, fontSize: 11, italic: true, color: E.claro });
+        }
         return s;
       },
       /** Tarjeta con título y texto (letra 15; si el texto no cabe se acorta con "…"). */
