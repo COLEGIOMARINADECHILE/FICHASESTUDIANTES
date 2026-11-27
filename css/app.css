@@ -1864,3 +1864,12 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 @media (max-width: 720px) { .asis-top { grid-template-columns: 1fr; } .asis-datos { grid-template-columns: repeat(3, 1fr); } .asis-barras { gap: 0.2rem; } }
 
 .cargas-pie{margin-top:22px;border-style:dashed}.cargas-pie .row-actions{margin-top:10px}
+
+.who__role{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+
+/* Seguro escolar, accesos, entrevistas previas, asistencia rápida */
+.seg-linea{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-line,#d0d5e0)}
+.acc-sens{color:#b42318}.acc-exceso td{background:rgba(180,35,24,.06)}.acc-tabla th{font-size:11px;white-space:nowrap}.acc-tabla td input[type=checkbox]{width:18px;height:18px}
+.ep-bloque{margin-top:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--color-line,#d0d5e0);background:rgba(37,99,235,.05)}.ep-bloque h4{margin:0 0 4px}.ep-n{font-size:1.4em}
+.asr-segs .seg[aria-pressed=true].asr-aus{background:#b42318;color:#fff;border-color:#b42318}.asr-segs .seg[aria-pressed=true].asr-atr{background:#b54708;color:#fff;border-color:#b54708}
+.asr-barra{margin:10px 0;align-items:center}

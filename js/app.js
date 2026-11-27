@@ -354,7 +354,8 @@ window.app = {
     const view = ['course_plan_detail', 'student_plan_detail'].includes(State.currentView) ? 'plan_detail' : State.currentView;
     document.querySelectorAll('[data-view]').forEach(v => { v.hidden = v.dataset.view !== view; });
     const u = State.currentUser;
-    el('user-name').textContent = u.name;
+    el('user-name').textContent = this.nombreCorto(u.name);
+    el('user-name').title = u.name;
     el('user-role').innerHTML = `<span class="role-pill">${esc(u.role)}</span>${u.customRole && u.customRole !== u.role ? ` ${esc(u.customRole)}` : ''}`;
     el('user-role').title = [u.role, u.customRole].filter(Boolean).join(', ');
     this.renderSessionBanner();
@@ -362,6 +363,13 @@ window.app = {
     this.renderNav();
     this[this.RENDERERS[view]]();
     icons();
+  },
+  /** Nombre y primer apellido (María Loreto se mantiene completo, es su nombre). */
+  nombreCorto(full) {
+    const p = String(full || '').trim().split(/\s+/).filter(Boolean);
+    if (p.length <= 2) return p.join(' ');
+    if (/^mar[ií]a$/i.test(p[0]) && /^loreto$/i.test(p[1])) return p.slice(0, 3).join(' ');
+    return p.length === 3 ? p[0] + ' ' + p[1] : p[0] + ' ' + p[2];
   },
   navigate(v) {
     State.welcome = false; // la bienvenida se muestra solo en la primera pantalla después de ingresar
@@ -379,6 +387,7 @@ window.app = {
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
       ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
+      ['asistencia', 'calendar-check', 'Asistencia', hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema') || !!(this.canSige && this.canSige()) || !!(this.canCert && this.canCert()), ['asistencia']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
       ['consejo', 'gavel', 'Consejo de promoción', hasAccess('ver_fichas'), ['consejo']],
