@@ -17,7 +17,7 @@ Object.assign(app, {
   epRol(t) {
     const n = String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
     if (/^pjefe|profjefe|profesorjefe/.test(n)) return 'Profesor jefe';
-    if (/^igeneral|^igenral|inspgeneral|inspectoriageneral|^ig$/.test(n)) return 'Inspectoría general';
+    if (/^igeneral|^igenral|^insp|^ig$/.test(n)) return 'Inspectoría general';
     if (/^utp/.test(n)) return 'UTP';
     if (/convescolar|convivencia|^conv$/.test(n)) return 'Convivencia escolar';
     if (/^psicolog|^psic/.test(n)) return 'Psicóloga';
@@ -28,6 +28,8 @@ Object.assign(app, {
   /** "2=p.jefe,1=i.general se retira solo" → { 'Profesor jefe': 2, 'Inspectoría general': 1 } */
   epDetalle(txt) {
     const por = {}; let suma = 0;
+    // Texto libre: «INSPECTORIA 7 : motivo - CAMILA LABRIN 1 : motivo» (quién y cuántas veces)
+    if (!/\d\s*=|=\s*\d/.test(txt || '')) [...String(txt || '').matchAll(/(?:^|-)\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü.][A-Za-zÁÉÍÓÚÑÜáéíóúñü. ]*?)\s+(\d{1,2})\s*:/g)].forEach(m => { const rol = this.epRol(m[1].trim()), k = parseInt(m[2]); por[rol] = (por[rol] || 0) + k; suma += k; });
     String(txt || '').split(/[,;]/).forEach(tk => {
       const a = tk.trim().match(/^(\d+)\s*=\s*(.+)$/), b = tk.trim().match(/^(.+?)\s*=\s*(\d+)\.?$/); if (!a && !b) return;
       const rol = this.epRol((a ? a[2] : b[1]).split(/\s+(?:se\s|no\s|s\/)/i)[0].trim()), k = parseInt(a ? a[1] : b[2]);
@@ -36,7 +38,33 @@ Object.assign(app, {
     });
     return { por, suma };
   },
-  async epLeerArchivo(file) {
+  /** Lee el Excel o el PDF de la planilla; ambos entregan lo mismo: hojas con sus estudiantes. */
+  async epLeerArchivo(file) { return /\.pdf$/i.test(file.name) || file.type === 'application/pdf' ? this.epLeerPdf(file) : this.epLeerExcel(file); },
+  /** PDF de la planilla (impresa desde el Excel): cada «REGISTRO Y CONTROL DE ENTREVISTAS» abre un curso. */
+  async epLeerPdf(file) {
+    const texto = await this.pdfText(file), hojas = []; let h = null, ultima = null;
+    const corte = /^(TOTALES|SECCI[OÓ]N|Estado del Libro|1\.\s*Observaciones|2\.\s*Indicaciones|_{5,}|Firma)/i;
+    for (const crudo of texto.split('\n')) {
+      const l = crudo.replace(/\s+/g, ' ').trim(); if (!l) continue;
+      if (/REGISTRO Y CONTROL DE ENTREVISTAS/i.test(l)) { h = { hoja: `Página ${hojas.length + 1}`, curso: '', docente: '', filas: [] }; hojas.push(h); ultima = null; continue; }
+      if (!h) continue;
+      const d = l.match(/^Docente:\s*(.*?)\s*N°\s*Estudiantes/i); if (d) { h.docente = d[1].trim(); continue; }
+      const c = l.match(/^Curso\s*\/\s*Nivel:\s*(.*?)\s*Meta Total/i); if (c && c[1].trim()) { const t = c[1].trim(); h.hoja = t; h.curso = this.asjCursoDeHoja(t) || ALL_COURSES.find(x => x.toLowerCase().replace(/\s/g, '') === t.toLowerCase().replace(/\s/g, '')) || ''; continue; }
+      // N°, nombre en mayúsculas, entrevistas, (porcentaje), (observaciones). Algunas filas no traen el % ni observaciones.
+      const m = l.match(/^(\d{1,3})\s+([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ'.\- ]*?)\s+(\d{1,2})(?:\s+\d+(?:[.,]\d+)?\s*%)?(?:\s+(.*))?$/);
+      if (m) { const obs = (m[4] || '').trim(), det = this.epDetalle(obs); ultima = { nombre: m[2].trim(), planilla: parseInt(m[3]), por: det.por, suma: det.suma, obs: obs === '0' ? '' : obs }; h.filas.push(ultima); continue; }
+      // Fila sin número de entrevistas (en blanco o «RET.» = retirado)
+      const sn = l.match(/^(\d{1,3})\s+([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ'.\- ]+?)(?:\s+\d+(?:[.,]\d+)?\s*%)?(\s+RET\.?)?$/);
+      if (sn && !/^TOTALES/.test(sn[2])) { ultima = { nombre: sn[2].trim().replace(/\s+RET\.?$/, ''), planilla: 0, por: {}, suma: 0, obs: sn[3] ? 'Retirado(a)' : '' }; h.filas.push(ultima); continue; }
+      if (corte.test(l)) { ultima = null; continue; }
+      // línea de continuación de una observación larga
+      if (ultima && /=/.test(l) && !/^(Docente|Curso|Fecha|Revisor|N°|Nombre|Entrevistas|Observaciones)/i.test(l)) { ultima.obs = `${ultima.obs} ${l}`.trim(); const det = this.epDetalle(ultima.obs); ultima.por = det.por; ultima.suma = det.suma; }
+    }
+    const util = hojas.filter(x => x.filas.length);
+    if (!util.length) throw new Error('No encontré la planilla de entrevistas en el PDF (debe tener las columnas Nombre, Entrevistas Realizadas y Observaciones).');
+    return util;
+  },
+  async epLeerExcel(file) {
     await this.gsCargarXlsx();
     const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' }), hojas = [];
     wb.SheetNames.forEach(nombre => {
@@ -62,9 +90,9 @@ Object.assign(app, {
   epAbrir() {
     State.ep = null;
     ui.modal({ title: 'Cargar entrevistas anteriores a la plataforma', icon: 'messages-square', size: 'xl', okText: 'Guardar entrevistas',
-      body: `<div class="stack"><p class="modal__msg">Suba el Excel «Registro y control de entrevistas de apoderados» (una hoja por curso). Se lee, por estudiante, cuántas entrevistas hubo y con quién (por ejemplo <em>2=p.jefe, 1=i.general</em>). No incluye lo conversado: sirve para ver cuántas intervenciones tiene cada estudiante. Al volver a cargar el mismo periodo se reemplaza.</p>
+      body: `<div class="stack"><p class="modal__msg">Suba la planilla «Registro y control de entrevistas de apoderados» en <strong>Excel o en PDF</strong> (un curso por hoja o página). Se lee, por estudiante, cuántas entrevistas hubo y con quién (por ejemplo <em>2=p.jefe, 1=i.general</em>). No incluye lo conversado: sirve para ver cuántas intervenciones tiene cada estudiante. Al volver a cargar el mismo periodo se reemplaza.</p>
         ${fieldHtml('Periodo que representa', '<input class="input" id="ep-periodo" value="2° ciclo 2026">')}
-        <input type="file" class="input" accept=".xlsx,.xls" onchange="app.epLeer(this.files[0])"><div id="ep-prev"></div></div>`,
+        <input type="file" class="input" accept=".xlsx,.xls,.pdf" onchange="app.epLeer(this.files[0])"><div id="ep-prev"></div></div>`,
       onOk: () => this.epGuardar() });
   },
   async epLeer(file) {
