@@ -388,6 +388,7 @@ window.app = {
       ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['asistencia', 'calendar-check', 'Asistencia', hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema') || !!(this.canSige && this.canSige()) || !!(this.canCert && this.canCert()), ['asistencia']],
+      ['entrevistas_reg', 'messages-square', 'Registro de entrevistas', hasAccess('ver_fichas') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas'), ['entrevistas_reg']],
       ['enfermeria', 'heart-pulse', 'Enfermería', hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('ver_fichas'), ['enfermeria']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
@@ -1321,7 +1322,8 @@ window.app = {
   admin_users() {
     const vigentes = State.users.filter(u => !u.eliminado);
     const bajas = State.users.filter(u => u.eliminado).sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    const lista = this.staffSorted(vigentes);
+    if (this.accEstadoAsegurar) this.accEstadoAsegurar();
+    const lista = this.staffSorted(vigentes).filter(u => !this.accEstadoCumple || this.accEstadoCumple(u));
     const sinCorreo = vigentes.filter(u => !u.email).length;
     const pendientes = vigentes.filter(u => u.email && !u.accesoNotificado && u.active !== false).length;
     const solo = !!State.variables.soloGoogle;
@@ -1349,9 +1351,10 @@ window.app = {
         ${fieldHtml('Ordenar', `<select class="input" onchange="State.staffSort=this.value; app.renderAdmin()">${options([['az', 'Nombre: A a la Z'], ['za', 'Nombre: Z a la A'], ['perfil', 'Por perfil y nombre'], ['cargo', 'Por cargo y nombre'], ['estado', 'Primero los que falta aviso']], State.staffSort || 'az')}</select>`)}
         <span class="muted small field-end">${lista.length} de ${vigentes.length} funcionario(s)</span>
       </div>
-      <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Perfil</th><th>Correo institucional</th><th>Estado</th><th class="t-actions">Acciones</th></tr></thead><tbody>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Perfil</th><th>Correo institucional</th><th>Invitación y acceso</th><th>Estado</th><th class="t-actions">Acciones</th></tr></thead><tbody>
       ${lista.length ? '' : `<tr><td colspan="5">${empty('search-x', 'Ningún funcionario coincide con la búsqueda.')}</td></tr>`}${lista.map(u => `<tr><td><span class="cell-title">${esc(u.name)}</span><span class="cell-sub">${esc(u.customRole || '')}</span></td><td>${chip(u.role, ROLE_TONE[u.role] || 'neutral')}</td>
         <td><input type="email" class="input input--email" aria-label="Correo de ${esc(u.name)}" value="${esc(u.email || '')}" placeholder="nombre.apellido@${this.domain()}" onchange="app.saveUserEmail(${jsq(u.id)}, this)"><span class="cell-sub">${u.accesoNotificado ? `Aviso enviado el ${fmtDate(u.accesoNotificado)}` : 'Sin aviso enviado'}</span></td>
+        <td class="small">${this.accEstadoCelda ? this.accEstadoCelda(u) : ''}</td>
         <td>${u.active === false ? chip('Inactivo', 'neutral') : chip('Activo', 'conv')}</td>
         <td class="t-actions"><div class="row-actions"><button class="icon-btn" aria-label="Enviar aviso de acceso" title="Enviar aviso de acceso" onclick="app.openNotifyModal(${jsq(u.id)})">${ico('send')}</button><button class="icon-btn" aria-label="Cambiar clave" title="Cambiar clave" onclick="app.resetUserPassword(${jsq(u.id)})">${ico('key')}</button><button class="icon-btn" aria-label="Editar" title="Editar" onclick="app.openUserModal(${jsq(u.id)})">${ico('edit')}</button><button class="icon-btn icon-btn--danger" aria-label="Dar de baja" title="Dar de baja (sus registros se conservan)" onclick="app.deleteUser(${jsq(u.id)})">${ico('user-x')}</button></div></td></tr>`).join('')}
       </tbody></table></div></section>

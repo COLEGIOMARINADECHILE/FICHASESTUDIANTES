@@ -10,7 +10,7 @@
 // - Nunca guarda datos de estudiantes: las consultas al servidor (Apps Script, POST) no pasan por aquí.
 // - La página se pide primero a internet (siempre la versión más nueva) y, sin conexión, se usa la copia guardada.
 // - Archivos con versión (?v=...) y bibliotecas externas se guardan para abrir más rápido.
-const VERSION = 'trayectoria-2026-12-30h';
+const VERSION = 'trayectoria-2026-12-30l';
 const BASE = ['./', 'index.html', 'manifest.webmanifest', 'img/icons/icon-192.png', 'img/icons/icon-512.png', 'img/icons/apple-touch-icon.png', 'img/logo-colegio.png', 'img/creditos-autor.png'];
 const CDN = /^https:\/\/(unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

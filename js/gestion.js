@@ -1,4 +1,4 @@
-﻿/*!
+/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -264,9 +264,9 @@ Object.assign(app, {
   gsPeriodo() { const p = State.gsPer = State.gsPer || { anio: today().slice(0, 4), mes: '' }; return p; },
   /** Logro de entrevistas de un funcionario en el período. */
   entrevistaMetricas(u, per, idx) {
-    const id = String(u.id), pref = per.mes ? `${per.anio}-${per.mes}` : String(per.anio);
+    const id = String(u.id);
     const metaCursos = this.cursosAtiende(u);
-    const mias = State.rawInterventions.filter(h => this.esEntrevista(h) && String(h.date || '').startsWith(pref) && (String(h.professionalId) === id || (h.entrevista?.apoyo || []).some(p => String(p.id) === id)));
+    const mias = State.rawInterventions.filter(h => this.esEntrevista(h) && this.gsEnPeriodo(h.date, per) && (String(h.professionalId) === id || (h.entrevista?.apoyo || []).some(p => String(p.id) === id)));
     const filas = {}; // curso -> { n, est:Set }
     mias.forEach(h => { const c = idx.cursoDe.get(String(h.studentId)) || 'Sin curso'; const f = filas[c] = filas[c] || { n: 0, est: new Set() }; f.n++; f.est.add(String(h.studentId)); });
     const propios = metaCursos.map(c => { const tot = (idx.por[c] || []).length, f = filas[c] || { n: 0, est: new Set() }; const conEnt = (idx.por[c] || []).filter(s => f.est.has(s)).length; return { curso: c, total: tot, entrevistados: conEnt, entrevistas: f.n, pct: tot ? Math.round(conEnt / tot * 100) : 0 }; });
@@ -280,7 +280,7 @@ Object.assign(app, {
     const per = this.gsPeriodo();
     const anios = [...new Set([today().slice(0, 4), ...State.rawInterventions.map(h => String(h.date || '').slice(0, 4)).filter(a => /^20\d\d$/.test(a))])].sort().reverse();
     return `<div class="filters">${fieldHtml('Año', `<select class="input" onchange="State.gsPer.anio=this.value; ${fn}">${options(anios, per.anio)}</select>`)}
-      ${fieldHtml('Período', `<select class="input" onchange="State.gsPer.mes=this.value; ${fn}">${options([['', 'Todo el año'], ...GS_MESES.map((m, i) => [String(i + 1).padStart(2, '0'), m])], per.mes)}</select>`)}</div>`;
+      ${fieldHtml('Período', `<select class="input" onchange="State.gsPer.mes=this.value; ${fn}">${options([['', 'Todo el año'], ['S1', '1° semestre (marzo a julio)'], ['S2', '2° semestre (agosto a diciembre)'], ...GS_MESES.map((m, i) => [String(i + 1).padStart(2, '0'), m])], per.mes)}</select>`)}</div>`;
   },
 
   // ---------------- REPORTE VISUAL PARA EL EQUIPO DE GESTIÓN ----------------
@@ -322,7 +322,7 @@ Object.assign(app, {
   },
   gsDetalleHtml(f) {
     const per = this.gsPeriodo(), todos = hasAccess('ver_todos_reportes');
-    const periodoTxt = per.mes ? `${GS_MESES[+per.mes - 1]} ${per.anio}` : `Año ${per.anio}`;
+    const periodoTxt = app.gsPeriodoTxt(per);
     return `<section class="panel gs-detalle"><div class="panel__head"><h2>${ico('user-check')}${esc(f.u.name)}</h2><div class="row-actions">
         <button class="btn btn--primary" onclick="app.gsPdfLogro(${jsq(f.u.id)})">${ico('file-down')}Descargar PDF del logro</button>
         <button class="btn" onclick="app.gsPdfGestion(${jsq(f.u.id)})">${ico('file-text')}PDF de registros del período</button>
@@ -397,7 +397,7 @@ Object.assign(app, {
 Object.assign(app.REPORTS, {
   logro_entrevistas() {
     const ex = State.export, per = ex.tempPer || app.gsPeriodo(), idx = app.gsIndice();
-    const periodoTxt = per.mes ? `${GS_MESES[+per.mes - 1]} ${per.anio}` : `Año ${per.anio}`;
+    const periodoTxt = app.gsPeriodoTxt(per);
     if (ex.tempSel === 'all') {
       const filas = State.users.filter(u => !u.eliminado && u.active !== false).map(u => app.entrevistaMetricas(u, per, idx)).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
       return { filename: `Logro_entrevistas_${per.anio}${per.mes ? '_' + per.mes : ''}.pdf`, title: 'LOGRO DE ENTREVISTAS POR FUNCIONARIO', wide: true,
