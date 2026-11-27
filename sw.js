@@ -1,4 +1,4 @@
-﻿/*!
+/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -10,7 +10,7 @@
 // - Nunca guarda datos de estudiantes: las consultas al servidor (Apps Script, POST) no pasan por aquí.
 // - La página se pide primero a internet (siempre la versión más nueva) y, sin conexión, se usa la copia guardada.
 // - Archivos con versión (?v=...) y bibliotecas externas se guardan para abrir más rápido.
-const VERSION = 'trayectoria-2026-12-29b';
+const VERSION = 'trayectoria-2026-12-30b';
 const BASE = ['./', 'index.html', 'manifest.webmanifest', 'img/icons/icon-192.png', 'img/icons/icon-512.png', 'img/icons/apple-touch-icon.png', 'img/logo-colegio.png', 'img/creditos-autor.png'];
 const CDN = /^https:\/\/(unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

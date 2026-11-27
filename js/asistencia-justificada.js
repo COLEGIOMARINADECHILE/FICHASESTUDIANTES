@@ -199,7 +199,7 @@ Object.assign(app, {
   const rs = app.renderStudents;
   if (rs) app.renderStudents = function () {
     rs.apply(this, arguments);
-    const a = el('students-actions'); if (a && this.canSige && (this.canSige() || hasAccess('editar_fichas')) && !a.querySelector('[data-asj]')) { a.insertAdjacentHTML('beforeend', `<button class="btn" data-asj onclick="app.asjAbrir()">${ico('calendar-check')}Cargar días justificados</button>`); icons(); }
+    const a = el('students-cargas-btns'); if (a && this.canSige && (this.canSige() || hasAccess('editar_fichas')) && !a.querySelector('[data-asj]')) { a.insertAdjacentHTML('beforeend', `<button class="btn" data-asj onclick="app.asjAbrir()">${ico('calendar-check')}Cargar días justificados</button>`); icons(); }
   };
   const as = app.admin_students;
   if (as) app.admin_students = function () { return as.apply(this, arguments) + `<section class="panel"><div class="option-block"><h3>${ico('calendar-check')}Días justificados (planilla de asistencia)</h3><p class="muted small">Suba la planilla de asistencia con los días justificados en negrita o rojo. Se complementa la asistencia de cada estudiante: real (sin justificar) y con días justificados.</p><button class="btn" onclick="app.asjAbrir()">${ico('upload')}Cargar días justificados</button></div></section>`; };

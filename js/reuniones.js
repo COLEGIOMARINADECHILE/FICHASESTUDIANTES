@@ -299,7 +299,7 @@ Object.assign(app, {
       O.kpis.push({ v: bajas.length, l: 'Bajo 85 % de asistencia', tone: bajas.length ? 'warn' : 'conv' });
       O.kpis.push({ v: bajas.filter(s => s.asistencia.real < 70).length, l: 'Críticos (bajo 70 %)', tone: bajas.some(s => s.asistencia.real < 70) ? 'proto' : 'conv' });
       O.kpis.push({ v: atr.length, l: 'Con 3 o más atrasos', tone: atr.length ? 'warn' : 'conv' });
-      grupo('Asistencia bajo 85 %', 'proto', 'calendar-x', bajas.slice(0, 20).map(s => ({ n: n(s), id: s.id, d: `${pct(s.asistencia.real)}${s.asistencia.diasJustificados ? ` (${pct(s.asistencia.conJustificativo)} con ${s.asistencia.diasJustificados} días justificados)` : '} · ${s.asistencia.inasistencias} inasistencias`, tone: s.asistencia.real < 70 ? 'proto' : 'warn' })), 'Ningún estudiante bajo 85 %.');
+      grupo('Asistencia bajo 85 %', 'proto', 'calendar-x', bajas.slice(0, 20).map(s => ({ n: n(s), id: s.id, d: `${pct(s.asistencia.real)}${s.asistencia.diasJustificados ? ` (${pct(s.asistencia.conJustificativo)} con ${s.asistencia.diasJustificados} días justificados)` : ''} · ${s.asistencia.inasistencias} inasistencias`, tone: s.asistencia.real < 70 ? 'proto' : 'warn' })), 'Ningún estudiante bajo 85 %.');
       grupo('Atrasos reiterados', 'warn', 'clock', atr.slice(0, 20).map(s => ({ n: n(s), id: s.id, d: `${s.asistencia.atrasos} atrasos`, tone: s.asistencia.atrasos >= 6 ? 'proto' : 'warn' })), 'Sin estudiantes con 3 o más atrasos.');
     }
     if (k === 'academica') {

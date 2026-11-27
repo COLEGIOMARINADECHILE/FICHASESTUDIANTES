@@ -391,6 +391,8 @@ window.app = {
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
       ['sin_reportes', 'user-search', 'Estudiantes sin reportes', hasAccess('ver_fichas'), ['sin_reportes']],
+      ['reportes', 'printer', 'Imprimir y reportes', hasAccess('ver_fichas'), ['reportes']],
+      ['cargas', 'upload-cloud', 'Cargas masivas', hasAccess('ver_fichas'), ['cargas']],
       ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), ['staff_report']],
       ['audit', 'scroll-text', 'Bitácora', this.canSeeAudit(), ['audit']],
       ['manual', 'book-open', 'Manual de uso', true, []],
@@ -595,14 +597,25 @@ window.app = {
     const canImport = hasAccess('editar_fichas') || hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema');
 
     el('students-title').textContent = course || 'Todos los estudiantes';
-    el('students-actions').innerHTML = [
+    // Las cargas y actualizaciones de datos van al final de la página (solo para quien tiene permiso)
+    const cargasBtns = [
       this.canSige() ? `<button class="btn" onclick="app.openSigeImport()">${ico('list-checks')}Actualizar con lista SIGE</button>` : '',
       course && canImport ? `<button class="btn" onclick="app.openAttendanceImport()">${ico('file-spreadsheet')}Cargar inasistencias</button>` : '',
       canImport ? `<button class="btn" onclick="app.openGradesImport()">${ico('file-badge')}Cargar notas (PDF)</button>` : '',
       this.canImportPie() ? `<button class="btn" onclick="app.openPiePlansImport()">${ico('puzzle')}Cargar planes PIE</button>` : '',
       this.canUploadActas() ? `<button class="btn" onclick="app.openActasImport()">${ico('file-check')}Subir actas firmadas (PDF)</button>` : '',
       this.canCert() ? `<button class="btn" onclick="app.openBulkCerts()">${ico('heart-pulse')}Subir certificados médicos</button>` : '',
-      this.canCert() && this.pendingCerts().length ? `<button class="btn" onclick="app.openPendingCerts()">${ico('inbox')}Certificados por asignar (${this.pendingCerts().length})</button>` : '',
+      this.canCert() && this.pendingCerts().length ? `<button class="btn" onclick="app.openPendingCerts()">${ico('inbox')}Certificados por asignar (${this.pendingCerts().length})</button>` : ''
+    ].filter(Boolean);
+    const box = el('students-cargas');
+    if (box) {
+      box.hidden = !cargasBtns.length;
+      box.innerHTML = cargasBtns.length ? `<section class="panel cargas-pie"><div class="panel__head"><h2>${ico('upload-cloud')}Cargas y actualizaciones de datos</h2></div>
+        <p class="muted small">Estas funciones modifican datos de los estudiantes y solo las ven quienes tienen permiso. Todas las cargas (con su explicación paso a paso) también están en <strong>«Cargas masivas»</strong>, en el menú lateral.</p>
+        <div class="row-actions" id="students-cargas-btns">${cargasBtns.join('')}</div>
+        <div class="row-actions"><button class="btn btn--sm" onclick="app.navigate('cargas')">${ico('arrow-right')}Ir a Cargas masivas</button></div></section>` : '';
+    }
+    el('students-actions').innerHTML = [
       course ? `<button class="btn" onclick="app.openTraspaso(${jsq(course)})">${ico('file-stack')}Ficha de traspaso</button>` : '',
       course ? `<button class="btn" onclick="app.openCourseRisk(${jsq(course)})">${ico('shield-alert')}Riesgos del curso</button>` : '',
       course ? `<button class="btn" onclick="app.openDia(${jsq(course)})">${ico('bar-chart-3')}DIA y Dominio lector</button>` : '',
