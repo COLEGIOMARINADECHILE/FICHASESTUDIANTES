@@ -1888,3 +1888,6 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 .rge-n{min-width:38px;height:38px;border-radius:10px;background:var(--color-primary,#1d3a8a);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
 .rge-nom{display:flex;flex-direction:column;min-width:180px;flex:1}.rge-met{display:flex;flex-direction:column;gap:4px;min-width:260px;font-size:12px}.rge-barra{display:block}
 .inact-aviso{position:fixed;right:16px;bottom:16px;z-index:100000;display:flex;flex-direction:column;gap:6px;max-width:340px;padding:14px 16px;border-radius:14px;background:#7c2d12;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+
+.jc-pies{display:flex;flex-wrap:wrap;gap:4px 10px}.jc-pie{padding:2px 8px;border-radius:999px;border:1px solid var(--color-line,#d0d5e0);font-size:12px}.jc-pie.is-on{background:rgba(37,99,235,.12);border-color:#2563eb}
+.ep2-n{width:62px;padding:3px 6px;text-align:center}.ep2-pj{background:rgba(37,99,235,.1)}.ep2-tot td{background:rgba(0,0,0,.04)}.ep2-tabla thead th{white-space:nowrap}
