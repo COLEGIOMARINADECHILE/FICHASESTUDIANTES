@@ -310,7 +310,8 @@ Object.assign(app, {
       && (!st.perfil || f.u.role === st.perfil) && (!st.cargo || cargoDe(f.u) === st.cargo) && (!st.ciclo || cicloDe(f).includes(st.ciclo))
       && (!q || GS_NORM(`${f.u.name} ${f.u.customRole || ''} ${f.u.role}`).includes(q)));
     const ord = { az: (a, b) => a.u.name.localeCompare(b.u.name, 'es'), za: (a, b) => b.u.name.localeCompare(a.u.name, 'es'), bajo: (a, b) => (a.pct ?? 999) - (b.pct ?? 999) || a.u.name.localeCompare(b.u.name, 'es'),
-      mas: (a, b) => b.total - a.total || a.u.name.localeCompare(b.u.name, 'es'), cargo: (a, b) => cargoDe(a.u).localeCompare(cargoDe(b.u), 'es') || a.u.name.localeCompare(b.u.name, 'es'),
+      mas: (a, b) => b.total - a.total || a.u.name.localeCompare(b.u.name, 'es'),
+      reg: (a, b) => ((b.act && b.act.total) || 0) - ((a.act && a.act.total) || 0) || a.u.name.localeCompare(b.u.name, 'es'), cargo: (a, b) => cargoDe(a.u).localeCompare(cargoDe(b.u), 'es') || a.u.name.localeCompare(b.u.name, 'es'),
       perfil: (a, b) => String(a.u.role).localeCompare(String(b.u.role), 'es') || a.u.name.localeCompare(b.u.name, 'es'),
       ciclo: (a, b) => (Object.keys(CYCLES).indexOf(cicloDe(a)[0]) + 99) % 99 - (Object.keys(CYCLES).indexOf(cicloDe(b)[0]) + 99) % 99 || a.u.name.localeCompare(b.u.name, 'es') };
     const vis = filas.slice().sort(ord[st.orden] || ord.az);
@@ -326,7 +327,7 @@ Object.assign(app, {
           <div class="stat" data-tone="conv"><span class="stat__num num">${prom === null ? '-' : prom + ' %'}</span><span class="stat__label">Logro promedio de entrevistas</span></div>
           <div class="stat" data-tone="obs"><span class="stat__num num">${filas.length}</span><span class="stat__label">Funcionarios en el listado</span></div>
           <div class="stat" data-tone="${sinEnt ? 'proto' : 'conv'}"><span class="stat__num num">${sinEnt}</span><span class="stat__label">Sin ninguna entrevista a sus cursos</span></div>
-          <div class="stat"><span class="stat__num num">${filas.reduce((t, f) => t + f.total, 0)}</span><span class="stat__label">Entrevistas en el período</span></div></div>
+          <div class="stat"><span class="stat__num num">${filas.reduce((t, f) => t + ((f.act && f.act.total) || f.total), 0)}</span><span class="stat__label">Registros en el período (todos los tipos; ${filas.reduce((t, f) => t + f.total, 0)} entrevistas)</span></div></div>
         <p class="muted small">Logro = estudiantes distintos entrevistados de los cursos que atiende ÷ estudiantes de esos cursos. Los cursos que atiende se definen en Administración → Funcionarios (editar) y, si no se definen, se usa el curso del que es profesor(a) jefe. Con «Historial completo» obtiene todo lo realizado por la persona (entrevistas, anotaciones, observaciones, enfermería, planes y respaldos).</p></section>
       ${sel ? this.gsDetalleHtml(sel) : ''}
       <section class="panel"><div class="filters">
@@ -335,7 +336,7 @@ Object.assign(app, {
         ${todos ? fieldHtml('Cargo', `<select class="input" onchange="State.sr.cargo=this.value; app.renderStaffReport()"><option value="">Todos</option>${options(cargos, st.cargo)}</select>`) : ''}
         ${todos ? fieldHtml('Ciclo', `<select class="input" onchange="State.sr.ciclo=this.value; app.renderStaffReport()"><option value="">Todos</option>${options(Object.keys(CYCLES), st.ciclo)}</select>`) : ''}
         ${todos ? fieldHtml('Estado', `<select class="input" onchange="State.sr.estado=this.value; app.renderStaffReport()">${options([['todos', 'Todos'], ['activos', 'Solo activos'], ['inactivos', 'Solo inactivos']], st.estado)}</select>`) : ''}
-        ${todos ? fieldHtml('Ordenar por', `<select class="input" onchange="State.sr.orden=this.value; app.renderStaffReport()">${options([['az', 'Nombre: A a la Z'], ['za', 'Nombre: Z a la A'], ['cargo', 'Cargo'], ['perfil', 'Perfil'], ['ciclo', 'Ciclo'], ['mas', 'Más entrevistas primero'], ['bajo', 'Menor logro primero']], st.orden)}</select>`) : ''}</div>
+        ${todos ? fieldHtml('Ordenar por', `<select class="input" onchange="State.sr.orden=this.value; app.renderStaffReport()">${options([['az', 'Nombre: A a la Z'], ['za', 'Nombre: Z a la A'], ['cargo', 'Cargo'], ['perfil', 'Perfil'], ['ciclo', 'Ciclo'], ['mas', 'Más entrevistas primero'], ['reg', 'Más registros en total primero'], ['bajo', 'Menor logro primero']], st.orden)}</select>`) : ''}</div>
         <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Cursos que atiende</th><th>Estudiantes</th><th class="gs-col">Logro de entrevistas</th><th>A su(s) curso(s)</th><th>A otros cursos</th><th class="t-actions"></th></tr></thead><tbody>
         ${vis.length ? vis.map(f => `<tr class="${String(f.u.id) === String(st.sel) ? 'is-sel' : ''}"><td><span class="cell-title">${esc(f.u.name)}${f.u.active === false ? ' ' + chip('Inactivo', 'neutral') : ''}</span><span class="cell-sub">${esc(f.u.customRole || f.u.role)}</span></td>
           <td class="small">${f.metaCursos.length ? f.metaCursos.map(c => chip(c, 'neutral')).join(' ') : '<span class="muted">Sin cursos asignados</span>'}</td>

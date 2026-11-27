@@ -85,3 +85,60 @@ Object.assign(app.REPORTS, {
     };
   }
 });
+
+// =====================================================================
+// TODO LO REGISTRADO POR CADA FUNCIONARIO (independiente de la meta de entrevistas)
+// El reporte de funcionarios mostraba solo las entrevistas. Ahora muestra todo lo que cada persona registró
+// en la plataforma en el período: entrevistas, anotaciones, protocolos, cartas, observaciones, enfermería,
+// planes, respaldos y atrasos/inasistencias, aunque no tenga cursos asignados ni meta.
+// =====================================================================
+const GS_ACT = [['entrevistas', 'Entrevistas', 'Ent.'], ['anotaciones', 'Anotaciones', 'Anot.'], ['protocolos', 'Protocolos', 'Prot.'], ['cartas', 'Cartas y documentos', 'Cartas'], ['observaciones', 'Observaciones docentes', 'Obs.'], ['enfermeria', 'Atenciones de enfermería', 'Enf.'], ['planes', 'Planes', 'Planes'], ['respaldos', 'Respaldos y archivos', 'Resp.'], ['asistencia', 'Atrasos e inasistencias', 'Asist.']];
+Object.assign(app, {
+  gsActividad(u, per) {
+    const pid = String(u.id), enP = f => !!f && this.gsEnPeriodo(String(f).split('T')[0], per), a = Object.fromEntries(GS_ACT.map(([k]) => [k, 0]));
+    State.rawInterventions.forEach(i => {
+      const mia = String(i.professionalId) === pid, apoyo = (i.entrevista?.apoyo || []).some(p => String(p.id) === pid);
+      if (!(mia || apoyo) || !enP(i.date)) return;
+      if (i.type === PROTOCOLO) a.protocolos++; else if (this.isCarta(i)) a.cartas++; else if (i.anotacion) a.anotaciones++; else a.entrevistas++;
+    });
+    State.rawObservations.forEach(x => { if (String(x.professionalId) === pid && enP(x.date)) a.observaciones++; });
+    State.rawNursings.forEach(x => { if (String(x.professionalId) === pid && enP(x.date)) a.enfermeria++; });
+    (State.studentPlans || []).forEach(p => { if (String(p.creatorId) === pid && enP(p.date)) a.planes++; });
+    (State.coursePlans || []).forEach(p => { if (String(p.creatorId) === pid && enP(p.date)) a.planes++; });
+    State.rawEvidences.forEach(x => { if (String(x.uploaderId) === pid && enP(x.date)) a.respaldos++; });
+    State.rawStudents.forEach(s => (s.registroAsistencia || []).forEach(r => { if (r.por === u.name && enP(r.fecha)) a.asistencia++; }));
+    a.total = GS_ACT.reduce((t, [k]) => t + a[k], 0);
+    return a;
+  },
+  gsActividadChips(a) { return GS_ACT.filter(([k]) => a[k]).map(([k, , c]) => `<span class="gs-act">${esc(c)} <b>${a[k]}</b></span>`).join(' ') || '<span class="muted small">Sin registros</span>'; }
+});
+
+(() => {
+  const em = app.entrevistaMetricas;
+  app.entrevistaMetricas = function (u, per) { const f = em.apply(this, arguments); try { f.act = this.gsActividad(u, per); } catch (e) { f.act = { total: 0 }; } return f; };
+  const sr = app.renderStaffReport;
+  app.renderStaffReport = function () {
+    sr.apply(this, arguments);
+    try {
+      const body = el('sr-body'); if (!body) return;
+      const per = this.gsPeriodo(), idx = this.gsIndice();
+      const tabla = [...body.querySelectorAll('table')].find(t => /Logro de entrevistas/.test(t.querySelector('thead')?.textContent || '')) || body.querySelector('table'), thead = tabla && tabla.querySelector('thead tr');
+      if (thead) { const o = [...thead.children].find(x => /A otros cursos/.test(x.textContent)); if (o) o.insertAdjacentHTML('afterend', '<th title="Todo lo que registró en la plataforma en el período">Todos los registros</th>'); [...thead.children].forEach(x => { if (/^A su\(s\) curso\(s\)$/.test(x.textContent.trim())) x.textContent = 'Entrevistas a su(s) curso(s)'; if (/^A otros cursos$/.test(x.textContent.trim())) x.textContent = 'Entrevistas a otros cursos'; }); }
+      (tabla ? tabla.querySelectorAll('tbody tr') : []).forEach(tr => {
+        const b = tr.querySelector('button[onclick*="State.sr.sel="]'); const m = b && b.getAttribute('onclick').match(/State\.sr\.sel=["']?([^"';]+)["']?;/); const u = m && State.users.find(x => String(x.id) === m[1]); if (!u) return;
+        const a = this.gsActividad(u, per), cel = [...tr.children].filter(x => x.classList.contains('num')).pop();
+        if (cel) cel.insertAdjacentHTML('afterend', `<td><strong class="num">${a.total}</strong><div class="gs-acts">${this.gsActividadChips(a)}</div></td>`);
+      });
+      icons();
+    } catch (e) { /* el reporte original sigue visible */ }
+  };
+  const det = app.gsDetalleHtml;
+  app.gsDetalleHtml = function (f) {
+    const h = det.apply(this, arguments);
+    try {
+      const a = f.act || this.gsActividad(f.u, this.gsPeriodo()), k = '<h3>Por curso que atiende</h3>';
+      const bloque = `<h3>Todo lo registrado en la plataforma (${this.gsPeriodoTxt(this.gsPeriodo())})</h3><div class="table-wrap"><table class="table table--dense"><thead><tr><th>Tipo de registro</th><th class="t-num">Cantidad</th></tr></thead><tbody>${GS_ACT.map(([kk, l]) => `<tr><td>${esc(l)}</td><td class="t-num num">${a[kk] || 0}</td></tr>`).join('')}<tr class="ep2-tot"><td><strong>Total</strong></td><td class="t-num num"><strong>${a.total}</strong></td></tr></tbody></table></div><p class="muted small">Incluye todo lo que la persona registró, tenga o no cursos asignados o meta de entrevistas.</p>`;
+      return h.includes(k) ? h.replace(k, bloque + k) : h;
+    } catch (e) { return h; }
+  };
+})();
