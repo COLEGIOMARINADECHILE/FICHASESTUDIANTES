@@ -1893,7 +1893,7 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 .ep2-n{width:62px;padding:3px 6px;text-align:center}.ep2-pj{background:rgba(37,99,235,.1)}.ep2-tot td{background:rgba(0,0,0,.04)}.ep2-tabla thead th{white-space:nowrap}
 
 /* Reporte de funcionarios: todo visible sin desplazarse al costado */
-#sr-body .table-wrap{overflow-x:visible}
+#sr-body .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 #sr-body table.table{width:100%;table-layout:auto;font-size:13px}
 #sr-body table.table th,#sr-body table.table td{padding:8px 6px;vertical-align:top;overflow-wrap:anywhere}
 #sr-body .gs-col{min-width:0;width:15%}#sr-body .gs-bar{min-width:0;width:100%}
@@ -1913,3 +1913,13 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 .enfe-col i{display:block;width:100%;background:#93c5fd;border-radius:4px 4px 0 0;position:relative;overflow:hidden}.enfe-col i b{position:absolute;left:0;right:0;bottom:0;background:#b42318;display:block}
 
 .gs-acts{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}.gs-act{font-size:11px;padding:1px 6px;border-radius:99px;background:rgba(37,99,235,.1)}
+
+/* Reporte de funcionarios: encabezados y chips pueden dividirse en varias líneas para que quepa todo */
+#sr-body table.table th,#sr-body table.table td{white-space:normal;word-break:normal;overflow-wrap:break-word;hyphens:auto}
+#sr-body table.table th{font-size:12px;line-height:1.2;vertical-align:bottom}
+#sr-body table.table .chip,#sr-body table.table .gs-act{white-space:normal}
+#sr-body table.table{font-size:12.5px}
+#sr-body table.table .cell-title{white-space:normal}
+#sr-body .gs-col{width:auto;min-width:5.5rem}
+#sr-body .gs-bar{min-width:5rem;height:1.3rem}
+#sr-body table.table th:last-child,#sr-body table.table td:last-child{width:auto;min-width:0}
