@@ -1,4 +1,4 @@
-﻿/*!
+/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -387,9 +387,9 @@ window.app = {
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
       ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
-      ['asistencia', 'calendar-check', 'Asistencia', hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema') || !!(this.canSige && this.canSige()) || !!(this.canCert && this.canCert()), ['asistencia']],
-      ['entrevistas_reg', 'messages-square', 'Registro de entrevistas', hasAccess('ver_fichas') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas'), ['entrevistas_reg']],
-      ['enfermeria', 'heart-pulse', 'Enfermería', hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('ver_fichas'), ['enfermeria']],
+      ['asistencia', 'calendar-check', 'Asistencia', !!this.renderAsistenciaRapida && (hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema') || !!(this.canSige && this.canSige()) || !!(this.canCert && this.canCert())), ['asistencia']],
+      ['entrevistas_reg', 'messages-square', 'Registro de entrevistas', !!this.renderRegistroEntrevistas && (hasAccess('ver_fichas') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas')), ['entrevistas_reg']],
+      ['enfermeria', 'heart-pulse', 'Enfermería', !!this.renderEnfermeria && (hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('ver_fichas')), ['enfermeria']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
       ['consejo', 'gavel', 'Consejo de promoción', hasAccess('ver_fichas'), ['consejo']],

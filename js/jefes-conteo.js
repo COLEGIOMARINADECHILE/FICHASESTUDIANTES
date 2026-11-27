@@ -122,7 +122,7 @@ Object.assign(app, {
       const est = State.rawStudents.filter(s => s.status !== 'blocked' && this.courseNameOf(s) === c), n = est.length;
       const papel = est.reduce((t, s) => t + this.epPapelDe(s).pj, 0), otrosPapel = est.reduce((t, s) => t + (this.epTotalPapel(s) - this.epPapelDe(s).pj), 0), conEnt = est.filter(s => this.epPapelDe(s).pj > 0).length;
       const p = plat[c] || { pj: 0, otros: 0 }, nombre = this.profJefeOf(c), u = nombre ? State.users.find(x => GS_NORM(x.name) === GS_NORM(nombre)) : null;
-      return { curso: c, nombre, u, n, papel, otrosPapel, conEnt, plat: p.pj, platOtros: p.otros, total: papel + p.pj, meta: u ? this.metaSemestral(u) * 2 : 0 };
+      return { curso: c, nombre, u, n, papel, otrosPapel, conEnt, plat: p.pj, platOtros: p.otros, total: papel + p.pj, meta: (u && this.metaExento && !this.metaExento(u)) ? n * this.metaPorAlumno(u) * 2 : 0 };
     });
   },
   jcSeccionRegistro() {

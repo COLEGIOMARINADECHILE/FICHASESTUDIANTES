@@ -43,16 +43,16 @@ Object.assign(app, {
     const porCurso = {}; State.rawInterventions.filter(h => this.esEntrevista(h) && this.gsEnPeriodo(h.date, per)).forEach(h => { const c = idx.cursoDe.get(String(h.studentId)); if (!c) return; const o = porCurso[c] = porCurso[c] || { n: 0, est: new Set() }; o.n++; o.est.add(String(h.studentId)); });
     const cursosFila = ALL_COURSES.filter(c => (idx.por[c] || []).length).map(c => { const tot = idx.por[c].length, o = porCurso[c] || { n: 0, est: new Set() }; return { c, tot, ent: o.est.size, n: o.n, pct: Math.round(o.est.size / tot * 100) }; });
     const totEst = cursosFila.reduce((t, r) => t + r.tot, 0), totEnt = cursosFila.reduce((t, r) => t + r.ent, 0), pctGen = totEst ? Math.round(totEnt / totEst * 100) : null;
-    const metaTot = gs.reduce((t, g) => { const m = g.u ? this.metaSemestral(g.u) : 0; return t + (!m ? 0 : (per.mes === 'S1' || per.mes === 'S2') ? m : !per.mes ? m * 2 : 0); }, 0), pctMeta = metaTot ? Math.min(100, Math.round(gs.reduce((t, g) => t + (g.u && this.metaSemestral(g.u) ? g.filas.length : 0), 0) / metaTot * 100)) : null;
+    const mmap = new Map(gs.filter(g => g.u).map(g => [g.id, this.entrevistaMetricas(g.u, per, idx)])), metaTot = [...mmap.values()].reduce((t, m) => t + (m.metaNum || 0), 0), pctMeta = metaTot ? Math.min(100, Math.round([...mmap.values()].reduce((t, m) => t + (m.hechas || 0), 0) / metaTot * 100)) : null;
     const fila = g => {
       const cursos = {}; g.filas.forEach(x => cursos[x.curso] = (cursos[x.curso] || 0) + 1);
       const sts = new Set(g.filas.map(x => String(x.h.studentId))), ult = g.filas.map(x => x.h.date).sort().pop();
-      const meta = g.u ? this.metaSemestral(g.u) : 0, metaN = !meta ? 0 : (per.mes === 'S1' || per.mes === 'S2') ? meta : !per.mes ? meta * 2 : 0;
+      const mt0 = g.u ? mmap.get(g.id) : null, metaN = mt0 ? mt0.metaNum : 0;
       const mt = g.u ? this.entrevistaMetricas(g.u, per, idx) : null;
       const cob = mt && mt.pct !== null ? `<span class="rge-barra" title="Estudiantes distintos entrevistados de los cursos que atiende">${this.gsBarra(mt.pct, `Cobertura: ${mt.cubiertos} de ${mt.meta} (${mt.pct} %)`)}</span>` : '';
       const lista = g.filas.slice().sort((a, b) => String(b.h.date).localeCompare(String(a.h.date)));
       return `<details class="rge-func"><summary><span class="rge-n">${g.filas.length}</span><span class="rge-nom"><strong>${esc(g.nombre)}</strong><span class="muted small">${esc(g.u?.customRole || g.u?.role || '')}</span></span>
-          <span class="rge-met">${sts.size} estudiante${sts.size === 1 ? '' : 's'} · último ${fmtDate(ult)}${metaN ? `<span class="rge-barra">${this.gsBarra(Math.min(100, Math.round(g.filas.length / metaN * 100)), `Meta: ${g.filas.length} de ${metaN} (${Math.min(100, Math.round(g.filas.length / metaN * 100))} %)`)}</span>` : ''}${cob}</span></summary>
+          <span class="rge-met">${sts.size} estudiante${sts.size === 1 ? '' : 's'} · último ${fmtDate(ult)}${metaN ? `<span class="rge-barra">${this.gsBarra(mt0.pctNum, `Meta: ${mt0.hechas} de ${metaN} (${mt0.pctNum} %)`)}</span>` : ''}${cob}</span></summary>
         <div class="chips">${Object.entries(cursos).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<span class="dia-pct" data-level="medio">${esc(c)}: ${n}</span>`).join(' ')}</div>
         <div class="table-wrap"><table class="table table--dense"><thead><tr><th>Fecha</th><th>Estudiante</th><th>Curso</th><th>Tipo</th><th>Motivo</th></tr></thead><tbody>
         ${lista.map(x => { const privado = x.h.isPrivate && String(x.h.professionalId) !== yo && !hasAccess('acceso_total'); const motivo = privado ? '<em class="muted">Confidencial</em>' : esc(String(x.h.entrevista?.motivo || x.h.background || '').replace(/^Motivo:\s*/, '').split('\n')[0].slice(0, 120));

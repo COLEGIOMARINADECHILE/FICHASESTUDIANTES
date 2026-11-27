@@ -261,6 +261,16 @@ Object.assign(app, {
       </tbody></table></div></section>`;
   },
   gsYo() { return State.users.find(u => sameId(u.id, State.currentUser.id)) || State.currentUser; },
+  /** ¿La fecha está dentro del período elegido? (año, año completo, semestre S1 = mar-jul, S2 = ago-dic, o un mes) */
+  gsEnPeriodo(fecha, per) {
+    const d = String(fecha || ''); if (!d.startsWith(String(per.anio))) return false;
+    const m = per.mes; if (!m) return true;
+    const mm = parseInt(d.slice(5, 7));
+    if (m === 'S1') return mm >= 3 && mm <= 7;
+    if (m === 'S2') return mm >= 8 && mm <= 12;
+    return d.startsWith(`${per.anio}-${m}`);
+  },
+  gsPeriodoTxt(per) { return per.mes === 'S1' ? `1° semestre ${per.anio}` : per.mes === 'S2' ? `2° semestre ${per.anio}` : per.mes ? `${GS_MESES[+per.mes - 1]} ${per.anio}` : `Año ${per.anio}`; },
   gsPeriodo() { const p = State.gsPer = State.gsPer || { anio: today().slice(0, 4), mes: '' }; return p; },
   /** Logro de entrevistas de un funcionario en el período. */
   entrevistaMetricas(u, per, idx) {
