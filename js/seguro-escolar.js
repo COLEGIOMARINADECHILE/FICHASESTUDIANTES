@@ -35,46 +35,64 @@ Object.assign(app, {
     };
   },
   segDia(fecha) { const d = fecha ? new Date(fecha + 'T12:00:00') : null; return d && !isNaN(d) ? SEG_DIAS[d.getDay()] : ''; },
-  /** Hoja imprimible de la Declaración Individual de Accidente Escolar (rellenada o en blanco). */
+  /** Hoja imprimible de la Declaración Individual de Accidente Escolar (formato original del ISL), rellenada o en blanco. Cabe en una página carta. */
   segHoja(v = {}) {
-    const u = (x, w) => `<span class="sg-u" style="min-width:${w || 120}px">${esc(x || '')}</span>`;
-    const caja = x => `<span class="sg-b">${esc(x || '')}</span>`;
-    const f = v.fechaReg ? v.fechaReg.split('-') : [], a = v.fechaAcc ? v.fechaAcc.split('-') : [], hh = (v.hora || '').split(':');
-    const logo = State.variables?.schoolLogo || '';
+    const cel = (x, n) => { const t = String(x || '').padStart(n, ' ').slice(-n); return `<span class="sg-cs">${[...t].map(c => `<i>${esc(c.trim())}</i>`).join('')}</span>`; };
+    const campo = (x, etiqueta, flex = 1) => `<div class="sg-f" style="flex:${flex}"><div class="sg-v">${esc(x || '')}</div><div class="sg-l">${etiqueta}</div></div>`;
+    const f = (v.fechaReg || '').split('-'), a = (v.fechaAcc || '').split('-'), hh = (v.hora || '').split(':');
+    const dow = v.fechaAcc ? (new Date(v.fechaAcc + 'T12:00:00').getDay() || 7) : '';
     return `<div class="sg-hoja">
-      <div class="sg-cab"><div class="sg-ins">Declaración Individual de Accidente Escolar<br><small>Formulario de uso en el establecimiento · Seguro escolar (Ley N° 16.744, D.S. N° 313)</small></div><div class="sg-n">N° ${caja('')}</div></div>
-      <h4>A. INDIVIDUALIZACIÓN DEL ESTABLECIMIENTO</h4>
-      <p>Tipo: Fiscal o municipal = 1 · Particular = 2 &nbsp; ${caja(v.estab ? '1' : '')} &nbsp; Nombre del establecimiento: ${u(v.estab, 200)}</p>
-      <p>Ciudad ${u(v.ciudad)} Comuna ${u(v.comuna)}</p>
-      <p>Curso ${u(v.curso, 110)} Horario ${u(v.horario, 90)} Fecha de registro de los datos: día ${caja(f[2])} mes ${caja(f[1])} año ${caja(f[0])}</p>
-      <h4>B. IDENTIFICACIÓN DEL ESTUDIANTE</h4>
-      <p>Apellido paterno ${u(v.ap1)} Apellido materno ${u(v.ap2)} Nombres ${u(v.nombres, 150)}</p>
-      <p>Sexo (M = 1, F = 2) ${caja(v.sexo)} Año de nacimiento ${caja(v.anioNac)} Edad ${caja(v.edad)}</p>
-      <p><strong>Residencia habitual:</strong> Calle ${u(v.calle, 150)} N° ${u(v.numero, 50)} Población/Villa ${u(v.poblacion, 110)} Comuna ${u(v.comunaRes, 100)} Ciudad ${u(v.ciudadRes, 100)}</p>
-      <h4>C. INFORME SOBRE EL ACCIDENTE (fecha, hora y día de la semana en que se accidentó)</h4>
-      <p>Hora ${caja(hh[0])} : ${caja(hh[1])} &nbsp; Año ${caja(a[0])} Mes ${caja(a[1])} Día ${caja(a[2])} &nbsp; Día de la semana: ${caja(v.fechaAcc ? SEG_DIAS.indexOf(this.segDia(v.fechaAcc)) || 7 : '')} <small>(Lunes = 1 … Domingo = 7)</small></p>
-      <p>Accidente: de trayecto = 1 · en la escuela = 2 &nbsp; ${caja(v.tipoAcc)}</p>
-      <p><strong>Testigos (en caso de trayecto):</strong> a) ${u(v.test1, 190)} C. nac. o ID ${u(v.test1id, 90)}<br>b) ${u(v.test2, 190)} C. nac. o ID ${u(v.test2id, 90)}</p>
-      <p><strong>Circunstancia del accidente</strong> (describa cómo ocurrió, causal):</p>
-      <div class="sg-circ">${esc(v.circ || '')}</div>
-      <div class="sg-firma"><div class="sg-timbre">Firma y timbre<br>Rector o representante del establecimiento</div></div>
-      <h4>D. NATURALEZA Y CONSECUENCIA DEL ACCIDENTE <small>(solo establecimiento asistencial)</small></h4>
-      <p>Establecimiento asistencial ${u('', 260)} Código ${caja('')}</p>
-      <p>Diagnóstico médico ${u('', 340)}</p>
-      <p>Parte del cuerpo afectada ${u('', 200)} Hospitalización (Sí = 1, No = 2) ${caja('')} Total días hosp. ${caja('')} Incapacidad (Sí = 1, No = 2) ${caja('')} Total días incapacidad ${caja('')}</p>
-      <p>Tipo de incapacidad: leve = 1, temporal = 2, invalidez parcial = 3, invalidez total = 4, gran invalidez = 5, muerte = 6 ${caja('')} &nbsp; Causa de cierre: alta médica = 1, invalidez = 2, abandono de tratamiento = 3, muerte = 4 ${caja('')} &nbsp; Fecha de cierre ${u('', 90)}</p>
-      <p style="text-align:right">Firma del estadístico ${u('', 160)}</p>
-      <p class="sg-pie">${logo ? `<img src="${esc(logo)}" alt="" style="height:26px;vertical-align:middle">` : ''} Documento generado desde Trayectoria Escolar con los datos guardados. Debe ser firmado y timbrado por la Dirección antes de entregarse al estudiante o al centro asistencial.</p>
-    </div>`;
+      <div class="sg-cab"><img class="sg-logo" src="${SEG_LOGO_ISL}" alt="Instituto de Seguridad Laboral">
+        <div class="sg-tit">DECLARACION INDIVIDUAL DE ACCIDENTE ESCOLAR</div><div class="sg-nro">N° <span class="sg-cs sg-cs--n"><i></i><i></i><i></i><i></i><i></i><i></i></span></div></div>
+      <div class="sg-fila sg-ar"><div><strong>Antes de registrar los datos lea las instrucciones al reverso</strong><br><strong class="sg-sec">A. INDIVIDUALIZACION DEL ESTABLECIMIENTO</strong></div>
+        <div class="sg-tipo">FISCAL O<br>MUNICIPAL &nbsp;= 1<br>PARTICULAR = 2 ${cel(v.estab ? '1' : '', 1)}</div></div>
+      <div class="sg-fila">${campo(v.estab, 'NOMBRE DEL ESTABLECIMIENTO', 1.4)}${campo(v.ciudad, 'CIUDAD')}${campo(v.comuna, 'COMUNA')}</div>
+      <div class="sg-fila">${campo(v.curso, 'CURSO')}${campo(v.horario, 'HORARIO')}<div class="sg-f" style="flex:1.1"><div class="sg-l">FECHA REGISTRO de los DATOS</div><div class="sg-v">${cel(f[2], 2)} ${cel(f[1], 2)} ${cel(f[0], 4)}</div><div class="sg-l">DIA &nbsp; MES &nbsp; AÑO</div></div></div>
+      <div class="sg-fila">${campo(v.ap1, 'APELLIDO PATERNO')}${campo(v.ap2, 'APELLIDO MATERNO')}${campo(v.nombres, 'NOMBRES')}
+        <div class="sg-f" style="flex:.55"><div class="sg-l">SEXO &nbsp;M = 1 &nbsp;F = 2</div><div class="sg-v">${cel(v.sexo, 1)}</div></div>
+        <div class="sg-f" style="flex:.9"><div class="sg-l">AÑO NACIMIENTO &nbsp; EDAD</div><div class="sg-v">${cel(v.anioNac, 4)} ${cel(v.edad, 2)}</div></div></div>
+      <div class="sg-sec2">RESIDENCIA HABITUAL:</div>
+      <div class="sg-fila">${campo(v.calle, 'CALLE', 1.3)}${campo(v.numero, 'NUMERO', .5)}${campo(v.poblacion, 'POBLACION/VILLA')}${campo(v.comunaRes, 'COMUNA')}${campo(v.ciudadRes, 'CIUDAD')}<div class="sg-f" style="flex:.35"><div class="sg-v">${cel('', 3)}</div><div class="sg-l">CODIF. COM.</div></div></div>
+      <div class="sg-sec3">C. INFORME SOBRE EL ACCIDENTE <span>(FECHA, HORA Y DIA DE LA SEMANA EN QUE SE ACCIDENTO)</span></div>
+      <div class="sg-fila sg-ar2"><div class="sg-hora"><div class="sg-l2">HORA &nbsp;MIN. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AÑO &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MES &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DIA</div>
+          <div>${cel(hh[0], 2)}${cel(hh[1], 2)} &nbsp; ${cel(a[0], 4)} &nbsp; ${cel(a[1], 2)} &nbsp; ${cel(a[2], 2)}</div></div>
+        <div class="sg-test"><strong>TESTIGOS: (EN CASO DE TRAYECTO)</strong></div></div>
+      <div class="sg-fila sg-ar3"><div class="sg-dias"><div class="sg-l2">DIA ACCIDENTE</div><div class="sg-dsem"><span>LUNES &nbsp;&nbsp;&nbsp;&nbsp;= 1<br>MARTES &nbsp;&nbsp;= 2<br>MIERCOLES = 3<br>JUEVES &nbsp;&nbsp;&nbsp;= 4<br>VIERNES &nbsp;&nbsp;= 5<br>SABADO &nbsp;&nbsp;= 6<br>DOMINGO &nbsp;= 7</span>${cel(dow, 1)}</div></div>
+        <div class="sg-tacc"><div class="sg-l2">ACCIDENTE:</div><div class="sg-dsem"><span>DE TRAYECTO = 1<br>EN LA ESCUELA = 2</span>${cel(v.tipoAcc, 1)}</div></div>
+        <div class="sg-tst"><div class="sg-fila">${campo(v.test1, 'NOMBRE - APELLIDO', 1.6)}${campo(v.test1id, 'C. NAC. DE ID.')}</div><div class="sg-fila">${campo(v.test2, 'NOMBRE - APELLIDO', 1.6)}${campo(v.test2id, 'C. NAC. DE ID.')}</div></div></div>
+      <div class="sg-l2" style="margin-top:3px"><strong>CIRCUSNTANCIA DEL ACCIDENTE</strong> (DESCRIBA COMO OCURRIO - CAUSAL)</div>
+      <div class="sg-circ-w"><div class="sg-circ">${esc(v.circ || '')}</div><div class="sg-timbre"><div class="sg-tl">FIRMA Y TIMBRE<br>RECTOR O REPRESENTANTE</div></div></div>
+      <div class="sg-d"><div class="sg-dv">SOLO ESTABLECIMIENTO ASISTENCIAL</div><div class="sg-dc">
+        <div class="sg-fila sg-dh"><strong>D. NATURALEZA Y CONSECUENCIA DEL ACCIDENTE</strong><span>S &nbsp; S &nbsp;&nbsp; ESTABLEC.<br>CODIGO ${cel('', 1)} - ${cel('', 3)}</span></div>
+        <div class="sg-f"><div class="sg-v">&nbsp;</div><div class="sg-l">ESTABLECIMIENTO ASISTENCIAL</div></div>
+        <div class="sg-f"><div class="sg-v">&nbsp;</div><div class="sg-l">DIAGNOSTICO MEDICO</div></div>
+        <div class="sg-fila sg-ar4"><div class="sg-f" style="flex:1.2"><div class="sg-v">&nbsp;</div><div class="sg-l">PARTE DEL CUERPO AFECTADA</div></div>
+          <div class="sg-hosp">HOSPITALIZACION<br>SI = 1 &nbsp; NO = 2 ${cel('', 1)}</div><div class="sg-hosp">TOTAL DIAS HOSP.<br>${cel('', 3)}</div><div class="sg-hosp">INCAPACIDAD<br>SI = 1 &nbsp; NO = 2 ${cel('', 1)}</div><div class="sg-hosp">TOTAL DIAS INCAPACIDAD<br>${cel('', 3)}</div></div>
+        <div class="sg-fila sg-ar4"><div class="sg-leg">TIPO DE INCAPACIDAD<br>LEVE &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 1<br>TEMPORAL &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 2<br>INVALIDEZ PARCIAL = 3<br>INVALIDEZ TOTAL &nbsp;= 4<br>GRAN INVALIDEZ &nbsp;&nbsp;= 5<br>MUERTE &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 6 ${cel('', 1)}</div>
+          <div class="sg-leg">CAUSA DE CIERRE DEL CASO<br>ALTA MEDICA &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 1<br>INVALIDEZ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 2<br>ABANDONO DE<br>TRATAMIENTO &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 3<br>MUERTE &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 4 ${cel('', 1)}</div>
+          <div class="sg-leg">FECHA CIERRE DEL CASO<br>${cel('', 4)} ${cel('', 2)} ${cel('', 2)}<br>AÑO &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MES &nbsp;&nbsp;&nbsp;DIA</div><div class="sg-leg" style="align-self:flex-end;text-align:center;border-top:1px solid #000;padding-top:2px">FIRMA DEL ESTADISTICO</div></div>
+      </div></div></div>`;
   },
   segImprimir(v) {
     const w = window.open('', '_blank'); if (!w) return toast('El navegador bloqueó la ventana. Permita ventanas emergentes para imprimir.', 'error');
     w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Declaración individual de accidente escolar</title><style>
-      body{font-family:Arial,sans-serif;color:#000;margin:0;font-size:12px} .sg-hoja{padding:14mm 14mm 10mm} .sg-cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:6px;font-weight:700;font-size:15px}
-      .sg-cab small{font-weight:400;font-size:10px} h4{margin:12px 0 4px;font-size:12px;background:#e6e6e6;padding:2px 6px} h4 small{font-weight:400} p{margin:6px 0;line-height:1.9}
-      .sg-u{display:inline-block;border-bottom:1px solid #000;padding:0 4px;vertical-align:bottom;min-height:15px} .sg-b{display:inline-block;border:1px solid #000;min-width:22px;min-height:17px;padding:0 4px;text-align:center;vertical-align:middle}
-      .sg-circ{border:1px solid #000;min-height:90px;padding:6px;white-space:pre-wrap;line-height:1.5} .sg-firma{display:flex;justify-content:flex-end;margin:8px 0}
-      .sg-timbre{width:260px;height:96px;border:1px dashed #555;text-align:center;font-size:10px;padding-top:70px;box-sizing:border-box} .sg-pie{font-size:9px;color:#444;margin-top:14px} @page{size:letter;margin:0}</style></head><body>${this.segHoja(v)}<script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+      @page{size:letter portrait;margin:0} *{box-sizing:border-box} html,body{margin:0;padding:0;background:#fff} body{font-family:Arial,Helvetica,sans-serif;color:#000;font-size:8.6pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .sg-hoja{width:215.9mm;height:278mm;padding:10mm 14mm 6mm;overflow:hidden;page-break-after:avoid;page-break-inside:avoid}
+      .sg-cab{display:flex;align-items:flex-start;gap:10px;margin-bottom:3px} .sg-logo{height:21mm;width:auto} .sg-tit{flex:1;text-align:center;font-weight:700;font-size:11.5pt;align-self:flex-end;padding-bottom:3px} .sg-nro{font-weight:700;font-size:10pt;align-self:flex-start;text-align:right} .sg-cs--n i{width:5mm;height:6mm}
+      .sg-fila{display:flex;gap:10px;align-items:flex-end;margin-top:6px} .sg-ar{justify-content:space-between;align-items:flex-start;margin-top:2px} .sg-sec{font-size:9pt}
+      .sg-tipo{font-weight:700;font-size:8pt;text-align:left;white-space:nowrap;line-height:1.3;display:flex;gap:6px;align-items:flex-end} .sg-tipo .sg-cs{margin-left:4px}
+      .sg-f{display:block;min-width:0} .sg-v{border-bottom:1px solid #000;min-height:5.2mm;padding:0 2px 1px;font-size:9.5pt;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:clip} .sg-l{font-size:7pt;font-weight:700;text-align:center;margin-top:1px}
+      .sg-cs{display:inline-flex;vertical-align:bottom} .sg-cs i{display:inline-block;width:4.4mm;height:5.2mm;border:1px solid #000;margin-right:-1px;text-align:center;font-style:normal;font-weight:700;font-size:9pt;line-height:5mm}
+      .sg-sec2{font-weight:700;margin-top:7px} .sg-sec3{font-weight:700;margin-top:9px;font-size:9pt} .sg-sec3 span{font-weight:700;font-size:8.4pt}
+      .sg-l2{font-size:7.4pt;font-weight:700} .sg-ar2{align-items:stretch;margin-top:4px} .sg-hora{flex:1.2} .sg-test{flex:1;border:2px solid #000;border-radius:2px;padding:3px 8px;font-size:8.4pt;display:flex;align-items:center;justify-content:center;min-height:7mm;box-shadow:2px 2px 0 #333}
+      .sg-ar3{align-items:flex-start;margin-top:4px} .sg-dias{flex:.55;font-size:7.2pt} .sg-tacc{flex:.7;font-size:7.4pt} .sg-dsem{display:flex;gap:6px;align-items:flex-start;font-weight:700;font-size:7.2pt;line-height:1.35;white-space:nowrap} .sg-dsem .sg-cs i{height:8mm;width:8mm;margin-top:2px}
+      .sg-tst{flex:2.2} .sg-tst .sg-fila{margin-top:10px}
+      .sg-circ-w{display:flex;gap:10px;margin-top:2px;align-items:stretch} .sg-circ{flex:1.5;min-height:21mm;white-space:pre-wrap;line-height:7mm;font-size:9pt;font-weight:600;background:repeating-linear-gradient(transparent 0 6.2mm,#000 6.2mm 6.5mm);padding:0 3px}
+      .sg-timbre{flex:1;position:relative;min-height:21mm;display:flex;align-items:flex-end;justify-content:center} .sg-tl{border-top:1px solid #000;width:90%;text-align:center;font-size:7.4pt;font-weight:700;padding-top:2px}
+      .sg-d{display:flex;margin-top:10px;border:2px solid #000} .sg-dv{writing-mode:vertical-rl;transform:rotate(180deg);font-size:6.6pt;font-weight:700;letter-spacing:.6px;text-align:center;border-left:1px solid #000;padding:1px 2px} .sg-dc{flex:1;padding:4px 8px 6px}
+      .sg-dh{justify-content:space-between;align-items:flex-start;margin-top:0} .sg-dh span{font-size:7.4pt;font-weight:700;text-align:right} .sg-dc>.sg-f{margin-top:7px} .sg-ar4{margin-top:8px;align-items:flex-end}
+      .sg-hosp{font-size:7pt;font-weight:700;text-align:left;white-space:nowrap;line-height:1.4} .sg-leg{flex:1;font-size:7pt;font-weight:700;line-height:1.35;white-space:nowrap}
+      </style></head><body>${this.segHoja(v)}<script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`);
     w.document.close();
   },
   segEnBlanco() { this.segImprimir({}); },
