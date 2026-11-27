@@ -22,7 +22,7 @@ const PRES_BLOQUES = [
   ['asistencia', 'Asistencia por curso', 'calendar-check', 'Asistencia promedio y estudiantes bajo 85 % en cada curso.', () => true],
   ['convivencia', 'Convivencia escolar por curso', 'heart-handshake', 'Registros de convivencia y protocolos en cada curso.', () => hasAccess('ver_fichas') || hasAccess('agregar_entrevistas')],
   ['pie', 'Estudiantes PIE por curso', 'puzzle', 'Cantidad de estudiantes con apoyo PIE en cada curso.', () => hasAccess('ver_fichas')],
-  ['dia', 'Resultados DIA', 'bar-chart-3', 'Porcentaje de logro por eje en cada asignatura y curso.', () => (State.dia || []).some(d => d.tipo !== 'condiciones')],
+  ['dia', 'Resultados DIA', 'bar-chart-3', 'Porcentaje de logro por eje en cada asignatura y curso.', () => (State.dia || []).some(d => !['condiciones', 'lector'].includes(d.tipo))],
   ['condiciones', 'Cuestionario de Condiciones (bienestar)', 'heart-pulse', 'Porcentaje de respuestas favorables por dimensión.', () => (State.dia || []).some(d => d.tipo === 'condiciones')],
   ['riesgos', 'Riesgos de los cursos', 'shield-alert', 'Riesgos académicos y de convivencia registrados por curso.', () => (State.riesgos || []).length > 0],
   ['reuniones', 'Reuniones de nivel', 'users-round', 'Reuniones realizadas y cumplimiento de sus acuerdos.', () => (State.reuniones || []).length > 0]
@@ -318,6 +318,15 @@ Object.assign(app, {
       k.chart(s4, 'bar', [{ name: 'Registros', labels: ['Protocolos', 'Convivencia', 'PIE', 'Observaciones', 'Enfermería'], values: ['proto', 'conv', 'pie', 'obs', 'enf'].map(x => a.registros[x]) }], k.chartOpts({ x: 6.8, y: 1.6, w: 6, h: 4.9, barDir: 'col', chartColors: E.graf, showValue: true, showTitle: true, title: 'Registros del año', titleColor: E.primario, titleFontSize: 15, showLegend: false }));
       k.lectura(s4, a.asistencia.length ? `${a.asistencia.length} estudiante(s) bajo 85 % de asistencia: requieren seguimiento desde el inicio del año.` : 'Ningún estudiante bajo 85 % de asistencia.');
       (a.dia || []).slice(0, 3).forEach(di => { const c = this.diaCalc(di); if (!c.areas.length) return; const s = k.base(`Resultados DIA · ${di.asignatura}`, di.periodo); k.chart(s, 'bar', [{ name: '% de logro', labels: c.areas.map(x => x.nombre), values: c.areas.map(x => x.pct) }], k.chartOpts({ x: 0.5, y: 1.6, w: 12.3, h: 4.9, barDir: 'bar', chartColors: [E.primario], valAxisMaxVal: 100, showValue: true, dataLabelFormatCode: '0"%"', showLegend: false })); const baja = [...c.areas].sort((x, y) => x.pct - y.pct)[0]; k.lectura(s, `Eje más descendido: ${baja.nombre} (${String(baja.pct).replace('.', ',')} %).`); });
+      (a.lector || []).slice(0, 2).forEach(ld => {
+        const c = this.lecCalc(ld); if (!c.nCal && !c.nVel) return;
+        const s = k.base(`Dominio lector · ${ld.periodo} ${ld.anio}`, `${c.evaluados.length} de ${c.est.length} estudiantes evaluados${c.ppm !== null ? ` · ${this.lecNum(c.ppm)} palabras por minuto en promedio` : ''}`);
+        const cal = c.cal.filter(x => x.n), vel = c.vel.filter(x => x.n);
+        const col = x => x.tono === 'ok' ? E.graf[2] : x.tono === 'mid' ? E.graf[1] : E.graf[0];
+        if (cal.length) k.chart(s, 'doughnut', [{ name: 'Calidad lectora', labels: cal.map(x => x.nombre.replace('Lectura ', '')), values: cal.map(x => x.n) }], k.chartOpts({ x: 0.5, y: 1.6, w: 6, h: 4.85, holeSize: 55, chartColors: cal.map(col), showLegend: true, legendPos: 'b', showPercent: true, showTitle: true, title: 'Calidad lectora', titleColor: E.primario, titleFontSize: 15 }));
+        if (vel.length) k.chart(s, 'bar', [{ name: 'Velocidad lectora', labels: vel.map(x => x.nombre), values: vel.map(x => x.n) }], k.chartOpts({ x: 6.8, y: 1.6, w: 6, h: 4.85, barDir: 'col', chartColors: vel.map(col), showValue: true, showLegend: false, showTitle: true, title: 'Velocidad lectora (estudiantes)', titleColor: E.primario, titleFontSize: 15 }));
+        k.lectura(s, c.apoyo.length ? `${c.apoyo.length} estudiante(s) requieren apoyo en lectura (no lectores, lectura silábica, velocidad baja o dificultad predominante).` : 'Ningún estudiante requiere apoyo en lectura según los criterios.');
+      });
       k.tarjetas('Trayectoria del curso', 'Cómo se inició y cómo termina el año, según los docentes', [['Pedagógica', sec('tray_ped'), E.graf[3]], ['Convivencia y clima de aula', sec('tray_conv'), E.graf[2]]]);
       k.tarjetas('Proyección para el próximo año', 'Fortalezas para mantener y desafíos para trabajar', [['Fortalezas pedagógicas', sec('fort_ped'), E.graf[2]], ['Fortalezas en convivencia', sec('fort_conv'), E.graf[2]], ['Desafíos pedagógicos', sec('des_ped'), E.graf[0]], ['Desafíos en convivencia', sec('des_conv'), E.graf[0]]]);
       const fp = d.secciones.foco_ped?.estudiantes || [], fd = d.secciones.foco_disc?.estudiantes || [];
@@ -325,6 +334,7 @@ Object.assign(app, {
       k.tarjetas('Estudiantes a focalizar el próximo año', conNombres ? '' : 'Cantidades (sin nombres)', [['Ámbito pedagógico', lista(fp), E.graf[3]], ['Ámbito disciplinario', lista(fd), E.graf[0]]]);
       // Conclusión en letra grande (continúa en otra diapositiva si es larga)
       if (d.analisis?.conclusion_general) k.textoLargo('Conclusión', `Revisada por el equipo${d.analisisFecha ? ` · ${fmtDate(d.analisisFecha)}` : ''}`, d.analisis.conclusion_general, 20);
+      if ((d.analisis?.alumnos_planes || []).length) { if (conNombres) k.puntos('Estudiantes que requieren plan de acompañamiento', 'Baja asistencia, riesgo de repitencia o PAI (Decreto 67, art. 11)', [{ t: 'Planes sugeridos', color: E.graf[0], items: d.analisis.alumnos_planes }]); else k.puntos('Planes de acompañamiento', 'Cantidades (sin nombres)', [{ t: 'Resumen', color: E.graf[0], items: [`${d.analisis.alumnos_planes.length} estudiante(s) requieren plan de acompañamiento por baja asistencia, riesgo de repitencia o PAI (Decreto 67, art. 11).`] }]); }
       const elegidas = (d.sugerencias || []).filter(s => s.seleccionada);
       for (let i = 0; i < elegidas.length; i += 3) {
         const s = k.base(i ? 'Acciones para el próximo año (continuación)' : 'Acciones para el próximo año', i ? '' : `${elegidas.length} acción(es) seleccionadas por el equipo`);
@@ -466,7 +476,7 @@ Object.assign(app, {
           L(s, 'Considere la cantidad de estudiantes PIE al distribuir horas de apoyo y coordinar con los docentes de aula.');
         }
         if (key === 'dia') {
-          const lista = (State.dia || []).filter(d => d.tipo !== 'condiciones' && cursos.includes(d.course) && String(d.anio) === anio);
+          const lista = (State.dia || []).filter(d => !['condiciones', 'lector'].includes(d.tipo) && cursos.includes(d.course) && String(d.anio) === anio);
           const asigs = [...new Set(lista.map(d => d.asignatura))];
           if (!asigs.length) { k.textoLargo('Resultados DIA', '', 'Los cursos seleccionados no tienen informes DIA cargados este año (no todos los cursos rinden el DIA).', 20); }
           asigs.forEach(asig => {
@@ -489,6 +499,18 @@ Object.assign(app, {
             const s = k.base('Cuestionario de Condiciones (bienestar)', '% de respuestas favorables por dimensión');
             k.chart(s, 'bar', dims.map(dn => ({ name: dn, labels: cs, values: cs.map(c => (ult(c).dims || []).find(x => x.nombre === dn)?.rf || 0) })), k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'clustered', chartColors: E.graf, valAxisMaxVal: 100, showLegend: true, legendPos: 'b' }));
             L(s, 'Menos de 50 % es prioridad; 50 % a 69 %, atención; 70 % o más, fortaleza.');
+          }
+        }
+        if (key === 'lector') {
+          const lista = (State.dia || []).filter(d => d.tipo === 'lector' && cursos.includes(d.course) && String(d.anio) === anio);
+          const cs = ALL_COURSES.filter(c => lista.some(d => d.course === c));
+          if (cs.length) {
+            const ult = c => lista.filter(d => d.course === c).sort((a, b) => LEC_PERIODOS.indexOf(b.periodo) - LEC_PERIODOS.indexOf(a.periodo))[0];
+            const calc = cs.map(c => this.lecCalc(ult(c)));
+            const s = k.base('Dominio lector por curso', 'Evaluación más reciente de cada curso');
+            k.chart(s, 'bar', [{ name: 'Lectura fluida (%)', labels: cs, values: calc.map(c => this.lecPct(c.fluida, c.nCal)) }, { name: 'Requieren apoyo (% de la lista)', labels: cs, values: calc.map(c => this.lecPct(c.apoyo.length, c.est.length)) }], k.chartOpts({ x: 0.5, y: 1.55, w: 12.3, h: 4.95, barDir: 'col', barGrouping: 'clustered', chartColors: [E.graf[2], E.graf[0]], valAxisMaxVal: 100, showLegend: true, legendPos: 'b', showValue: cs.length <= 10, dataLabelFormatCode: '0"%"' }));
+            const peor = cs.map((c, i) => ({ c, v: this.lecPct(calc[i].apoyo.length, calc[i].est.length) })).sort((a, b) => b.v - a.v)[0];
+            L(s, `${calc.reduce((t, c) => t + c.apoyo.length, 0)} estudiantes requieren apoyo en lectura${peor && peor.v ? `; el mayor porcentaje está en ${peor.c} (${peor.v} %)` : ''}. Sirve para decidir apoyos, no para comparar cursos.`);
           }
         }
         if (key === 'riesgos') {

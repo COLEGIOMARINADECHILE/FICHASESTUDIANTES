@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -375,12 +375,13 @@ window.app = {
   renderNav() {
     const v = State.currentView;
     const quick = this.isQuickOnly();
-    const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']], ['mine', 'list-todo', 'Mis acciones', true, ['mine']], ['reuniones', 'users-round', 'Reuniones de nivel', true, ['reuniones']]] : [
+    const items = quick ? [['quick', 'clipboard-pen', 'Registro rápido', true, ['quick']], ['mine', 'list-todo', 'Mis acciones', true, ['mine']], ['reuniones', 'users-round', 'Reuniones de nivel', true, ['reuniones']], ['manual', 'book-open', 'Manual de uso', true, []]] : [
       ['dashboard', 'layout-dashboard', 'Panel principal', true, ['dashboard']],
       ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
+      ['consejo', 'gavel', 'Consejo de promoción', hasAccess('ver_fichas'), ['consejo']],
       ['presentaciones', 'presentation', 'Crear presentaciones', hasAccess('ver_fichas') || hasAccess('ver_resumen_cursos'), ['presentaciones']],
       ['pick_riesgos', 'shield-alert', 'Riesgos del curso', hasAccess('ver_fichas'), ['course_risk', 'ov_riesgos']],
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
@@ -392,10 +393,11 @@ window.app = {
       ['sin_reportes', 'user-search', 'Estudiantes sin reportes', hasAccess('ver_fichas'), ['sin_reportes']],
       ['report', 'calendar-days', 'Reportes funcionario', hasAccess('ver_reportes') || hasAccess('ver_todos_reportes'), ['staff_report']],
       ['audit', 'scroll-text', 'Bitácora', this.canSeeAudit(), ['audit']],
+      ['manual', 'book-open', 'Manual de uso', true, []],
       ['admin', 'settings', 'Administración', hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'), ['admin']]
     ];
     el('nav-menu').innerHTML = items.filter(i => i[3]).map(([id, icon, label, , views]) =>
-      `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'report' ? 'app.openStaffReportModal()' : id === 'cartas' ? 'app.openCartasHub()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
+      `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'manual' ? 'app.abrirManual()' : id === 'report' ? 'app.openStaffReportModal()' : id === 'cartas' ? 'app.openCartasHub()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
     this.setupNavScroll();
   },
   /** Flechas para recorrer el menú lateral cuando no cabe completo en la pantalla. */

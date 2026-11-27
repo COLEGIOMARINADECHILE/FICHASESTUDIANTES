@@ -454,20 +454,39 @@ Object.assign(app, {
       datos.estudiantes_a_focalizar = { pedagogico: (d.secciones.foco_ped?.estudiantes || []).length, disciplinario: (d.secciones.foco_disc?.estudiantes || []).length };
       if (!(datos.dia || []).length) datos.dia_nota = 'Este curso no tiene informes DIA cargados este año (no todos los cursos rinden el DIA). No interpretes resultados DIA.';
       const claves = TRASPASO_SECCIONES.filter(s => !TR_DOC_KEYS.has(s[0])).map(([k, t]) => `"${k}": "${t}"`).join(', ');
-      const r = await API.call('ai', { motivo: `Conclusión de la ficha de traspaso ${State.traspasoCourse} ${State.traspasoAnio}`, json: true, prompt: `Actúa como jefe de UTP y orientador de un colegio público en Chile. Integra los datos CUANTITATIVOS del curso con las observaciones CUALITATIVAS escritas por los docentes para que el equipo que recibirá el curso el próximo año planifique.
-Reglas: usa SOLO los datos entregados; si no hay resultados DIA, escribe en "dia" que el curso no tiene informes DIA cargados y no los menciones en el resto; cita cifras; relaciona lo cuantitativo con lo que describen los docentes; no identifiques personas ("[estudiante]" reemplaza nombres); sin diagnósticos clínicos; español de Chile, claro y profesional.
+      // Estudiantes candidatos a plan de acompañamiento: se envían con un código (sin nombre) y luego se vuelven a identificar aquí
+      const cod = new Map(), cand = [], numero = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
+      State.trData.activos.forEach(s => {
+        const rec = (s.calificaciones || {})[State.traspasoAnio], prom = numero(rec?.promedioGeneral);
+        const bajo4 = (rec?.asignaturas || []).filter(a => { const f = numero(a.valores[a.valores.length - 1]); return f !== null && f < 4; }).length;
+        const rg = State.trData.riesgo.find(x => x.s === s);
+        const art11 = !!(s.riesgoRepitenciaAnterior || (s.historialCursos || []).some(h => h.situacion === 'promovido' && h.riesgoRepitencia));
+        if (!(s.asistencia.real < 85 || rg || art11 || (prom !== null && prom < 4.5)) || cand.length >= 40) return;
+        const c = `E${cand.length + 1}`; cod.set(c, s);
+        cand.push({ codigo: c, asistencia_pct: s.asistencia.real, promedio_general: prom, asignaturas_bajo_4: bajo4, criterios_de_riesgo: rg ? rg.motivos.map(m => m.replace(/^marcado.*|^tiene plan.*/, 'ya identificado por el equipo')) : [], con_plan_por_repitencia: !!this.isRep(s), apoyo_pie: !!this.isPie?.(s), promovido_el_anio_anterior_con_riesgo_art11: art11 });
+      });
+      const claves2 = '';
+      const r = await API.call('ai', { motivo: `Conclusión de la ficha de traspaso ${State.traspasoCourse} ${State.traspasoAnio}`, json: true, prompt: `Eres un equipo técnico de un colegio público de Chile que analiza la ficha de traspaso de un curso. Cada sección la interpretas desde el rol profesional que corresponde, y NUNCA te limitas a repetir los datos: explicas qué significan, sus posibles causas pedagógicas o socioemocionales, qué implican para el próximo año y qué conviene hacer.
+ROL SEGÚN SECCIÓN: matrícula y ritmo: docente de aula y jefe de UTP. rendimiento y DIA: docente de aula y jefe de UTP (cobertura, brechas, habilidades descendidas). riesgo y asistencia: profesor jefe, inspectoría y psicopedagogo (Decreto 67 de evaluación y promoción). disciplina y convivencia: experto en convivencia escolar (clima, prevención, formación). socioemocional: orientador y psicólogo educacional. pie y aprendizaje: psicopedagogo y especialista en diversidad de aprendizaje en aula (DUA, ajustes, PACI/PAI, evaluación diferenciada). talleres: jefe de UTP.
+Si en los datos hay "dominio_lector", interprétalo dentro de la sección "dia" junto con el DIA (calidad y velocidad lectora, dificultad predominante, palabras por minuto) y relaciónalo con Lenguaje y con el apoyo PIE.
+FORMATO DE CADA INTERPRETACIÓN (texto de 3 líneas separadas por salto de línea, así): "Hallazgo: ..." (la idea central con cifras, no una lista de datos) / "Interpretación: ..." (qué significa y posibles causas, desde el rol correspondiente) / "Qué hacer: ..." (1 o 2 acciones concretas para el próximo año).
+Reglas: usa SOLO los datos entregados; si no hay resultados DIA, escribe en "dia" que el curso no tiene informes DIA cargados y no los menciones en el resto; relaciona lo cuantitativo con lo que describen los docentes; no identifiques personas ("[estudiante]" reemplaza nombres); sin diagnósticos clínicos; español de Chile, claro y profesional.
+PLANES DE ACOMPAÑAMIENTO: de la lista ESTUDIANTES_CANDIDATOS elige quienes requieren un plan y clasifícalos: "Plan por baja asistencia" (asistencia bajo 85 %), "Plan por riesgo de repitencia" (promedio o asignaturas bajo 4,0, o riesgo ya identificado) o "PAI (Decreto 67, art. 11)" (estudiante promovido con el art. 11 que debe tener plan de acompañamiento individual). Para cada uno da el motivo con los datos que lo sustentan y una acción breve. Máximo 15; puede ser vacío.
 
 SECCIONES: {${claves}}
-DATOS (JSON): ${JSON.stringify(datos).slice(0, 15000)}
+DATOS (JSON): ${JSON.stringify(datos).slice(0, 13000)}
+ESTUDIANTES_CANDIDATOS: ${JSON.stringify(cand)}
 
 Devuelve SOLO un JSON:
 {"interpretaciones": {"matricula": "...", "rendimiento": "...", "dia": "...", "riesgo": "...", "asistencia": "...", "disciplina": "...", "socioemocional": "...", "pie": "...", "aprendizaje": "...", "ritmo": "...", "talleres": "...", "otros": "..."},
+"alumnos_planes": [{"codigo": "E1", "tipo": "Plan por baja asistencia | Plan por riesgo de repitencia | PAI (Decreto 67, art. 11)", "motivo": "...", "accion": "..."}],
 "conclusion_general": "Conclusión integrada de 8 a 12 líneas que una lo cuantitativo y lo escrito por los docentes (cómo empezó y terminó el curso, fortalezas, desafíos)",
 "nivel_alerta": "bajo | medio | alto", "resumen": "2 o 3 líneas",
 "fortalezas": ["..."], "desafios": ["..."], "recomendaciones": ["..."], "focos_por_asignatura": [{"asignatura": "...", "sugerencia": "..."}], "apoyos_sugeridos": ["..."],
 "sugerencias": [{"ambito": "Pedagógico | Convivencia | Familias | Gestión", "titulo": "acción breve", "detalle": "cómo implementarla el próximo año (1 o 2 oraciones)"}]}
 Las "sugerencias" deben ser exactamente 10, concretas, realistas y distintas entre sí.` });
       const j = r.json || {};
+      j.alumnos_planes = (j.alumnos_planes || []).filter(x => cod.has(String(x.codigo))).map(x => `${this.formatStudentName(cod.get(String(x.codigo)).name)} — ${x.tipo || 'Plan de acompañamiento'}: ${x.motivo || ''}${x.accion ? ` Acción: ${x.accion}` : ''}`);
       const previas = (d.sugerencias || []).filter(s => s.seleccionada || s.propia);
       d.analisis = j; d.analisisFecha = today(); d.analisisPor = State.currentUser.name;
       d.sugerencias = [...previas, ...(j.sugerencias || []).slice(0, 10).map((s, i) => ({ id: `s${Date.now()}${i}`, ambito: s.ambito || '', titulo: s.titulo || '', detalle: s.detalle || '', seleccionada: false }))];
@@ -482,7 +501,7 @@ Las "sugerencias" deben ser exactamente 10, concretas, realistas y distintas ent
     const an = d.analisis;
     const can = TRASPASO_SECCIONES.some(([k]) => this.trCan(d, k)) && !State.verAnio && !d.anioArchivo;
     const boton = can ? `<button type="button" class="btn ${an ? '' : 'btn--primary'} btn--lg" ${listo ? '' : 'disabled'} onclick="app.analyzeTraspasoAI()">${ico('sparkles')}${an ? 'Volver a interpretar con IA' : 'Interpretar con IA'}</button>` : '';
-    const bloques = [['conclusion_general', 'Conclusión general', 'file-text', 'obs', 'texto'], ['resumen', 'Diagnóstico breve', 'gauge', 'neutral', 'texto'], ['fortalezas', 'Fortalezas del curso', 'thumbs-up', 'conv', 'lista'], ['desafios', 'Desafíos y alertas', 'alert-triangle', 'proto', 'lista'], ['recomendaciones', 'Recomendaciones para planificar', 'calendar-check', 'warn', 'lista'], ['apoyos_sugeridos', 'Apoyos y coordinación', 'life-buoy', 'pie', 'lista']];
+    const bloques = [['conclusion_general', 'Conclusión general', 'file-text', 'obs', 'texto'], ['resumen', 'Diagnóstico breve', 'gauge', 'neutral', 'texto'], ['fortalezas', 'Fortalezas del curso', 'thumbs-up', 'conv', 'lista'], ['desafios', 'Desafíos y alertas', 'alert-triangle', 'proto', 'lista'], ['recomendaciones', 'Recomendaciones para planificar', 'calendar-check', 'warn', 'lista'], ['apoyos_sugeridos', 'Apoyos y coordinación', 'life-buoy', 'pie', 'lista'], ['alumnos_planes', 'Estudiantes que requieren plan de acompañamiento (asistencia, riesgo de repitencia o PAI Decreto 67 art. 11)', 'user-cog', 'proto', 'lista']];
     const txt = x => typeof x === 'string' ? x : `${x.asignatura || x.area || ''}: ${x.sugerencia || x.texto || ''}`;
     const nivel = { bajo: ['Nivel de alerta bajo', 'conv'], medio: ['Nivel de alerta medio', 'warn'], alto: ['Nivel de alerta alto', 'proto'] }[String(an?.nivel_alerta || '').toLowerCase()];
     return `<section class="panel tr-conc" id="tr-conc">

@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -29,7 +29,7 @@ Object.assign(app, {
   renderDiaAll() {
     const f = State.diaFiltro = State.diaFiltro || { anio: '', asignatura: '', periodo: '' };
     const cursos = this.myCourses();
-    const todos = (State.dia || []).filter(d => cursos.includes(d.course) && d.tipo !== 'condiciones');
+    const todos = (State.dia || []).filter(d => cursos.includes(d.course) && !['condiciones', 'lector'].includes(d.tipo));
     const anios = [...new Set(todos.map(d => String(d.anio)))].sort().reverse();
     const asigs = [...new Set(todos.map(d => d.asignatura))].sort();
     const lista = todos.filter(d => (!f.anio || String(d.anio) === f.anio) && (!f.asignatura || d.asignatura === f.asignatura) && (!f.periodo || d.periodo === f.periodo))

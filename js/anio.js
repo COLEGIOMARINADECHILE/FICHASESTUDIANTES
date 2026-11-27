@@ -115,6 +115,8 @@ Object.assign(app, {
     (State._studentsFull || State.rawStudents).filter(s => s.status !== 'blocked').forEach(s => {
       const sig = this.cursoSiguiente(s.curso);
       filas[s.id] = sig ? { accion: 'promovido', curso: sig.curso, revisar: sig.revisar } : { accion: 'egresa', curso: '', revisar: false };
+      // Si el consejo de promoción resolvió que repite, ya viene marcado
+      if (s.resolucionConsejo && +s.resolucionConsejo.anio === anio && s.resolucionConsejo.resolucion === 'repetir') filas[s.id] = { accion: 'repite', curso: s.curso, revisar: false };
     });
     return (State.cierre = { anio, filas, abiertos: {} });
   },

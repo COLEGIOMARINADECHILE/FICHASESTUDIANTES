@@ -1755,3 +1755,36 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 .asg-h:hover { background: color-mix(in oklab, var(--color-accent) 25%, transparent); }
 .asg tr.is-sel .asg-name { background: var(--tone-warn-soft, #fff7d6); }
 .asg-ciclos { display: flex; gap: 0.25rem; flex-wrap: nowrap; }
+
+/* ===== Consejo de promoción, guías en la ficha y sugerencias PIE ===== */
+.con-curso .con-actas { margin-top: 0.6rem; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+.con-hero { border-top: 5px solid var(--color-accent); }
+.con-hero__k { display: inline-flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em; color: var(--color-accent); }
+.con-prog { display: grid; gap: 0.35rem; margin: 0.6rem 0; }
+.con-caso { border: 1px solid var(--color-rule); border-left: 6px solid #94a3b8; border-radius: 12px; padding: 1rem; background: var(--color-paper, #fff); display: grid; gap: 0.7rem; }
+.con-caso[data-res="promover"] { border-left-color: #1f7a4d; } .con-caso[data-res="repetir"] { border-left-color: #dc2626; } .con-caso[data-res="pend"] { border-left-color: #facc15; }
+.con-caso__head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: flex-start; }
+.con-caso__head h3 { margin: 0 0 0.3rem; }
+.con-caso__datos { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; }
+.con-caso__motivos { margin: 0; padding-left: 1.1rem; font-size: 0.88rem; }
+.con-informe > summary { cursor: pointer; font-weight: 700; display: flex; gap: 0.4rem; align-items: center; }
+.con-guia { display: grid; gap: 0.1rem; font-size: 0.74rem; color: var(--color-muted, #666); margin-top: 0.2rem; }
+.con-res { display: grid; gap: 0.6rem; padding: 0.8rem; border-radius: 10px; background: color-mix(in oklab, var(--color-rule) 25%, transparent); }
+.con-res .seg.con-res__promover[aria-pressed="true"] { background: #1f7a4d; color: #fff; } .con-res .seg.con-res__repetir[aria-pressed="true"] { background: #dc2626; color: #fff; } .con-res .seg.con-res__pend[aria-pressed="true"] { background: #facc15; color: #111; }
+.con-medidas { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.2rem 1rem; }
+.con-esc { list-style: none; padding: 0; display: grid; gap: 0.4rem; } .con-esc li { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.tr-guia-in { border: 1px dashed var(--color-rule); border-radius: 10px; padding: 0.5rem 0.8rem; margin: 0.6rem 0; background: color-mix(in oklab, #facc15 12%, transparent); }
+.tr-guia-in > summary { cursor: pointer; font-weight: 700; display: flex; gap: 0.4rem; align-items: center; font-size: 0.88rem; }
+.tr-guia-in__body { display: grid; gap: 0.4rem; margin-top: 0.5rem; } .tr-guia-in__body ul { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; } .tr-guia-in__ej { font-size: 0.84rem; background: var(--color-paper, #fff); padding: 0.5rem 0.7rem; border-radius: 8px; margin: 0; }
+.tr-interp__fila { display: grid; grid-template-columns: 7.5rem 1fr; gap: 0.6rem; margin: 0.35rem 0; } .tr-interp__fila strong { color: var(--color-accent); }
+.pie-sug { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 0.8rem; }
+.pie-sug__card { border: 1px solid var(--color-rule); border-left: 5px solid #facc15; border-radius: 10px; padding: 0.8rem; display: grid; gap: 0.4rem; background: var(--color-paper, #fff); }
+.pie-sug__card header { display: grid; } .pie-sug__list { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: 0.88rem; } .pie-sug__card footer { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.act-list { max-height: 14rem; overflow: auto; }
+
+/* ===== Dominio lector ===== */
+.lec-dists { margin: 0.8rem 0; }
+.lec-dist { display: grid; gap: 0.35rem; align-content: start; }
+.lec-dist h4 { margin: 0 0 0.2rem; }
+.lec-row { display: grid; grid-template-columns: minmax(7rem, 11rem) 1.6rem 1fr; gap: 0.5rem; align-items: center; font-size: 0.82rem; }
+.lec-row .gs-bar { min-width: 4rem; height: 1.2rem; }

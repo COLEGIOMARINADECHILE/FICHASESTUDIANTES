@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -274,7 +274,7 @@ Object.assign(app, {
         O.kpis.push({ v: a.convivencia?.total || 0, l: `Registros de convivencia (${a.convivencia?.protocolos || 0} protocolos)`, tone: 'conv' });
       }
       O.notas.push(`Profesor(a) jefe: ${this.profJefeOf(course) || 'sin registrar'}`);
-      const dia = (State.dia || []).filter(d => d.course === course && String(d.anio) === anio && d.tipo !== 'condiciones');
+      const dia = (State.dia || []).filter(d => d.course === course && String(d.anio) === anio && !['condiciones', 'lector'].includes(d.tipo));
       dia.forEach(d => { const c = this.diaCalc(d); grupo(`DIA ${d.asignatura} · ${d.periodo}`, 'obs', 'bar-chart-3', c.areas.map(x => ({ n: x.nombre, d: pct(x.pct), tone: nivel(x.pct, 50, 75) })), ''); });
       if (!dia.length) O.notas.push('Sin informes DIA cargados este año para el curso');
       (this.condOf ? this.condOf(course, anio) : []).forEach(d => grupo('Cuestionario de Condiciones (bienestar)', 'conv', 'heart-handshake', (d.dims || []).map(x => ({ n: x.nombre, d: pct(this.condNum(x.rf)), tone: nivel(x.rf, 50, 70) })), ''));
@@ -724,7 +724,7 @@ Object.assign(app, {
     try {
       if (API.demo) {
         const me = State.currentUser.id;
-        lista = (Demo.db?.reuniones || []).filter(r => r.estado === 'abierta' && (r.participantes || []).some(p => sameId(p.userId, me))).map(r => ({ id: r.id, course: r.course, fecha: r.fecha, hora: r.hora, lugar: r.lugar, creadoPor: r.creadoPor, organiza: sameId(r.creadoPorId, me), presente: (r.participantes || []).some(p => sameId(p.userId, me) && p.presente) }));
+        lista = (Demo.db?.reuniones || []).filter(r => r.estado === 'abierta' && (r.participantes || []).some(p => sameId(p.userId, me))).map(r => ({ id: r.id, tipo: r.tipo || '', course: r.course, fecha: r.fecha, hora: r.hora, lugar: r.lugar, creadoPor: r.creadoPor, organiza: sameId(r.creadoPorId, me), presente: (r.participantes || []).some(p => sameId(p.userId, me) && p.presente) }));
       } else { const res = await API.call('reunionesActivas'); lista = res.reuniones || []; this._ultimaSol = res.solicitudes || []; }
     } catch (e) { return; }
     State.reuActivas = lista;
@@ -744,14 +744,14 @@ Object.assign(app, {
     if (!b) { b = document.createElement('div'); b.id = 'reu-aviso'; b.className = 'reu-aviso'; b.setAttribute('role', 'status'); document.body.appendChild(b); }
     b.hidden = false;
     b.innerHTML = lista.map(x => x.presente
-      ? `<div class="reu-aviso__item" data-on="true"><span class="reu-aviso__dot"></span><span><strong>En reunión de nivel</strong> · ${esc(x.course)}${x.lugar ? ` · ${esc(x.lugar)}` : ''}</span><button type="button" class="btn btn--sm" onclick="app.openReunion(${jsq(x.id)})">Ir a la reunión</button></div>`
-      : `<div class="reu-aviso__item"><span class="reu-aviso__dot"></span><span><strong>Reunión de nivel en curso</strong> · ${esc(x.course)}. Usted está invitado(a).</span><button type="button" class="btn btn--sm btn--primary" onclick="app.reuAvisoModal(State.reuActivas.find(r => String(r.id) === ${jsq(x.id)}))">Registrar asistencia</button></div>`).join('');
+      ? `<div class="reu-aviso__item" data-on="true"><span class="reu-aviso__dot"></span><span><strong>En ${x.tipo === 'consejo' ? 'consejo de promoción' : 'reunión de nivel'}</strong> · ${esc(x.course)}${x.lugar ? ` · ${esc(x.lugar)}` : ''}</span><button type="button" class="btn btn--sm" onclick="app.openReunion(${jsq(x.id)})">Ir a la reunión</button></div>`
+      : `<div class="reu-aviso__item"><span class="reu-aviso__dot"></span><span><strong>${x.tipo === 'consejo' ? 'Consejo de promoción' : 'Reunión de nivel'} en curso</strong> · ${esc(x.course)}. Usted está invitado(a).</span><button type="button" class="btn btn--sm btn--primary" onclick="app.reuAvisoModal(State.reuActivas.find(r => String(r.id) === ${jsq(x.id)}))">Registrar asistencia</button></div>`).join('');
   },
   reuAvisoModal(x) {
     if (!x) return;
     (State.reuAvisadas = State.reuAvisadas || new Set()).add(String(x.id));
     ui.modal({
-      title: 'Está invitado(a) a una reunión de nivel', icon: 'users-round', tone: 'warn', size: 'sm', okText: 'Registrar mi asistencia', cancelText: 'Ahora no',
+      title: x.tipo === 'consejo' ? 'Está invitado(a) al consejo de promoción' : 'Está invitado(a) a una reunión de nivel', icon: 'users-round', tone: 'warn', size: 'sm', okText: 'Registrar mi asistencia', cancelText: 'Ahora no',
       body: `<div class="stack">
         <p class="reu-aviso-modal__curso">${esc(x.course)}</p>
         <p class="modal__msg">${fmtDate(x.fecha)}${x.hora ? ` · ${esc(x.hora)}` : ''}${x.lugar ? ` · ${esc(x.lugar)}` : ''}. Dirige: <strong>${esc(x.creadoPor || '')}</strong>.</p>

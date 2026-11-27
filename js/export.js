@@ -306,7 +306,7 @@ Object.assign(app, {
       const an = d.analisis;
       const interp = k => an?.interpretaciones?.[k] ? `<p class="doc-muted"><strong>Interpretación (IA):</strong> ${esc(an.interpretaciones[k])}</p>` : '';
       const analisis = an ? `<div class="doc-avoid">${docH('Conclusión general e interpretación (IA)')}${an.conclusion_general ? `<div class="doc-box doc-pre"><strong>Conclusión general:</strong> ${esc(an.conclusion_general)}</div>` : ''}${an.resumen ? `<div class="doc-box doc-pre">${esc(an.resumen)}</div>` : ''}
-        ${[['Fortalezas', an.fortalezas], ['Desafíos y alertas', an.desafios], ['Recomendaciones para planificar', an.recomendaciones], ['Apoyos sugeridos', an.apoyos_sugeridos]].filter(([, l]) => (l || []).length).map(([t, l]) => `<p><strong>${t}:</strong></p><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}
+        ${[['Fortalezas', an.fortalezas], ['Desafíos y alertas', an.desafios], ['Recomendaciones para planificar', an.recomendaciones], ['Apoyos sugeridos', an.apoyos_sugeridos], ['Estudiantes que requieren plan de acompañamiento', an.alumnos_planes]].filter(([, l]) => (l || []).length).map(([t, l]) => `<p><strong>${t}:</strong></p><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}
         ${(an.focos_por_asignatura || []).length ? docTable(['Asignatura', 'Foco sugerido'], an.focos_por_asignatura.map(f => [esc(f.asignatura), esc(f.sugerencia)]), '') : ''}
         <p class="doc-muted">Interpretación generada con IA a partir de datos agregados y sin identificar a los estudiantes (Ley 19.628 y Ley 21.719). Revisada por el equipo antes de su uso.</p></div>` : '';
       return {
