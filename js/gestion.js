@@ -298,31 +298,46 @@ Object.assign(app, {
   renderStaffReport() {
     const todos = hasAccess('ver_todos_reportes'), per = this.gsPeriodo(), idx = this.gsIndice();
     const st = State.sr = State.sr || { q: '', orden: 'az', sel: '' };
+    st.cargo = st.cargo || ''; st.perfil = st.perfil || ''; st.ciclo = st.ciclo || ''; st.estado = st.estado || 'todos';
     if (!todos) st.sel = String(State.currentUser.id);
-    let gente = State.users.filter(u => !u.eliminado && u.active !== false && (todos || sameId(u.id, State.currentUser.id)));
-    const filas = gente.map(u => this.entrevistaMetricas(u, per, idx));
+    // Todo el personal (activos e inactivos, salvo los dados de baja); el filtro «Estado» permite acotar
+    let gente = State.users.filter(u => !u.eliminado && (todos || sameId(u.id, State.currentUser.id)));
+    const base = gente.map(u => this.entrevistaMetricas(u, per, idx));
+    const cargoDe = u => (u.customRole || u.role || '').trim();
+    const cicloDe = f => Object.entries(CYCLES).filter(([, c]) => f.metaCursos.some(x => c.courses.includes(x)) || (f.u.assignedCourses || []).some(x => c.courses.includes(x))).map(([k]) => k);
     const q = GS_NORM(st.q);
-    let vis = filas.filter(f => !q || GS_NORM(`${f.u.name} ${f.u.customRole || ''} ${f.u.role}`).includes(q));
-    vis.sort(st.orden === 'bajo' ? (a, b) => (a.pct ?? 999) - (b.pct ?? 999) : (a, b) => a.u.name.localeCompare(b.u.name, 'es'));
+    const filas = base.filter(f => (st.estado === 'todos' || (st.estado === 'activos' ? f.u.active !== false : f.u.active === false))
+      && (!st.perfil || f.u.role === st.perfil) && (!st.cargo || cargoDe(f.u) === st.cargo) && (!st.ciclo || cicloDe(f).includes(st.ciclo))
+      && (!q || GS_NORM(`${f.u.name} ${f.u.customRole || ''} ${f.u.role}`).includes(q)));
+    const ord = { az: (a, b) => a.u.name.localeCompare(b.u.name, 'es'), za: (a, b) => b.u.name.localeCompare(a.u.name, 'es'), bajo: (a, b) => (a.pct ?? 999) - (b.pct ?? 999) || a.u.name.localeCompare(b.u.name, 'es'),
+      mas: (a, b) => b.total - a.total || a.u.name.localeCompare(b.u.name, 'es'), cargo: (a, b) => cargoDe(a.u).localeCompare(cargoDe(b.u), 'es') || a.u.name.localeCompare(b.u.name, 'es'),
+      perfil: (a, b) => String(a.u.role).localeCompare(String(b.u.role), 'es') || a.u.name.localeCompare(b.u.name, 'es'),
+      ciclo: (a, b) => (Object.keys(CYCLES).indexOf(cicloDe(a)[0]) + 99) % 99 - (Object.keys(CYCLES).indexOf(cicloDe(b)[0]) + 99) % 99 || a.u.name.localeCompare(b.u.name, 'es') };
+    const vis = filas.slice().sort(ord[st.orden] || ord.az);
     const conMeta = filas.filter(f => f.pct !== null), prom = conMeta.length ? Math.round(conMeta.reduce((t, f) => t + f.pct, 0) / conMeta.length) : null;
     const sinEnt = conMeta.filter(f => f.cubiertos === 0).length;
-    const sel = filas.find(f => String(f.u.id) === String(st.sel));
+    const sel = base.find(f => String(f.u.id) === String(st.sel));
+    const cargos = [...new Set(State.users.filter(u => !u.eliminado).map(cargoDe).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
     el('sr-body').innerHTML = `
-      <div class="page-head"><div><h1>Reporte de funcionarios</h1><p class="muted">Nivel de logro de entrevistas: a los cursos que atiende cada funcionario y a otros cursos.</p></div>
+      <div class="page-head"><div><h1>Reporte de funcionarios</h1><p class="muted">Nivel de logro de entrevistas e historial de lo realizado por cada funcionario.</p></div>
         <div class="row-actions">${todos ? `<button class="btn" onclick="app.gsPdfLogro('all')">${ico('file-down')}Descargar PDF de todos</button>` : ''}</div></div>
       <section class="panel">${this.gsPeriodoHtml('app.renderStaffReport()')}
         <div class="stats stats--4">
           <div class="stat" data-tone="conv"><span class="stat__num num">${prom === null ? '-' : prom + ' %'}</span><span class="stat__label">Logro promedio de entrevistas</span></div>
-          <div class="stat" data-tone="obs"><span class="stat__num num">${conMeta.length}</span><span class="stat__label">Funcionarios con cursos asignados</span></div>
+          <div class="stat" data-tone="obs"><span class="stat__num num">${filas.length}</span><span class="stat__label">Funcionarios en el listado</span></div>
           <div class="stat" data-tone="${sinEnt ? 'proto' : 'conv'}"><span class="stat__num num">${sinEnt}</span><span class="stat__label">Sin ninguna entrevista a sus cursos</span></div>
           <div class="stat"><span class="stat__num num">${filas.reduce((t, f) => t + f.total, 0)}</span><span class="stat__label">Entrevistas en el período</span></div></div>
-        <p class="muted small">Logro = estudiantes distintos entrevistados de los cursos que atiende ÷ estudiantes de esos cursos. Los cursos que atiende se definen en Administración → Funcionarios (editar) y, si no se definen, se usa el curso del que es profesor(a) jefe.</p></section>
+        <p class="muted small">Logro = estudiantes distintos entrevistados de los cursos que atiende ÷ estudiantes de esos cursos. Los cursos que atiende se definen en Administración → Funcionarios (editar) y, si no se definen, se usa el curso del que es profesor(a) jefe. Con «Historial completo» obtiene todo lo realizado por la persona (entrevistas, anotaciones, observaciones, enfermería, planes y respaldos).</p></section>
       ${sel ? this.gsDetalleHtml(sel) : ''}
       <section class="panel"><div class="filters">
         ${todos ? fieldHtml('Buscar funcionario', `<input type="search" class="input" value="${esc(st.q)}" placeholder="Nombre, cargo o perfil" oninput="State.sr.q=this.value; clearTimeout(app._srT); app._srT=setTimeout(() => { app.renderStaffReport(); const i = document.querySelector('#sr-body input[type=search]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250)">`) : ''}
-        ${todos ? fieldHtml('Ordenar', `<select class="input" onchange="State.sr.orden=this.value; app.renderStaffReport()">${options([['az', 'Nombre: A a la Z'], ['bajo', 'Menor logro primero']], st.orden)}</select>`) : ''}</div>
+        ${todos ? fieldHtml('Perfil', `<select class="input" onchange="State.sr.perfil=this.value; app.renderStaffReport()"><option value="">Todos</option>${options(State.variables.roles || [], st.perfil)}</select>`) : ''}
+        ${todos ? fieldHtml('Cargo', `<select class="input" onchange="State.sr.cargo=this.value; app.renderStaffReport()"><option value="">Todos</option>${options(cargos, st.cargo)}</select>`) : ''}
+        ${todos ? fieldHtml('Ciclo', `<select class="input" onchange="State.sr.ciclo=this.value; app.renderStaffReport()"><option value="">Todos</option>${options(Object.keys(CYCLES), st.ciclo)}</select>`) : ''}
+        ${todos ? fieldHtml('Estado', `<select class="input" onchange="State.sr.estado=this.value; app.renderStaffReport()">${options([['todos', 'Todos'], ['activos', 'Solo activos'], ['inactivos', 'Solo inactivos']], st.estado)}</select>`) : ''}
+        ${todos ? fieldHtml('Ordenar por', `<select class="input" onchange="State.sr.orden=this.value; app.renderStaffReport()">${options([['az', 'Nombre: A a la Z'], ['za', 'Nombre: Z a la A'], ['cargo', 'Cargo'], ['perfil', 'Perfil'], ['ciclo', 'Ciclo'], ['mas', 'Más entrevistas primero'], ['bajo', 'Menor logro primero']], st.orden)}</select>`) : ''}</div>
         <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Cursos que atiende</th><th>Estudiantes</th><th class="gs-col">Logro de entrevistas</th><th>A su(s) curso(s)</th><th>A otros cursos</th><th class="t-actions"></th></tr></thead><tbody>
-        ${vis.length ? vis.map(f => `<tr class="${String(f.u.id) === String(st.sel) ? 'is-sel' : ''}"><td><span class="cell-title">${esc(f.u.name)}</span><span class="cell-sub">${esc(f.u.customRole || f.u.role)}</span></td>
+        ${vis.length ? vis.map(f => `<tr class="${String(f.u.id) === String(st.sel) ? 'is-sel' : ''}"><td><span class="cell-title">${esc(f.u.name)}${f.u.active === false ? ' ' + chip('Inactivo', 'neutral') : ''}</span><span class="cell-sub">${esc(f.u.customRole || f.u.role)}</span></td>
           <td class="small">${f.metaCursos.length ? f.metaCursos.map(c => chip(c, 'neutral')).join(' ') : '<span class="muted">Sin cursos asignados</span>'}</td>
           <td class="num">${f.meta ? `${f.cubiertos} de ${f.meta}` : '-'}</td><td class="gs-col">${this.gsBarra(f.pct)}</td>
           <td class="num">${f.entPropias}</td><td class="num">${f.entOtros}</td>
@@ -335,7 +350,7 @@ Object.assign(app, {
     const periodoTxt = app.gsPeriodoTxt(per);
     return `<section class="panel gs-detalle"><div class="panel__head"><h2>${ico('user-check')}${esc(f.u.name)}</h2><div class="row-actions">
         <button class="btn btn--primary" onclick="app.gsPdfLogro(${jsq(f.u.id)})">${ico('file-down')}Descargar PDF del logro</button>
-        <button class="btn" onclick="app.gsPdfGestion(${jsq(f.u.id)})">${ico('file-text')}PDF de registros del período</button>
+        <button class="btn" onclick="app.gsPdfGestion(${jsq(f.u.id)})">${ico('file-text')}Historial completo (PDF)</button>
         ${todos ? `<button class="icon-btn" aria-label="Cerrar detalle" onclick="State.sr.sel=''; app.renderStaffReport()">${ico('x')}</button>` : ''}</div></div>
       <p class="muted small">${esc(f.u.customRole || f.u.role)} · ${periodoTxt}</p>
       <div class="gs-detalle__top"><div class="gs-ring" data-tone="${this.gsTono(f.pct)}" style="--p:${f.pct || 0}"><span>${f.pct === null ? '-' : f.pct + '%'}</span></div>
