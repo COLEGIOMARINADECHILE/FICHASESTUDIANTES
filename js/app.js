@@ -388,6 +388,7 @@ window.app = {
       ['mine', 'list-todo', 'Mis acciones', true, ['mine']],
       ['quick', 'clipboard-pen', 'Registro rápido', hasAccess('registro_rapido'), ['quick']],
       ['asistencia', 'calendar-check', 'Asistencia', hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema') || !!(this.canSige && this.canSige()) || !!(this.canCert && this.canCert()), ['asistencia']],
+      ['enfermeria', 'heart-pulse', 'Enfermería', hasAccess('registro_rapido') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas') || hasAccess('ver_fichas'), ['enfermeria']],
       ['courses', 'users', 'Directorio escolar', hasAccess('ver_fichas'), ['courses', 'students', 'student_detail', 'course_plans', 'course_plan_detail', 'student_plan_detail']],
       ['pick_traspaso', 'file-stack', 'Ficha de traspaso', hasAccess('ver_fichas'), ['traspaso', 'ov_traspaso']],
       ['consejo', 'gavel', 'Consejo de promoción', hasAccess('ver_fichas'), ['consejo']],

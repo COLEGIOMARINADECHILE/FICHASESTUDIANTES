@@ -1873,3 +1873,11 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 .ep-bloque{margin-top:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--color-line,#d0d5e0);background:rgba(37,99,235,.05)}.ep-bloque h4{margin:0 0 4px}.ep-n{font-size:1.4em}
 .asr-segs .seg[aria-pressed=true].asr-aus{background:#b42318;color:#fff;border-color:#b42318}.asr-segs .seg[aria-pressed=true].asr-atr{background:#b54708;color:#fff;border-color:#b54708}
 .asr-barra{margin:10px 0;align-items:center}
+
+.lec-atencion{margin:12px 0;padding:12px 14px;border:1px solid var(--color-line,#d0d5e0);border-radius:12px;background:rgba(180,83,9,.05)}.lec-atencion h4{margin:0 0 4px}
+.enf-buscar{min-width:260px;flex:1}
+.asm-wrap{max-height:70vh;overflow:auto}.asm-tabla th,.asm-tabla td{padding:2px}.asm-nom{position:sticky;left:0;background:var(--color-surface,#fff);min-width:190px;z-index:1}
+.asm-dia button{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;min-width:26px;padding:2px;font-weight:700;border-radius:6px}.asm-dia button small{font-weight:400;opacity:.6}.asm-dia.is-sin button{background:#fde68a;color:#7c2d12}
+.asm-c.is-sin{background:repeating-linear-gradient(45deg,#fef3c7,#fef3c7 4px,#fde68a 4px,#fde68a 8px)}
+.asm-b{all:unset;cursor:pointer;display:block;width:26px;height:24px;line-height:24px;text-align:center;border:1px solid var(--color-line,#d0d5e0);border-radius:6px;font-weight:700;font-size:12px}
+.asm-b[data-e=inasistencia]{background:#b42318;color:#fff;border-color:#b42318}.asm-b[data-e=atraso]{background:#b54708;color:#fff;border-color:#b54708}.is-sucio .asm-nom{box-shadow:inset 3px 0 #2563eb}
