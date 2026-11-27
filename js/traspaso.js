@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -163,7 +163,7 @@ Object.assign(app, {
           `\nMejores promedios: ${mejores.map(r => `${r.nombre} (${String(r.promedio).replace('.', ',')})`).join('; ')}.`;
       },
       riesgo: () => a.riesgo.length ? `${a.riesgo.length} estudiante(s) cumplen criterios de riesgo de repitencia:\n${a.riesgo.map(x => `- ${n(x.s)}: ${x.motivos.join(', ')}.`).join('\n')}` : 'Con los datos actuales, ningún estudiante cumple criterios de riesgo de repitencia.',
-      asistencia: () => `Asistencia promedio del curso: ${a.promAsis} %.` + (a.asistencia.length ? `\n${a.asistencia.length} estudiante(s) bajo 85 %:\n${a.asistencia.map(s => `- ${n(s)}: ${s.asistencia.real} % (${s.asistencia.inasistencias} inasistencias).`).join('\n')}` : '\nNingún estudiante bajo 85 %.'),
+      asistencia: () => `Asistencia promedio del curso: ${a.promAsis} %.` + (a.asistencia.length ? `\n${a.asistencia.length} estudiante(s) bajo 85 %:\n${a.asistencia.map(s => `- ${n(s)}: ${this.asisTexto(s)} (${s.asistencia.inasistencias} inasistencias).`).join('\n')}` : '\nNingún estudiante bajo 85 %.'),
       disciplina: () => a.disciplina.length ? `Estudiantes que requieren monitoreo:\n${a.disciplina.map(x => `- ${n(x.s)}: ${[x.prot && `${x.prot} protocolo(s)`, x.graves && `${x.graves} falta(s) grave(s) o gravísima(s)`, x.anot && `${x.anot} anotación(es) negativa(s)`].filter(Boolean).join(', ')}.`).join('\n')}` : 'No se registran protocolos, faltas graves ni anotaciones negativas reiteradas.',
       convivencia: () => { const v = a.convivencia; return v.total ? `Durante el año se registraron ${v.total} intervenciones de convivencia (${v.protocolos} protocolos), que involucran a ${v.estudiantesConRegistros} estudiante(s).${v.estudiantesConRegistros > 3 ? ` El ${v.concentracion} % de los registros se concentra en 3 estudiantes.` : ''}` +
         `\nTipos más frecuentes: ${v.porTipo.slice(0, 4).map(([t, c]) => `${t} (${c})`).join('; ')}.` + (v.porMes.length ? `\nMeses con más registros: ${v.porMes.slice(0, 3).map(([m, c]) => `${m} (${c})`).join(', ')}.` : '') +
@@ -274,7 +274,7 @@ Devuelve SOLO un JSON: {"clima": "Interpretación del clima de convivencia del c
         ${a.rendimiento.map(r => { const p = v => r.n ? Math.round(v / r.n * 100) : 0; return `<tr><td>${esc(r.nombre)}</td><td class="t-num num" ${r.bajo ? 'data-level="high"' : ''}>${r.bajo}</td><td class="t-num num">${p(r.bajo)}</td><td class="t-num num">${r.medio}</td><td class="t-num num">${p(r.medio)}</td><td class="t-num num">${r.alto}</td><td class="t-num num">${p(r.alto)}</td><td class="t-num"><strong class="num">${String(r.promedio).replace('.', ',')}</strong></td></tr>`; }).join('')}</tbody></table></div>`
         : `<p class="muted small">Aún no hay notas ${esc(State.traspasoAnio)} cargadas para este curso. Use "Cargar notas (PDF)" en el curso.</p>`,
       riesgo: lista(a.riesgo, x => `<li>${nombre(x.s)} <span class="muted small">${esc(x.motivos.join(', '))}</span></li>`, 'Ningún estudiante cumple los criterios de riesgo con los datos actuales.'),
-      asistencia: lista(a.asistencia, s => `<li>${nombre(s)} <span class="muted small">${s.asistencia.real} % (${s.asistencia.inasistencias} inasistencias)</span></li>`, 'Ningún estudiante bajo 85 % de asistencia.'),
+      asistencia: lista(a.asistencia, s => `<li>${nombre(s)} <span class="muted small">${this.asisTexto(s)} · ${s.asistencia.inasistencias} inasistencias</span></li>`, 'Ningún estudiante bajo 85 % de asistencia.'),
       disciplina: lista(a.disciplina, x => `<li>${nombre(x.s)} <span class="muted small">${[x.prot && `${x.prot} protocolo(s)`, x.graves && `${x.graves} falta(s) grave(s) o gravísima(s)`, x.anot && `${x.anot} anotación(es) negativa(s)`].filter(Boolean).join(', ')}</span></li>`, 'Sin protocolos, faltas graves ni anotaciones negativas reiteradas.'),
       socioemocional: lista(a.socio, x => `<li>${nombre(x.s)} <span class="muted small">${[x.planes.length && x.planes.join(', '), x.apoyos && `${x.apoyos} intervención(es) de apoyo o derivación`].filter(Boolean).join('. ')}</span></li>`, 'Sin planes ni apoyos socioemocionales registrados.'),
       pie: lista(a.pie, x => `<li>${nombre(x.s)} <span class="muted small">${esc(x.tipos.join(', ') || 'Documentos PIE')}. ${x.ambitos} estrategia(s), ${x.docs} documento(s). Último registro: ${fmtDate(x.ultima) || '-'}</span></li>`, 'Sin estudiantes PIE con planes o documentos cargados.'),

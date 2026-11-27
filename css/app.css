@@ -1799,3 +1799,22 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 @keyframes navDestello { 0% { box-shadow: inset 5px 0 0 #fff, 0 0 0 0 rgb(224 179 65 / 0.95); } 100% { box-shadow: inset 5px 0 0 #fff, 0 0 0 16px rgb(224 179 65 / 0); } }
 .nav__item.is-click { background: var(--color-accent); color: var(--color-accent-ink); font-weight: 800; animation: navDestello 0.75s ease-out; }
 @media (prefers-reduced-motion: reduce) { .nav__item.is-click { animation: none; } .nav__item[aria-current="page"] { transform: none; } }
+
+.cn-lista { max-height: 22rem; overflow: auto; border: 1px solid var(--color-rule); border-radius: 8px; }
+.cn-ul { columns: 2; font-size: 0.85rem; }
+.tr-cierre { border-left: 6px solid #facc15; }
+.reu-aviso__x { flex: none; margin-left: 0.4rem; width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.35); background: transparent; color: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.reu-aviso__x:hover { background: rgb(255 255 255 / 0.18); }
+.cn-ia { display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 0.8rem; padding: 0.8rem 1rem; border: 2px dashed #facc15; border-radius: 10px; background: color-mix(in oklab, #facc15 10%, transparent); }
+
+/* ===== Asistencia real y con días justificados ===== */
+.asj-sub { color: var(--tone-conv-ink, #1f7a4d); }
+.asj-cell[data-con="true"] { background: color-mix(in oklab, #1f7a4d 12%, transparent); border-left: 4px solid #1f7a4d; }
+.asj-j { color: #1f7a4d; }
+.asj-detalle { margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px dashed var(--color-rule); }
+.asj-meses { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.4rem 0.8rem; }
+.asj-mes { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+.asj-mes strong { width: 100%; font-size: 0.8rem; }
+.asj-chip { display: inline-block; min-width: 1.7rem; text-align: center; padding: 0.05rem 0.4rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; }
+.asj-chip--j { background: #1f7a4d; color: #fff; }
+.asj-chip--n { background: #fde0dc; color: #b42318; border: 1px solid #f2b8b0; }

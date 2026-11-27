@@ -433,7 +433,7 @@ window.app = {
   },
   groupByStudent(arr) { const m = {}; arr.forEach(x => { (m[String(x.studentId)] = m[String(x.studentId)] || []).push(x); }); return m; },
   enrich(s, maps) {
-    const total = State.variables.diasTotalesClases || 180;
+    const total = parseInt(s.diasTotales) || State.variables.diasTotalesClases || 180;
     const inas = parseInt(s.inasistencias) || 0;
     const atrasos = parseInt(s.atrasos) || 0;
     const dj = (s.justificativos || []).reduce((a, j) => a + (parseInt(j.dias) || 0), 0);
@@ -651,7 +651,7 @@ window.app = {
         return `<tr class="${s.status === 'blocked' ? 'is-retirado' : ''}"${s.status === 'blocked' ? '' : this.highlightAttrs(s)}>
           <td><div class="st-row">${this.miniFotoHtml ? this.miniFotoHtml(s) : ''}<div class="st-row__txt"><span class="cell-title"><button type="button" class="st-name" title="Abrir la ficha de ${esc(s.name)}" onclick="app.openStudent(${jsq(s.id)})">${esc(s.name)}</button> ${this.areaBadges(s)}</span><span class="cell-sub num">${esc(s.rut)}</span>
             <span class="chips">${this.recordChips([s.id], this.countRecords(s))}${s.status === 'blocked' ? chip(s.egresado ? `Egresado(a) ${s.anioEgreso || ''}` : `Retirado${s.fechaRetiro ? ' el ' + fmtDate(s.fechaRetiro) : ''}`, 'neutral', s.egresado ? 'graduation-cap' : 'user-minus') : ''}${plans}${s.asistencia.alerta ? chip('Riesgo de promoción', 'proto', 'alert-triangle') : ''}</span></div></div></td>
-          <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></td>
+          <td class="t-num"><span class="figure num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span>${this.asisSubHtml(s)}</td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Inasistencias de ${esc(s.name)}" value="${s.asistencia.inasistencias}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'inasistencias', this.value)"></td>
           <td class="t-num"><input type="number" min="0" class="input input--num num" aria-label="Atrasos de ${esc(s.name)}" value="${s.asistencia.atrasos}" onchange="app.quickSaveMetric(${jsq(s.id)}, 'atrasos', this.value)"></td>
           <td class="t-num"><span class="num">${s.asistencia.diasJustificados}</span><span class="cell-sub">Se agregan en la ficha</span></td>
@@ -755,9 +755,10 @@ window.app = {
         <div class="chips chips--end">${this.recordChips([s.id], this.countRecords(s))}</div>
       </div>
       <div class="entry__cells">
-        <div class="cell"><span class="cell__label">Asistencia real</span><span class="cell__num num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></div>
+        <div class="cell"><span class="cell__label">Asistencia real (sin justificar)</span><span class="cell__num num" data-alert="${s.asistencia.alerta}">${s.asistencia.real}%</span></div>
         <div class="cell"><span class="cell__label">Inasistencia base</span><span class="cell__num num">${Math.max(0, 100 - s.asistencia.real)}%</span></div>
-        <div class="cell"><span class="cell__label">Asistencia con justificativos</span><span class="cell__num num">${s.asistencia.conJustificativo}%</span></div>
+        <div class="cell"><span class="cell__label">Días justificados</span><span class="cell__num num">${s.asistencia.diasJustificados}</span></div>
+        <div class="cell asj-cell" data-con="${s.asistencia.diasJustificados > 0}"><span class="cell__label">Asistencia con días justificados</span><span class="cell__num num">${s.asistencia.conJustificativo}%</span></div>
         <div class="cell"><span class="cell__label">Atrasos</span><span class="cell__num num">${s.asistencia.atrasos}</span></div>
       </div>
       ${just ? `<div class="entry__foot"><span class="cell__label">Justificativos registrados</span><ul class="just-list">${just}</ul></div>` : ''}`;

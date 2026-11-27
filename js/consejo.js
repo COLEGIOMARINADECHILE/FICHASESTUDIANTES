@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -40,7 +40,7 @@ Object.assign(app, {
     if (pg === null && asig.length) pg = Math.round(asig.reduce((t, a) => t + a.nota, 0) / asig.length * 10) / 10;
     const asist = s.asistencia?.real;
     const motivos = [], tipos = [];
-    if (asist !== undefined && asist < 85) { motivos.push(`Asistencia ${asist} % (bajo el 85 % exigido)`); tipos.push('asistencia'); }
+    if (asist !== undefined && asist < 85) { motivos.push(`Asistencia ${asist} % (bajo el 85 % exigido)${s.asistencia.diasJustificados ? `; con ${s.asistencia.diasJustificados} día(s) justificado(s) llega a ${s.asistencia.conJustificativo} %` : '; sin días justificados'}`); tipos.push('asistencia'); }
     let notasOk = true;
     if (pg !== null && asig.length) {
       const n = reprobadas.length;

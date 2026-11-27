@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -245,7 +245,7 @@ Object.assign(app, {
       return {
         filename: `Alertas_Preventivas${course ? '_' + course.replace(/\s+/g, '_') : ''}.pdf`, title: 'REPORTE DE ALERTAS PREVENTIVAS', wide: true,
         body: `<p><strong>Alcance:</strong> ${esc(course || 'Todos los cursos del establecimiento')}. <strong>Fecha de emisión:</strong> ${fmtDate(today())}. <strong>Estudiantes con registros:</strong> ${rows.length}.</p>
-          ${docTable(['N°', 'Estudiante', 'Curso', 'Asist.', 'Prot.', 'Conv.', 'PIE', 'Obs.', 'Enf.', 'Total'], rows.map((r, i) => [i + 1, `<strong>${esc(app.formatStudentName(r.name))}</strong>`, esc(r.curso), `${r.asistencia.real}%`, r.proto, r.conv, r.pie, r.obs, r.enf, `<strong>${r.total}</strong>`]), 'No hay alertas registradas con este criterio.', 'doc-table--center')}
+          ${docTable(['N°', 'Estudiante', 'Curso', 'Asist.', 'Prot.', 'Conv.', 'PIE', 'Obs.', 'Enf.', 'Total'], rows.map((r, i) => [i + 1, `<strong>${esc(app.formatStudentName(r.name))}</strong>`, esc(r.curso), (r.asistencia.diasJustificados ? `${r.asistencia.real}% (${r.asistencia.conJustificativo}% con just.)` : `${r.asistencia.real}%`), r.proto, r.conv, r.pie, r.obs, r.enf, `<strong>${r.total}</strong>`]), 'No hay alertas registradas con este criterio.', 'doc-table--center')}
           <p class="doc-small">Este reporte consolida la cantidad de registros por estudiante (protocolos, intervenciones de convivencia o PIE, observaciones docentes y atenciones de enfermería). No incluye el detalle de los registros confidenciales.</p>`
       };
     },
@@ -291,7 +291,7 @@ Object.assign(app, {
           ${a.retirados.length ? docTable(['Retirado', 'Fecha', 'Motivo'], a.retirados.map(s => [n(s), fmtDate(s.fechaRetiro), esc(s.motivoRetiro || '')]), '') : ''}`,
         rendimiento: a.rendimiento.length ? docTable(['Asignatura', 'Bajo 4,0', '%', '4,0 a 5,9', '%', '6,0 o más', '%', 'Promedio'], a.rendimiento.map(r => { const p = v => r.n ? Math.round(v / r.n * 100) : 0; return [esc(r.nombre), r.bajo, p(r.bajo), r.medio, p(r.medio), r.alto, p(r.alto), `<strong>${String(r.promedio).replace('.', ',')}</strong>`]; }), '', 'doc-table--center') : '<p class="doc-muted">Sin notas cargadas.</p>',
         riesgo: listaSimple(a.riesgo, x => `${n(x.s)}: ${esc(x.motivos.join(', '))}`),
-        asistencia: listaSimple(a.asistencia, s => `${n(s)}: ${s.asistencia.real} % (${s.asistencia.inasistencias} inasistencias)`),
+        asistencia: listaSimple(a.asistencia, s => `${n(s)}: ${app.asisTexto(s)} (${s.asistencia.inasistencias} inasistencias)`),
         disciplina: listaSimple(a.disciplina, x => `${n(x.s)}: ${[x.prot && `${x.prot} protocolo(s)`, x.graves && `${x.graves} falta(s) grave(s)`, x.anot && `${x.anot} anotación(es) negativa(s)`].filter(Boolean).join(', ')}`),
         socioemocional: listaSimple(a.socio, x => `${n(x.s)}: ${esc([x.planes.join(', '), x.apoyos && `${x.apoyos} apoyo(s)`].filter(Boolean).join('. '))}`),
         pie: listaSimple(a.pie, x => `${n(x.s)}: ${esc(x.tipos.join(', ') || 'Documentos PIE')} (${x.docs} documento(s))`),
@@ -313,7 +313,7 @@ Object.assign(app, {
         filename: `Ficha_Traspaso_${String(State.traspasoCourse).replace(/\s+/g, '_')}_${State.traspasoAnio}.pdf`, title: 'FICHA DE CARACTERIZACIÓN Y TRASPASO',
         body: `${docKv([[['Curso', esc(State.traspasoCourse)], ['Año', esc(State.traspasoAnio)]], [['Profesor(a) jefe', esc(app.profJefeOf(State.traspasoCourse) || '-')], ['Profesor(a) especialista', esc(d.profesorEspecialista || '-')]], [['Asistencia promedio', `${a.promAsis}%`], ['Promedio del curso', a.promCurso]]])}
           ${graficos ? `<div class="doc-avoid" style="margin:8px 0 14px">${graficos}</div>` : ''}
-          ${TRASPASO_SECCIONES.map(([k, t]) => `<div class="doc-avoid">${docH(t)}${auto[k] || ''}${interp(k)}${d.secciones?.[k]?.texto ? `<div class="doc-box doc-pre">${esc(d.secciones[k].texto)}</div>` : ''}</div>`).join('')}
+          ${TRASPASO_SECCIONES.filter(([k]) => app.trAplica(State.traspasoCourse, k)).map(([k, t]) => `<div class="doc-avoid">${docH(t)}${auto[k] || ''}${interp(k)}${d.secciones?.[k]?.texto ? `<div class="doc-box doc-pre">${esc(d.secciones[k].texto)}</div>` : ''}</div>`).join('')}
           ${analisis}`
       };
     },

@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -97,7 +97,7 @@ Object.assign(app, {
   // ---------------- OBSERVACIONES DOCENTES ----------------
   trDocenteHtml(d) {
     const grupos = [1, 2, 3].map(g => {
-      const items = TR_DOCENTE.filter(x => x[6] === g);
+      const items = TR_DOCENTE.filter(x => x[6] === g && this.trAplica(d.course, x[0])); if (!items.length) return '';
       const [t, sub, ic] = TR_GRUPOS[g];
       const hechas = items.filter(x => d.secciones[x[0]]?.estado === 'completo').length;
       return `<div class="trd-grupo" data-g="${g}">
@@ -429,7 +429,7 @@ Object.assign(app, {
             const id = this.traspasoId(x.c, anio);
             let d = this.trDoc(id);
             if (!d) { d = { id, course: x.c, anio, secciones: {}, asignaciones: {} }; (State.trDrafts = State.trDrafts || {})[id] = d; }
-            const nuevas = TR_DOCENTE.map(t => t[0]).filter(k => !d.asignaciones[k]);
+            const nuevas = TR_DOCENTE.map(t => t[0]).filter(k => this.trAplica(x.c, k) && !d.asignaciones[k]);
             nuevas.forEach(k => { d.asignaciones[k] = { userId: String(x.u.id), userName: x.u.name, fecha: today(), por: State.currentUser.name }; this.trSec(d, k).estado = this.trSec(d, k).estado || 'pendiente'; });
             Object.assign(d, { course: x.c, anio });
             if (nuevas.length) { await DB.save('traspasos', JSON.parse(JSON.stringify(d))); avisos.push([x.u, d, nuevas]); }
@@ -468,6 +468,7 @@ Object.assign(app, {
       const claves2 = '';
       const r = await API.call('ai', { motivo: `Conclusión de la ficha de traspaso ${State.traspasoCourse} ${State.traspasoAnio}`, json: true, prompt: `Eres un equipo técnico de un colegio público de Chile que analiza la ficha de traspaso de un curso. Cada sección la interpretas desde el rol profesional que corresponde, y NUNCA te limitas a repetir los datos: explicas qué significan, sus posibles causas pedagógicas o socioemocionales, qué implican para el próximo año y qué conviene hacer.
 ROL SEGÚN SECCIÓN: matrícula y ritmo: docente de aula y jefe de UTP. rendimiento y DIA: docente de aula y jefe de UTP (cobertura, brechas, habilidades descendidas). riesgo y asistencia: profesor jefe, inspectoría y psicopedagogo (Decreto 67 de evaluación y promoción). disciplina y convivencia: experto en convivencia escolar (clima, prevención, formación). socioemocional: orientador y psicólogo educacional. pie y aprendizaje: psicopedagogo y especialista en diversidad de aprendizaje en aula (DUA, ajustes, PACI/PAI, evaluación diferenciada). talleres: jefe de UTP.
+${this.trEsCierre(State.traspasoCourse) ? 'CIERRE DE CICLO: este curso egresa y no hay curso siguiente. Haz un BALANCE GENERAL de cómo estuvo el curso (trayectoria, rendimiento, asistencia, convivencia, fortalezas) y no planifiques un próximo año con este grupo: las recomendaciones y las 10 sugerencias deben ser lecciones aprendidas y mejoras para el equipo de enseñanza media y para el establecimiento. No inventes datos de secciones que no se entregan.' : ''}
 Si en los datos hay "dominio_lector", interprétalo dentro de la sección "dia" junto con el DIA (calidad y velocidad lectora, dificultad predominante, palabras por minuto) y relaciónalo con Lenguaje y con el apoyo PIE.
 FORMATO DE CADA INTERPRETACIÓN (texto de 3 líneas separadas por salto de línea, así): "Hallazgo: ..." (la idea central con cifras, no una lista de datos) / "Interpretación: ..." (qué significa y posibles causas, desde el rol correspondiente) / "Qué hacer: ..." (1 o 2 acciones concretas para el próximo año).
 Reglas: usa SOLO los datos entregados; si no hay resultados DIA, escribe en "dia" que el curso no tiene informes DIA cargados y no los menciones en el resto; relaciona lo cuantitativo con lo que describen los docentes; no identifiques personas ("[estudiante]" reemplaza nombres); sin diagnósticos clínicos; español de Chile, claro y profesional.

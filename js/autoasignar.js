@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -44,8 +44,8 @@ Object.assign(app, {
     const base = borrador || guardada || { id, course, anio, secciones: {}, asignaciones: {} };
     const { docente, pies } = this.trQuienesDeCurso(course, base.profesorEspecialista || guardada?.profesorEspecialista || '');
     const deseadas = [];
-    if (docente) TR_DOCENTE.forEach(([k]) => deseadas.push([k, docente]));
-    if (pies.length) AUTO_PIE_KEYS.forEach(k => deseadas.push([k, pies[0]]));
+    if (docente) TR_DOCENTE.forEach(([k]) => { if (this.trAplica(course, k)) deseadas.push([k, docente]); });
+    if (pies.length) AUTO_PIE_KEYS.forEach(k => { if (this.trAplica(course, k)) deseadas.push([k, pies[0]]); });
     const faltan = deseadas.filter(([k]) => !(base.asignaciones || {})[k]);
     if (!faltan.length) return 0;
     const doc = JSON.parse(JSON.stringify(guardada || base));
@@ -70,7 +70,7 @@ Object.assign(app, {
     if (!forzar && Date.now() - (this._autoAsigT || 0) < 60000) return 0;
     this._autoAsigEn = true; this._autoAsigT = Date.now();
     let total = 0;
-    try { for (const c of ALL_COURSES) { try { total += await this.trAutoAsignar(c, State.traspasoAnio || today().slice(0, 4)); } catch (e) { /* un curso con problema no detiene a los demás */ } } }
+    try { for (const c of (this.cnTodosCursos ? this.cnTodosCursos() : ALL_COURSES)) { try { total += await this.trAutoAsignar(c, State.traspasoAnio || today().slice(0, 4)); } catch (e) { /* un curso con problema no detiene a los demás */ } } }
     finally { this._autoAsigEn = false; }
     if (total) { this.renderNav && this.renderNav(); if (State.currentView === 'ov_traspaso') this.renderOvTraspaso?.(); icons(); }
     return total;
