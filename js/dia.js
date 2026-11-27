@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -377,8 +377,8 @@ Object.assign(app, {
       </div>`;
     (this._diaCharts || []).forEach(c => c.destroy());
     this._diaCharts = [];
-    el('dia-body').innerHTML = `<article class="entry"><div class="entry__head"><div class="entry__id"><h1 class="entry__name">Resultados DIA · ${esc(course)}</h1>
-        <div class="chips">${chip(`${lista.length + (this.condOf ? this.condOf(course).length : 0)} informe(s)`, 'obs', 'bar-chart-3')}${chip('Diagnóstico Integral de Aprendizajes', 'neutral')}</div></div></div>
+    el('dia-body').innerHTML = `<article class="entry"><div class="entry__head"><div class="entry__id"><h1 class="entry__name">Resultados DIA y Dominio lector · ${esc(course)}</h1>
+        <div class="chips">${chip(`${lista.length + (this.condOf ? this.condOf(course).length : 0)} informe(s)`, 'obs', 'bar-chart-3')}${chip('Diagnóstico Integral de Aprendizajes', 'neutral')}${chip('Dominio lector', 'neutral', 'book-open-check')}</div></div></div>
         <p class="entry__note entry__note--info">${ico('info')}Los resultados del DIA orientan la planificación. Según la Agencia de Calidad, no deben usarse para calificar a los estudiantes ni para comparar cursos.</p></article>
       ${lista.length ? lista.map(d => this.diaCardHtml(d)).join('') : (this.condOf && this.condOf(course).length ? '' : empty('bar-chart-3', 'Aún no hay informes DIA para este curso. Súbalos con "Subir informes DIA" (puede elegir varios a la vez).', 'obs'))}
       ${this.condOf ? this.condOf(course).map(d => this.condCardHtml(d)).join('') : ''}`;

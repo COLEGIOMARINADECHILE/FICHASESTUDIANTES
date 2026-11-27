@@ -1788,3 +1788,14 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 .lec-dist h4 { margin: 0 0 0.2rem; }
 .lec-row { display: grid; grid-template-columns: minmax(7rem, 11rem) 1.6rem 1fr; gap: 0.5rem; align-items: center; font-size: 0.82rem; }
 .lec-row .gs-bar { min-width: 4rem; height: 1.2rem; }
+
+.esp-medidor { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; margin: 0.8rem 0; }
+
+/* ===== Menú lateral: opción activa bien visible ===== */
+.nav__item[aria-current="page"] { background: var(--color-accent); color: var(--color-accent-ink); font-weight: 800; box-shadow: inset 5px 0 0 #fff, 0 10px 20px -10px rgb(0 0 0 / 0.75); transform: translateX(3px); }
+.nav__item[aria-current="page"] .ico { transform: scale(1.15); }
+.nav__item { transition: background-color 0.15s, color 0.15s, transform 0.15s, box-shadow 0.15s; }
+.nav__item:active { transform: scale(0.97); }
+@keyframes navDestello { 0% { box-shadow: inset 5px 0 0 #fff, 0 0 0 0 rgb(224 179 65 / 0.95); } 100% { box-shadow: inset 5px 0 0 #fff, 0 0 0 16px rgb(224 179 65 / 0); } }
+.nav__item.is-click { background: var(--color-accent); color: var(--color-accent-ink); font-weight: 800; animation: navDestello 0.75s ease-out; }
+@media (prefers-reduced-motion: reduce) { .nav__item.is-click { animation: none; } .nav__item[aria-current="page"] { transform: none; } }

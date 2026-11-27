@@ -115,6 +115,18 @@ Object.assign(app, {
     ui.modal({ title: 'Manuales de uso', icon: 'book-open', size: 'sm', hideOk: true, cancelText: 'Cerrar',
       body: `<div class="stack"><p class="modal__msg">Se abren en una pestaña nueva. Para guardarlos, use el botón "Imprimir o guardar como PDF".</p>
         <a class="btn btn--primary" href="manual/manual-completo.html" target="_blank" rel="noopener">${ico('book-open')}Manual de uso completo</a>
-        <a class="btn" href="manual/manual-ficha-traspaso.html" target="_blank" rel="noopener">${ico('file-stack')}Manual de la ficha de traspaso</a></div>` });
+        <a class="btn" href="manual/manual-ficha-traspaso.html" target="_blank" rel="noopener">${ico('file-stack')}Manual de la ficha de traspaso</a>
+        <a class="btn" href="manual/infografia-ficha-traspaso.html" target="_blank" rel="noopener">${ico('image')}Infografía de la ficha de traspaso (para imprimir)</a>
+        <a class="btn" href="manual/video-ficha-traspaso.html" target="_blank" rel="noopener">${ico('play-circle')}Video de la ficha de traspaso</a></div>` });
   }
 });
+
+// Acceso directo a los manuales desde la propia ficha de traspaso
+(() => {
+  const rt = app.renderTraspaso;
+  app.renderTraspaso = function () {
+    rt.apply(this, arguments);
+    const ra = el('traspaso-toolbar')?.querySelectorAll('.row-actions'); const last = ra && ra[ra.length - 1];
+    if (last && !last.querySelector('[data-man-btn]')) { last.insertAdjacentHTML('afterbegin', `<button class="btn" data-man-btn onclick="app.abrirManual()">${ico('book-open')}Manual y video</button>`); icons(); }
+  };
+})();

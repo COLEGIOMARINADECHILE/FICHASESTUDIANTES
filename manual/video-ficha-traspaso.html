@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video · Ficha de traspaso</title>
+<!-- Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados. -->
+<style>
+  :root { --azul:#16285a; --azul2:#0f1d44; --dorado:#e0b341; --crema:#f7f3ea; --verde:#1f7a4d; --rojo:#b42318; --amar:#facc15; --texto:#1f2937; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { background: #0b1226; color: #fff; font-family: Calibri, "Segoe UI", Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 10px; }
+  #marco { width: min(100%, calc((100vh - 120px) * 16 / 9)); aspect-ratio: 16 / 9; position: relative; overflow: hidden; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,.6); background: var(--crema); }
+  #escena { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; color: var(--texto); }
+  /* controles */
+  #ctl { width: min(100%, calc((100vh - 120px) * 16 / 9)); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  button { background: #22305f; color: #fff; border: 1px solid #3b4a7e; border-radius: 8px; padding: .45rem .8rem; font: 600 .9rem Calibri, Arial; cursor: pointer; }
+  button:hover { background: #2d3f7a; } button.on { background: var(--dorado); color: #111; border-color: var(--dorado); }
+  #barra { flex: 1; min-width: 160px; height: 12px; background: #26335f; border-radius: 99px; position: relative; cursor: pointer; }
+  #prog { height: 100%; width: 0; background: var(--dorado); border-radius: 99px; }
+  #marcas { position: absolute; inset: 0; pointer-events: none; } #marcas i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #0b1226; }
+  #tiempo { font-size: .85rem; color: #aab4d6; min-width: 5.5rem; text-align: right; }
+  /* escena base */
+  .tit { position: absolute; left: 60px; top: 38px; font: 800 20px Georgia, serif; letter-spacing: .08em; color: #a47c12; }
+  .rv { opacity: 0; transform: translateY(14px); transition: opacity .5s, transform .5s; } .rv.on { opacity: 1; transform: none; }
+  .hl { outline: 4px solid var(--amar); outline-offset: 3px; transition: outline .2s; }
+  .sub { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 70px 22px; background: linear-gradient(transparent, rgba(11,18,38,.92) 40%); color: #fff; font-size: 27px; line-height: 1.3; text-align: center; min-height: 110px; display: flex; align-items: flex-end; justify-content: center; }
+  .portada { background: linear-gradient(135deg, var(--azul2), var(--azul)); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .portada .k { letter-spacing: .25em; color: var(--dorado); font-weight: 700; font-size: 20px; }
+  .portada h1 { font: 800 92px Georgia, serif; margin: 14px 0; } .portada p { font-size: 32px; color: #d7def5; max-width: 900px; }
+  .portada .raya { width: 220px; height: 8px; background: var(--dorado); margin: 14px 0; border-radius: 4px; }
+  .app { position: absolute; left: 40px; top: 90px; right: 40px; bottom: 120px; background: #fff; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); display: flex; overflow: hidden; border: 1px solid #d9d4c5; }
+  .side { width: 250px; background: var(--azul); color: #dfe6ff; padding: 16px 12px; font-size: 17px; flex: none; }
+  .side .logo { font: 800 19px Georgia; color: #fff; margin-bottom: 14px; } .side div.it { padding: 8px 10px; border-radius: 8px; margin: 3px 0; } .side .act { background: var(--dorado); color: #111; font-weight: 700; }
+  .main { flex: 1; padding: 20px 26px; background: var(--crema); position: relative; overflow: hidden; }
+  .main h2 { font: 800 28px Georgia; color: var(--azul); margin-bottom: 10px; }
+  .card { background: #fff; border: 1px solid #ddd6c2; border-radius: 12px; padding: 14px 16px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; } .chip { padding: 3px 12px; border-radius: 99px; font-size: 15px; font-weight: 700; background: #e7ecfa; color: var(--azul); }
+  .chip.v { background: #dff3e7; color: var(--verde); } .chip.a { background: #fdf0b8; color: #6b5200; } .chip.r { background: #fde0dc; color: var(--rojo); }
+  .btn { display: inline-block; padding: 8px 16px; border-radius: 8px; background: var(--azul); color: #fff; font-weight: 700; font-size: 17px; }
+  .btn.o { background: var(--dorado); color: #111; } .btn.g { background: var(--verde); }
+  .grid { display: grid; gap: 14px; }
+  .cursos { grid-template-columns: repeat(4, 1fr); } .cursos .card { text-align: center; font-weight: 700; font-size: 20px; color: var(--azul); }
+  .stat { text-align: center; } .stat b { display: block; font: 800 40px Georgia; color: var(--azul); } .stat span { font-size: 15px; color: #555; }
+  .bar { height: 22px; border-radius: 6px; background: #e8e3d4; overflow: hidden; margin: 6px 0; } .bar i { display: block; height: 100%; width: 0; transition: width 1.2s; border-radius: 6px; }
+  .lbl { font-size: 16px; display: flex; justify-content: space-between; }
+  .ta { background: #fff; border: 2px solid #c9c2ac; border-radius: 8px; padding: 10px 12px; font-size: 17px; line-height: 1.4; min-height: 100px; white-space: pre-wrap; }
+  .guia { background: #fff8e1; border: 2px dashed var(--dorado); border-radius: 10px; padding: 10px 14px; font-size: 16px; }
+  ul.l { padding-left: 22px; font-size: 17px; line-height: 1.5; }
+  .cand { font-size: 60px; text-align: center; }
+  .final { background: linear-gradient(135deg, var(--azul2), var(--azul)); color: #fff; }
+  .ck { font-size: 30px; line-height: 1.75; } .ck div::before { content: "☐"; margin-right: 14px; color: var(--dorado); }
+  .ck div.on::before { content: "☑"; }
+  .lock { font-size: 34px; }
+</style>
+</head>
+<body>
+<div id="marco"><div id="escena"></div></div>
+<div id="ctl">
+  <button id="bPlay">▶ Reproducir</button>
+  <button id="bReinicio" title="Volver al inicio">⏮</button>
+  <div id="barra"><div id="prog"></div><div id="marcas"></div></div>
+  <span id="tiempo">0:00</span>
+  <button id="bVoz" title="Narración con voz del navegador">🔊 Narración</button>
+  <button id="bPantalla">⛶ Pantalla completa</button>
+</div>
+
+<script>
+/* Cada escena: duración (ms), título, narración (también es el subtítulo) y HTML. Los elementos .rv aparecen en data-at (ms). */
+const ESC = [
+ { d: 7000, tit: '', voz: 'Ficha de traspaso. Así entregamos cada curso al equipo del año siguiente: paso a paso, desde el ingreso hasta la entrega.', html: `
+   <div class="portada" style="position:absolute;inset:0"><img src="../img/logo-colegio.png" alt="" style="height:170px;margin-bottom:18px"><div class="k rv on">COLEGIO MARINA DE CHILE · SLEP ANDALIÉN SUR</div><h1 class="rv on" data-at="400">Ficha de traspaso</h1><div class="raya rv" data-at="900"></div><p class="rv" data-at="1300">Cómo ingresar y cómo completarla</p></div>` },
+ { d: 14000, tit: 'PASO 1 · INGRESAR', voz: 'Primero, ingresa con tu cuenta institucional. En el menú lateral, elige Ficha de traspaso y luego selecciona tu curso. Si tienes tareas pendientes, un aviso al ingresar te lleva directo a Mis tareas.', html: `
+   <div class="app"><div class="side"><div class="logo">Trayectoria Escolar</div><div class="it">Panel principal</div><div class="it">Mis acciones</div><div class="it">Registro rápido</div><div class="it">Directorio escolar</div><div class="it" id="mFicha" data-hl="2500">Ficha de traspaso</div><div class="it">Consejo de promoción</div><div class="it">Reuniones de nivel</div></div>
+   <div class="main"><h2 class="rv" data-at="3200">¿De qué curso es la ficha?</h2>
+   <div class="grid cursos"><div class="card rv" data-at="3800">6° Básico A</div><div class="card rv" data-at="4100">6° Básico B</div><div class="card rv" data-at="4400" id="cSel" data-hl="7500">7° Básico A</div><div class="card rv" data-at="4700">7° Básico B</div></div>
+   <div class="card rv" data-at="9000" style="margin-top:18px;border-left:6px solid var(--dorado)"><b>🔔 Tiene 2 puntos pendientes</b> · Fecha tope: 12 días<br><span class="btn o" style="margin-top:8px">Ir a Mis tareas</span></div></div></div>` },
+ { d: 13000, tit: 'PASO 2 · LAS PARTES DE LA FICHA', voz: 'La ficha tiene un encabezado con el profesor jefe y los datos del curso, tres gráficos de panorama, las observaciones de los docentes, trece secciones con datos de la plataforma y, al final, la conclusión con inteligencia artificial.', html: `
+   <div class="app"><div class="main" style="padding:18px 30px">
+   <div class="card rv" data-at="400" data-hl="1800"><b style="font:800 24px Georgia;color:var(--azul)">Ficha de caracterización y traspaso</b><div class="chips" style="margin-top:6px"><span class="chip v">7° Básico A</span><span class="chip">Año 2026</span><span class="chip a">21 secciones pendientes</span></div></div>
+   <div class="card rv" data-at="2300" data-hl="4200" style="margin-top:12px"><b>Panorama del curso</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><div class="lbl"><span>Rendimiento</span></div><div class="bar"><i style="background:#2f6fb3" data-w="70"></i></div><div class="bar"><i style="background:var(--amar)" data-w="45"></i></div></div><div><div class="lbl"><span>Asistencia</span></div><div class="bar"><i style="background:var(--verde)" data-w="88"></i></div><div class="bar"><i style="background:var(--rojo)" data-w="14"></i></div></div><div><div class="lbl"><span>Registros</span></div><div class="bar"><i style="background:#7c5cc4" data-w="60"></i></div><div class="bar"><i style="background:#2f6fb3" data-w="30"></i></div></div></div></div>
+   <div class="card rv" data-at="4800" data-hl="6600" style="margin-top:12px"><b>📝 Observaciones de los docentes</b> · 8 puntos</div>
+   <div class="card rv" data-at="7000" data-hl="8800" style="margin-top:12px"><b>🧾 13 secciones con datos</b> · matrícula, rendimiento, DIA, asistencia, convivencia, PIE…</div>
+   <div class="card rv" data-at="9200" data-hl="11500" style="margin-top:12px"><b>🤖 Conclusión e interpretación</b> · sugerencias para el próximo año</div></div></div>` },
+ { d: 16000, tit: 'PASO 3 · OBSERVACIONES DE LOS DOCENTES', voz: 'El profesor jefe completa ocho puntos: trayectoria, fortalezas, desafíos y estudiantes a focalizar. En cada punto, el recuadro amarillo te orienta con preguntas y un ejemplo, y puedes insertarlas como plantilla. Escribe con hechos y respeto, y marca el punto como completo.', html: `
+   <div class="app"><div class="main" style="padding:18px 30px"><h2>Trayectoria pedagógica del curso</h2>
+   <div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">
+   <div><div class="guia rv" data-at="800" data-hl="3500"><b>💡 Cómo completar este punto (si no usa IA)</b><ul class="l" style="font-size:15px"><li>¿Cómo llegó el curso en marzo?</li><li>¿Qué avances hubo y en qué asignaturas?</li><li>¿Cómo termina el curso?</li></ul><span class="btn" style="font-size:14px;padding:5px 10px">Insertar las preguntas como plantilla</span></div>
+   <div class="chips rv" data-at="5200" style="margin-top:14px"><span class="chip">Trayectoria · 2</span><span class="chip">Fortalezas · 2</span><span class="chip">Desafíos · 2</span><span class="chip">A focalizar · 2</span></div></div>
+   <div><div class="ta rv" data-at="3800" data-type="Al inicio del año el curso mostró dificultades en comprensión lectora. Con lectura diaria y trabajo en parejas mejoró la participación; termina con mejor ritmo en Lenguaje, aunque Matemática sigue descendida.|7000"></div>
+   <div style="margin-top:14px;display:flex;gap:10px;align-items:center" class="rv" data-at="12000"><span class="btn g" id="bOk" data-hl="13500">✔ Marcar como completa</span><span class="chip v" style="opacity:0" data-show="14000">Completa</span></div></div></div></div></div>` },
+ { d: 15000, tit: 'PASO 4 · SECCIONES CON DATOS', voz: 'Cada sección muestra los datos de la plataforma. Con Autocompletar se agrega un borrador ordenado en puntos. Revísalo, corrígelo y agrega causas y apoyos. Mientras no lo revises queda como por revisar; cuando lo confirmas, la marcas como completa.', html: `
+   <div class="app"><div class="main" style="padding:18px 30px"><h2>🧾 Asistencia (bajo 85 %)</h2>
+   <div class="grid" style="grid-template-columns:repeat(3,1fr)"><div class="card stat rv" data-at="300"><b>91 %</b><span>Asistencia promedio</span></div><div class="card stat rv" data-at="600"><b>4</b><span>Bajo 85 %</span></div><div class="card stat rv" data-at="900"><b>3</b><span>En riesgo de repitencia</span></div></div>
+   <div style="margin:14px 0" class="rv" data-at="2200"><span class="btn o" data-hl="4200">✨ Autocompletar con datos de la plataforma</span> <span class="chip a" style="margin-left:10px;opacity:0" data-show="5500">Por revisar</span></div>
+   <div class="ta rv" data-at="4200" data-type="• Asistencia promedio del curso: 91 %.\n• 4 estudiantes bajo 85 %:\n     • Estudiante A: 78 %\n     • Estudiante B: 82 %\nCausas: salud y traslado. Se citó a apoderados.|8500" style="min-height:140px"></div>
+   <div style="margin-top:12px;display:flex;gap:10px;align-items:center" class="rv" data-at="11000"><span class="btn g" data-hl="12500">✔ Marcar como completa</span><span class="chip v" style="opacity:0" data-show="13200">Completa</span></div></div></div>` },
+ { d: 11000, tit: 'DATOS DEL DIA Y DOMINIO LECTOR', voz: 'En la sección de DIA también aparece el Dominio Lector del curso: calidad y velocidad lectora, palabras por minuto y los estudiantes que requieren apoyo en lectura.', html: `
+   <div class="app"><div class="main" style="padding:18px 30px"><h2>📖 Dominio lector · Final 2026</h2>
+   <div class="grid" style="grid-template-columns:1fr 1fr;gap:26px"><div class="card"><b>Calidad lectora</b>
+     <div class="lbl" style="margin-top:8px"><span>Lectura fluida</span><span>73 %</span></div><div class="bar"><i style="background:var(--verde)" data-w="73" data-at="800"></i></div>
+     <div class="lbl"><span>Unidades cortas</span><span>20 %</span></div><div class="bar"><i style="background:var(--amar)" data-w="20" data-at="1400"></i></div>
+     <div class="lbl"><span>Palabra a palabra</span><span>7 %</span></div><div class="bar"><i style="background:#e0a02a" data-w="7" data-at="2000"></i></div></div>
+   <div class="grid"><div class="card stat rv" data-at="2600"><b>80</b><span>palabras por minuto (promedio)</span></div><div class="card rv" data-at="3600" style="border-left:6px solid var(--rojo)"><b>9 estudiantes</b> requieren apoyo en lectura</div></div></div></div></div>` },
+ { d: 16000, tit: 'PASO 5 · CONCLUSIÓN CON IA', voz: 'Cuando los ocho puntos de los docentes están completos, se habilita Interpretar con IA. La inteligencia artificial entrega, por sección, el hallazgo, la interpretación y qué hacer, y sugiere qué estudiantes necesitan un plan de acompañamiento: por baja asistencia, riesgo de repitencia o PAI del Decreto 67. Tú la revisas y la editas.', html: `
+   <div class="app"><div class="main" style="padding:18px 30px"><h2>🤖 Conclusión e interpretación</h2>
+   <div class="card rv" data-at="300"><span class="lock" data-lock="2600">🔒</span> Observaciones docentes: <b data-count="2600">6 de 8</b> <span class="chip" data-show="2600" style="opacity:0;margin-left:8px">8 de 8 · ¡Listo!</span></div>
+   <div style="margin:12px 0" class="rv" data-at="3000"><span class="btn o" data-hl="4200">✨ Interpretar con IA</span></div>
+   <div class="grid" style="grid-template-columns:1fr 1fr">
+     <div class="card rv" data-at="5000"><b>Hallazgo</b><br>Matemática concentra los promedios más bajos.<br><b>Interpretación</b><br>Falta de bases en resolución de problemas.<br><b>Qué hacer</b><br>Tutorías desde marzo.</div>
+     <div class="card rv" data-at="7500" style="border-left:6px solid var(--rojo)"><b>Estudiantes que requieren plan de acompañamiento</b><ul class="l" style="font-size:15px"><li>Estudiante A — baja asistencia</li><li>Estudiante B — riesgo de repitencia</li><li>Estudiante C — PAI (Decreto 67, art. 11)</li></ul></div></div>
+   <div class="chips rv" data-at="11000" style="margin-top:12px"><span class="chip v">✎ Todo es editable</span><span class="chip">10 sugerencias para el próximo año</span></div></div></div>` },
+ { d: 12000, tit: 'TRABAJO EN EQUIPO', voz: 'Gestión asigna cada punto a una o más personas. Ellas reciben un correo y un aviso al ingresar, y cada punto muestra su fecha tope con cuenta regresiva. Así varias personas completan la ficha sin pisarse.', html: `
+   <div class="app"><div class="main" style="padding:18px 30px"><h2>👥 Asignar puntos</h2>
+   <div class="card rv" data-at="400"><b>Desafíos pedagógicos</b><div class="chips" style="margin-top:8px"><span class="chip v rv" data-at="1500">Prof. jefe</span><span class="chip rv" data-at="2500">+ Docente de Matemática</span><span class="chip a rv" data-at="3500">⏳ 12 días</span></div></div>
+   <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px"><div class="card rv" data-at="5000" data-hl="7500"><b>📧 Correo de aviso</b><br><span style="font-size:15px">«Tarea pendiente: ficha de traspaso 7° Básico A»</span></div><div class="card rv" data-at="6500"><b>🔔 Aviso al ingresar</b><br><span style="font-size:15px">Todos tus pendientes juntos en <b>Mis tareas</b></span></div></div>
+   <div class="card rv" data-at="9000" style="margin-top:14px"><b>Todos los cursos:</b> avance de cada ficha (anillos) y quién tiene pendientes.</div></div></div>` },
+ { d: 13000, tit: 'PASO 6 · ENTREGA', voz: 'Para terminar, elige las sugerencias que el equipo implementará el próximo año, guarda la ficha y descárgala en PDF o como presentación con la insignia del colegio, con o sin nombres de estudiantes.', html: `
+   <div class="app"><div class="main" style="padding:18px 30px"><h2>📤 Cierre de la ficha</h2>
+   <div class="grid" style="grid-template-columns:repeat(2,1fr)"><div class="card rv" data-at="300"><span class="chip v">✔ Implementar</span> Tutorías de Matemática desde marzo</div><div class="card rv" data-at="900"><span class="chip v">✔ Implementar</span> Acuerdos de curso en la primera semana</div><div class="card rv" data-at="1500"><span class="chip">☐</span> Taller de estudio</div><div class="card rv" data-at="2100"><span class="chip v">✔ Implementar</span> Reunión temprana con familias</div></div>
+   <div style="display:flex;gap:14px;margin-top:22px;flex-wrap:wrap"><span class="btn o rv" data-at="4200" data-hl="6500">💾 Guardar ficha</span><span class="btn rv" data-at="6000" data-hl="8500">📄 PDF de la ficha</span><span class="btn rv" data-at="8500" data-hl="11000">🖥️ Presentación .pptx</span></div>
+   <p class="rv" data-at="9500" style="margin-top:20px;font-size:18px;color:#555">La presentación incluye gráficos, observaciones en tarjetas, la conclusión y las acciones elegidas.</p></div></div>` },
+ { d: 10000, tit: '', voz: 'Antes de cerrar, revisa: ocho observaciones completas, trece secciones revisadas, conclusión revisada, planes de acompañamiento y sugerencias seleccionadas. La información es confidencial. ¡Gracias!', html: `
+   <div class="final" style="position:absolute;inset:0;padding:70px 110px"><h1 style="font:800 52px Georgia;color:var(--dorado);margin-bottom:24px" class="rv on">Lista para cerrar la ficha</h1>
+   <div class="ck"><div class="rv" data-at="700" data-ck="1">8 observaciones docentes completas</div><div class="rv" data-at="1700" data-ck="1">13 secciones revisadas</div><div class="rv" data-at="2700" data-ck="1">Conclusión con IA revisada</div><div class="rv" data-at="3700" data-ck="1">Planes de acompañamiento revisados</div><div class="rv" data-at="4700" data-ck="1">Sugerencias seleccionadas</div></div>
+   <img src="../img/logo-colegio.png" alt="" style="height:90px;display:block;margin-top:24px" class="rv" data-at="6000"><p class="rv" data-at="6500" style="margin-top:14px;font-size:20px;color:#c9d3f3">Trayectoria Escolar · Información confidencial · © 2026 Leandro Bascuñán Valdebenito</p></div>` }
+];
+
+const $ = s => document.querySelector(s);
+const esc = $('#escena'), marco = $('#marco');
+let t = 0, jugando = false, ultimo = 0, actual = -1, voz = false, desde = ESC.map((e, i) => ESC.slice(0, i).reduce((a, b) => a + b.d, 0)), total = ESC.reduce((a, b) => a + b.d, 0);
+function ajustar() { esc.style.transform = `scale(${marco.clientWidth / 1280})`; }
+addEventListener('resize', ajustar); ajustar();
+$('#marcas').innerHTML = desde.slice(1).map(d => `<i style="left:${d / total * 100}%"></i>`).join('');
+
+function hablar(txt) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  if (!voz || !jugando || !txt) return;
+  const u = new SpeechSynthesisUtterance(txt); u.lang = 'es-CL';
+  const vs = speechSynthesis.getVoices(); const v = vs.find(x => /es[-_]CL/i.test(x.lang)) || vs.find(x => /es[-_](MX|US|419)/i.test(x.lang)) || vs.find(x => /^es/i.test(x.lang)); if (v) u.voice = v;
+  u.rate = 0.98; speechSynthesis.speak(u);
+}
+function montar(i) {
+  actual = i; const e = ESC[i];
+  esc.innerHTML = `${e.tit ? `<div class="tit">${e.tit}</div>` : ''}${e.html}<div class="sub"><span>${e.voz}</span></div>`;
+  esc.querySelectorAll('[data-w]').forEach(b => { b.dataset.on = ''; });
+  hablar(e.voz);
+}
+function pintar() {
+  let i = ESC.length - 1; while (i > 0 && t < desde[i]) i--;
+  if (i !== actual) montar(i);
+  const ts = t - desde[i];
+  esc.querySelectorAll('.rv[data-at]').forEach(n => n.classList.toggle('on', ts >= +n.dataset.at));
+  esc.querySelectorAll('[data-hl]').forEach(n => { const ini = n.dataset.hl; /* se resalta durante 1,6 s antes del instante indicado */ n.classList.toggle('hl', ts >= ini - 1600 && ts < +ini + 200); });
+  esc.querySelectorAll('[data-w][data-at]').forEach(n => { n.style.width = ts >= +n.dataset.at ? n.dataset.w + '%' : '0'; });
+  esc.querySelectorAll('[data-w]:not([data-at])').forEach(n => { n.style.width = ts > 1500 ? n.dataset.w + '%' : '0'; });
+  esc.querySelectorAll('[data-show]').forEach(n => { n.style.opacity = ts >= +n.dataset.show ? 1 : 0; });
+  esc.querySelectorAll('[data-lock]').forEach(n => { n.textContent = ts >= +n.dataset.lock ? '🔓' : '🔒'; });
+  esc.querySelectorAll('[data-count]').forEach(n => { n.textContent = ts >= +n.dataset.count ? '8 de 8' : '6 de 8'; });
+  esc.querySelectorAll('[data-ck]').forEach(n => n.classList.toggle('on', ts >= +n.dataset.at + 500));
+  esc.querySelectorAll('[data-type]').forEach(n => {
+    const [txt, fin] = n.dataset.type.split('|'); const ini = +n.dataset.at + 200, dur = +fin - ini; const p = Math.max(0, Math.min(1, (ts - ini) / Math.max(1, dur - ini)));
+    n.textContent = txt.slice(0, Math.floor(txt.length * Math.min(1, Math.max(0, (ts - ini) / (fin - ini)))));
+  });
+  $('#prog').style.width = (t / total * 100) + '%';
+  const s = Math.floor(t / 1000); $('#tiempo').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} / ${Math.floor(total / 60000)}:${String(Math.round(total / 1000) % 60).padStart(2, '0')}`;
+}
+function bucle(ms) { if (jugando) { t = Math.min(total, t + (ms - ultimo)); ultimo = ms; if (t >= total) { jugando = false; $('#bPlay').textContent = '↻ Ver de nuevo'; hablar(''); } pintar(); requestAnimationFrame(bucle); } }
+function play() { if (t >= total) { t = 0; actual = -1; } jugando = true; $('#bPlay').textContent = '⏸ Pausa'; ultimo = performance.now(); if (voz) hablar(ESC[Math.max(0, actual)].voz); requestAnimationFrame(bucle); }
+function pausa() { jugando = false; $('#bPlay').textContent = '▶ Reproducir'; speechSynthesis && speechSynthesis.cancel(); }
+$('#bPlay').onclick = () => jugando ? pausa() : play();
+$('#bReinicio').onclick = () => { t = 0; actual = -1; pintar(); if (jugando) hablar(ESC[0].voz); };
+$('#barra').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); t = Math.floor((e.clientX - r.left) / r.width * total); actual = -1; pintar(); if (jugando) hablar(ESC[Math.max(0, actual)].voz); };
+$('#bVoz').onclick = e => { voz = !voz; e.currentTarget.classList.toggle('on', voz); if (voz && jugando) hablar(ESC[actual].voz); else speechSynthesis && speechSynthesis.cancel(); };
+$('#bPantalla').onclick = () => { const el = document.documentElement; document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen(); };
+addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); $('#bPlay').click(); } if (e.key === 'ArrowRight') { t = Math.min(total - 1, t + 5000); actual = -1; pintar(); } if (e.key === 'ArrowLeft') { t = Math.max(0, t - 5000); actual = -1; pintar(); } });
+if (speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
+pintar();
+</script>
+</body>
+</html>

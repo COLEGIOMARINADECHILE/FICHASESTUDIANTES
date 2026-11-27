@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -188,7 +188,7 @@ Devuelve SOLO un JSON: {"resumen": "Síntesis del riesgo del curso en 4 a 6 lín
   openCoursePicker(destino) {
     const ac = State.currentUser.assignedCourses || [];
     const open = hasAccess('acceso_total') || ac.length === 0;
-    const titulo = { traspaso: 'Ficha de traspaso', dia: 'Resultados DIA' }[destino] || 'Riesgos del curso';
+    const titulo = { traspaso: 'Ficha de traspaso', dia: 'Resultados DIA y Dominio lector' }[destino] || 'Riesgos del curso';
     ui.modal({
       title: `${titulo}: elija el curso`, icon: { traspaso: 'file-stack', dia: 'bar-chart-3' }[destino] || 'shield-alert', tone: 'obs', size: 'md', hideOk: true, cancelText: 'Cerrar',
       body: `<div class="stack">${Object.entries(CYCLES).map(([ciclo, data]) => {

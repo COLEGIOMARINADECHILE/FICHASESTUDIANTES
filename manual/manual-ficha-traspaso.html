@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual de la ficha de traspaso · Trayectoria Escolar</title>
+<!-- Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados. -->
+<style>
+  :root { --azul:#16285a; --dorado:#e0b341; --suave:#eef2fa; --texto:#1f2937; --ok:#1f7a4d; --alerta:#b42318; }
+  * { box-sizing: border-box; }
+  body { font-family: Calibri, "Segoe UI", Arial, sans-serif; color: var(--texto); line-height: 1.55; margin: 0; background: #f4f1ea; }
+  .hoja { max-width: 820px; margin: 0 auto; background: #fff; padding: 2.2rem 2.6rem 3rem; }
+  .portada { text-align: center; padding: 4rem 1rem 3rem; border-bottom: 6px solid var(--dorado); margin-bottom: 2rem; page-break-after: always; }
+  .portada .logo { height: 150px; width: auto; margin-bottom: 1.2rem; }
+  .portada .k { letter-spacing: .18em; font-size: .85rem; font-weight: 700; color: var(--dorado); }
+  .portada h1 { font-size: 2.4rem; color: var(--azul); margin: .6rem 0; font-family: Georgia, serif; }
+  .portada p { font-size: 1.1rem; margin: .3rem 0; }
+  .portada .aut { margin-top: 3rem; font-size: .95rem; color: #555; }
+  h2 { color: var(--azul); font-family: Georgia, serif; font-size: 1.65rem; border-bottom: 3px solid var(--dorado); padding-bottom: .25rem; margin-top: 2.4rem; page-break-after: avoid; }
+  h3 { color: var(--azul); font-size: 1.2rem; margin: 1.5rem 0 .3rem; page-break-after: avoid; }
+  p, li { font-size: 1rem; } ul, ol { padding-left: 1.4rem; } li { margin: .2rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .93rem; page-break-inside: avoid; }
+  th, td { border: 1px solid #c9d1e0; padding: .4rem .6rem; vertical-align: top; text-align: left; }
+  th { background: var(--azul); color: #fff; } tr:nth-child(even) td { background: var(--suave); }
+  .caja { border-left: 5px solid var(--dorado); background: #fff8e1; padding: .6rem 1rem; margin: 1rem 0; border-radius: 4px; page-break-inside: avoid; }
+  .caja.ok { border-color: var(--ok); background: #e9f7ef; } .caja.alerta { border-color: var(--alerta); background: #fdecea; }
+  .caja strong:first-child { display: block; margin-bottom: .15rem; }
+  .indice { background: var(--suave); padding: 1rem 1.4rem 1rem 2.6rem; border-radius: 8px; } .indice a { color: var(--azul); text-decoration: none; }
+  .pasos { counter-reset: p; list-style: none; padding-left: 0; }
+  .pasos li { counter-increment: p; position: relative; padding-left: 2.4rem; margin: .5rem 0; }
+  .pasos li::before { content: counter(p); position: absolute; left: 0; top: 0; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--azul); color: #fff; font-weight: 700; text-align: center; line-height: 1.7rem; font-size: .9rem; }
+  .btn { display: inline-block; background: var(--azul); color: #fff; padding: .05rem .5rem; border-radius: 5px; font-size: .88rem; font-weight: 600; }
+  .menu { display: inline-block; background: #eef2fa; border: 1px solid #c9d1e0; padding: .05rem .45rem; border-radius: 5px; font-weight: 600; font-size: .92rem; }
+  .ej { background: #f6f6f6; border-left: 4px solid #999; padding: .5rem .9rem; margin: .5rem 0; font-style: italic; font-size: .95rem; page-break-inside: avoid; }
+  ul.check { padding-left: 0; } .check li { list-style: none; } .check li::before { content: "☐ "; }
+  .imprimir { position: fixed; right: 1rem; top: 1rem; background: var(--azul); color: #fff; border: 0; padding: .6rem 1rem; border-radius: 8px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  footer { margin-top: 3rem; border-top: 1px solid #ccc; padding-top: .8rem; font-size: .82rem; color: #666; text-align: center; }
+  @media print { body { background: #fff; } .hoja { padding: 0; max-width: none; } .imprimir { display: none; } h2 { page-break-before: always; } h2:first-of-type { page-break-before: auto; } @page { size: letter; margin: 18mm 16mm; } }
+  @media (max-width: 640px) { .hoja { padding: 1.2rem; } }
+</style>
+</head>
+<body>
+<button class="imprimir" onclick="window.print()">Imprimir o guardar como PDF</button>
+<div class="hoja">
+
+<div class="portada">
+  <img class="logo" src="../img/logo-colegio.png" alt="Colegio Marina de Chile">
+  <div class="k">COLEGIO MARINA DE CHILE · SLEP ANDALIÉN SUR</div>
+  <h1>Ficha de traspaso</h1>
+  <p><strong>Manual: cómo ingresar y cómo completar la ficha</strong></p>
+  <p>Entrega de cada curso al equipo del año siguiente</p>
+  <p class="aut">Plataforma creada por <strong>Leandro Bascuñán Valdebenito</strong> · © 2026. Todos los derechos reservados.<br>Información confidencial (Ley N° 21.719).</p>
+</div>
+
+<h2 id="indice">Índice</h2>
+<ol class="indice">
+  <li><a href="#a1">Para qué sirve la ficha</a></li>
+  <li><a href="#a2">Antes de empezar</a></li>
+  <li><a href="#a3">Cómo ingresar a la ficha</a></li>
+  <li><a href="#a4">Partes de la ficha</a></li>
+  <li><a href="#a5">Observaciones de los docentes (8 puntos)</a></li>
+  <li><a href="#a6">Secciones con datos de la plataforma</a></li>
+  <li><a href="#a7">Conclusión con IA, planes de acompañamiento y sugerencias</a></li>
+  <li><a href="#a8">Trabajo en equipo: asignar, avisos y fecha tope</a></li>
+  <li><a href="#a9">Guardar, PDF y presentación</a></li>
+  <li><a href="#a10">Seguimiento para el equipo de gestión</a></li>
+  <li><a href="#a11">Lista de verificación y preguntas frecuentes</a></li>
+</ol>
+
+<h2 id="a1">1. Para qué sirve la ficha</h2>
+<p>La ficha de traspaso reúne, por curso y año, lo que el próximo profesor jefe y su equipo necesitan saber: cómo llegó y cómo termina el curso, qué funciona, qué hay que trabajar, qué estudiantes requieren seguimiento y cuáles necesitan un plan de acompañamiento. Combina <strong>datos de la plataforma</strong> (notas, asistencia, convivencia, PIE, DIA, Dominio Lector) con las <strong>observaciones escritas por los docentes</strong>, y termina con una <strong>conclusión</strong> y <strong>sugerencias</strong> para el año siguiente.</p>
+
+<h2 id="a2">2. Antes de empezar</h2>
+<p>La ficha se alimenta de lo que ya está cargado. Para que quede completa, verifique (o pida al administrador):</p>
+<ul class="check">
+<li>Nómina de estudiantes del curso al día (retiros e incorporaciones con fecha).</li>
+<li>Notas finales cargadas (Directorio → curso → <em>Cargar notas</em>).</li>
+<li>Asistencia cargada.</li>
+<li>Registros de convivencia, observaciones y planes del año ingresados.</li>
+<li>Resultados DIA, Cuestionario de Condiciones y Dominio Lector subidos (si el curso los rindió; no todos los cursos tienen DIA).</li>
+<li>Profesor jefe registrado en el curso.</li>
+</ul>
+<div class="caja"><strong>Si faltan datos</strong>La ficha igual se puede completar. Las secciones sin datos muestran un aviso («sin informes», «sin notas») y se completan a mano.</div>
+
+<h2 id="a3">3. Cómo ingresar a la ficha</h2>
+<h3>Desde el menú</h3>
+<ol class="pasos">
+<li>Ingrese a la plataforma con su cuenta @andaliensur.cl.</li>
+<li>En el menú lateral presione <span class="menu">Ficha de traspaso</span>.</li>
+<li>Elija el <strong>curso</strong> en la lista que aparece. Se abre la ficha de ese curso y del año en curso.</li>
+</ol>
+<h3>Otras formas de llegar</h3>
+<ul>
+<li><strong>Desde el curso:</strong> Directorio escolar → curso → botón de la ficha de traspaso.</li>
+<li><strong>Todos los cursos:</strong> dentro de la ficha, el botón <span class="btn">Todos los cursos</span> abre la vista general con el avance de cada curso.</li>
+<li><strong>Desde el aviso al ingresar:</strong> si tiene puntos pendientes, al entrar aparece una ventana que lo lleva a <span class="menu">Mis tareas</span>: una sola página con todo lo que le asignaron, aunque sea de varios cursos.</li>
+<li><strong>Desde un correo:</strong> cuando le asignan un punto recibe un correo; ingrese a la plataforma y use el aviso.</li>
+</ul>
+<div class="caja alerta"><strong>No veo la ficha de mi curso</strong>Puede que su perfil no tenga acceso a ese curso. Pida al administrador que lo agregue en Administración → Acceso a cursos. Para completar un punto, además debe tenerlo asignado (o ser parte del equipo de gestión).</div>
+<h3>Año de la ficha</h3>
+<p>Arriba, en el campo <em>Año</em>, puede cambiar el año de la ficha. Las fichas de años cerrados quedan de solo lectura.</p>
+
+<h2 id="a4">4. Partes de la ficha</h2>
+<table>
+<tr><th>Parte</th><th>Qué contiene</th></tr>
+<tr><td>Barra superior</td><td>Todos los cursos · Volver al curso · Año · Autocompletar con datos · Interpretar con IA · PDF de la ficha · Presentación · Manual y video · Guardar ficha.</td></tr>
+<tr><td>Encabezado</td><td>Curso, año, secciones pendientes, profesor(a) jefe, profesor(a) especialista PIE (editable), número de estudiantes y asistencia promedio.</td></tr>
+<tr><td>Panorama del curso</td><td>Tres gráficos: rendimiento por asignatura, distribución de asistencia y registros por tipo.</td></tr>
+<tr><td>Avance</td><td>Anillos de avance de la ficha y de cada persona que participa.</td></tr>
+<tr><td>Observaciones de los docentes</td><td>8 puntos en 3 grupos (trayectoria, proyección, estudiantes a focalizar). Capítulo 5.</td></tr>
+<tr><td>Secciones con datos</td><td>13 secciones (matrícula, rendimiento, DIA y Dominio Lector, riesgo de repitencia, asistencia, disciplina, convivencia, socioemocional, PIE, aprendizaje, ritmo, talleres, otros). Capítulo 6.</td></tr>
+<tr><td>Conclusión e interpretación</td><td>Se genera con IA al final, cuando los docentes completaron sus 8 puntos. Capítulo 7.</td></tr>
+<tr><td>Sugerencias</td><td>10 sugerencias seleccionables y editables para el próximo año.</td></tr>
+</table>
+
+<h2 id="a5">5. Observaciones de los docentes (8 puntos)</h2>
+<p>Las completa el <strong>profesor jefe</strong> u otros docentes asignados. Hay tres grupos:</p>
+<table>
+<tr><th>Grupo</th><th>Puntos</th></tr>
+<tr><td>1. Trayectoria del curso</td><td>Trayectoria pedagógica · Trayectoria en convivencia y clima de aula</td></tr>
+<tr><td>2. Proyección para el próximo año</td><td>Fortalezas pedagógicas · Fortalezas en convivencia · Desafíos pedagógicos · Desafíos en convivencia</td></tr>
+<tr><td>3. Estudiantes a focalizar</td><td>Ámbito pedagógico · Ámbito disciplinario</td></tr>
+</table>
+<h3>Cómo completar un punto de texto</h3>
+<ol class="pasos">
+<li>Lea las <strong>preguntas guía</strong> del recuadro amarillo <em>«Cómo completar este punto (si no usa IA)»</em>. Ahí hay preguntas y un ejemplo para cada punto; también está el botón <em>¿Qué considerar?</em>.</li>
+<li>Si quiere, presione <span class="btn">Insertar las preguntas como plantilla</span>: se copian al texto y usted responde debajo de cada una.</li>
+<li>Escriba con lenguaje objetivo y respetuoso, con hechos y cifras cuando pueda. No incluya diagnósticos clínicos.</li>
+<li>Presione <span class="btn">Marcar como completa</span> al terminar. Puede <em>Reabrir</em> si necesita corregir.</li>
+</ol>
+<div class="ej">Ejemplo (trayectoria pedagógica): «Al inicio del año el curso mostró dificultades en comprensión lectora y en hábitos de trabajo autónomo. Con lectura diaria y trabajo en parejas mejoró la participación; termina con mejor ritmo en Lenguaje, aunque Matemática sigue descendida en resolución de problemas. Se cubrió el 85 % de la priorización curricular.»</div>
+<h3>Estudiantes a focalizar (ámbito pedagógico y disciplinario)</h3>
+<ol class="pasos">
+<li>Elija al estudiante en la lista desplegable.</li>
+<li>Escriba un <strong>motivo breve y el apoyo que funcionó</strong> (por ejemplo: «dificultad en lectura inicial; funcionó lectura diaria con apoyo PIE»).</li>
+<li>Presione <span class="btn">Agregar</span>. Repita con cada estudiante; el icono × quita uno.</li>
+<li>Si no hay estudiantes en ese ámbito, marque <em>«No hay estudiantes a focalizar en este ámbito»</em> y luego <em>Marcar como completa</em>.</li>
+</ol>
+<h3>Qué incluir en cada punto (resumen)</h3>
+<table>
+<tr><th>Punto</th><th>Preguntas que ayudan</th></tr>
+<tr><td>Trayectoria pedagógica</td><td>¿Cómo llegó el curso en marzo? ¿Qué avances hubo y en qué asignaturas? ¿Cómo termina? ¿Qué estrategias dieron resultado?</td></tr>
+<tr><td>Trayectoria en convivencia</td><td>¿Cómo era el clima al inicio? ¿Qué situaciones marcaron el año? ¿Cómo terminan las relaciones? ¿Qué acciones mejoraron el clima?</td></tr>
+<tr><td>Fortalezas pedagógicas</td><td>¿En qué destaca el curso? ¿Qué metodologías le resultan? ¿Qué intereses o talentos tiene?</td></tr>
+<tr><td>Fortalezas en convivencia</td><td>¿Qué valores o actitudes destacan? ¿Hay líderes positivos? ¿Cómo es la relación con las familias?</td></tr>
+<tr><td>Desafíos pedagógicos</td><td>¿Qué aprendizajes quedaron descendidos? ¿Qué hábitos reforzar? ¿Qué apoyos se recomiendan?</td></tr>
+<tr><td>Desafíos en convivencia</td><td>¿Qué situaciones prevenir? ¿Qué normas instalar desde marzo? ¿Con quién coordinar?</td></tr>
+<tr><td>Estudiantes a focalizar (pedagógico)</td><td>¿Quiénes tienen aprendizajes descendidos o riesgo de repitencia? ¿Quiénes requieren evaluación o apoyo PIE?</td></tr>
+<tr><td>Estudiantes a focalizar (disciplinario)</td><td>¿Quiénes requieren monitoreo de conducta? ¿Hubo protocolos o cartas de compromiso? ¿Qué estrategias funcionaron?</td></tr>
+</table>
+<div class="caja"><strong>Importante</strong>Los 8 puntos deben estar <em>completos</em> para habilitar la conclusión con IA (capítulo 7).</div>
+
+<h2 id="a6">6. Secciones con datos de la plataforma</h2>
+<p>Cada una de las 13 secciones muestra primero los <strong>datos automáticos</strong> (tarjetas, tablas, listas, semáforos) y debajo un campo de texto para los antecedentes del equipo.</p>
+<h3>Cómo completar una sección</h3>
+<ol class="pasos">
+<li>Revise los datos que muestra la sección.</li>
+<li>Presione <span class="btn">Autocompletar con datos de la plataforma</span> para agregar al texto un <strong>borrador ordenado en puntos</strong> (cada dato en su línea). También puede usar el botón general <span class="btn">Autocompletar con datos</span> de la barra superior, que permite elegir varias secciones a la vez.</li>
+<li>Revise y corrija el borrador. Lo autocompletado queda marcado <em>«Por revisar»</em>: la sección no se da por completa hasta que alguien confirme que revisó la información.</li>
+<li>Agregue lo que no está en la plataforma (causas, apoyos, acuerdos). Use el recuadro <em>«Cómo completar este punto»</em> si necesita orientación.</li>
+<li>Presione <span class="btn">Marcar como completa</span>.</li>
+</ol>
+<table>
+<tr><th>Sección</th><th>Qué muestra y qué agregar</th></tr>
+<tr><td>Matrícula</td><td>Matrícula inicial y actual, incorporados y retirados (con motivo). Agregue el contexto de los cambios.</td></tr>
+<tr><td>Rendimiento por asignatura</td><td>Estudiantes bajo 4,0, entre 4,0 y 5,9 y sobre 6,0, con promedio por asignatura. Agregue causas y estrategias.</td></tr>
+<tr><td>Resultados DIA y Dominio Lector</td><td>Logro por eje del DIA, Cuestionario de Condiciones y Dominio Lector (calidad y velocidad lectora, palabras por minuto, quienes requieren apoyo). Si el curso no rindió DIA, la sección lo indica.</td></tr>
+<tr><td>Riesgo de repitencia</td><td>Estudiantes que cumplen criterios (notas, asistencia, marca en ficha, plan) y sus motivos. Agregue antecedentes.</td></tr>
+<tr><td>Asistencia (bajo 85 %)</td><td>Estudiantes bajo 85 % con su porcentaje. Agregue causas y apoyos realizados.</td></tr>
+<tr><td>Disciplina</td><td>Estudiantes con protocolos, faltas graves o anotaciones negativas reiteradas. Agregue a quién monitorear.</td></tr>
+<tr><td>Convivencia escolar</td><td>Registros, protocolos, faltas, concentración en pocos estudiantes, tipos y meses más frecuentes. Tiene un botón para <em>analizar la convivencia con IA</em> (claves para organizar el curso).</td></tr>
+<tr><td>Socioemocional y económica</td><td>Estudiantes con planes o apoyos socioemocionales. Agregue dificultades que requieren apoyo.</td></tr>
+<tr><td>Estudiantes PIE</td><td>Estudiantes con planes o documentos PIE y su última actividad. Agregue última evaluación, PACI, apoyo familiar y avances.</td></tr>
+<tr><td>Dificultades que requieren evaluación</td><td>Sin datos automáticos: escriba quiénes, sin diagnóstico, deberían evaluarse.</td></tr>
+<tr><td>Ritmo de trabajo</td><td>Elija la evaluación (muy bueno, bueno, requiere apoyo) y comente cobertura curricular.</td></tr>
+<tr><td>Talleres</td><td>Acciones de los planes de curso. Agregue talleres realizados y solicitados.</td></tr>
+<tr><td>Otros antecedentes</td><td>Cualquier dato útil para el próximo equipo.</td></tr>
+</table>
+<div class="caja alerta"><strong>Validez de los datos</strong>Los datos pueden estar incompletos o desactualizados (por ejemplo, notas o inasistencias aún no cargadas). Siempre revise antes de dar una sección por completa.</div>
+
+<h2 id="a7">7. Conclusión con IA, planes de acompañamiento y sugerencias</h2>
+<h3>Cuándo se habilita</h3>
+<p>El botón <span class="btn">Interpretar con IA</span> (barra superior y al final de la ficha) se habilita cuando los <strong>8 puntos de observaciones docentes están completos</strong>. Si no, muestra cuántos faltan.</p>
+<h3>Cómo usarlo</h3>
+<ol class="pasos">
+<li>Presione <span class="btn">Interpretar con IA</span> y acepte el aviso de qué datos se envían (sin nombres, RUN ni contacto).</li>
+<li>La IA integra los datos del curso con lo escrito por los docentes y, desde cada rol profesional (docente de aula, UTP, psicopedagogo, especialista en diversidad, experto en convivencia), entrega por sección: <em>Hallazgo, Interpretación y Qué hacer</em>.</li>
+<li>Aparece la <strong>conclusión final</strong> con: conclusión general, diagnóstico breve, fortalezas, desafíos y alertas, recomendaciones, apoyos y coordinación, y <strong>estudiantes que requieren plan de acompañamiento</strong>.</li>
+<li><strong>Edite</strong> cualquier texto: haga clic sobre él, corrija y salga del campo (se guarda solo). Agregue puntos con Enter.</li>
+</ol>
+<h3>Planes de acompañamiento</h3>
+<p>La IA revisa a los estudiantes con asistencia bajo 85 %, riesgo de repitencia o antecedente de promoción con riesgo, y propone quiénes necesitan un plan, con el motivo y una acción:</p>
+<ul>
+<li><strong>Plan por baja asistencia.</strong></li>
+<li><strong>Plan por riesgo de repitencia</strong> (notas o asignaturas bajo 4,0).</li>
+<li><strong>PAI (Decreto 67, art. 11):</strong> estudiantes promovidos con el art. 11, que deben tener un plan de acompañamiento individual.</li>
+</ul>
+<div class="caja"><strong>Es una propuesta</strong>La lista usa nombres solo dentro de la plataforma (la IA recibe códigos). Revísela y ajústela con lo que conoce de cada estudiante.</div>
+<h3>10 sugerencias para el próximo año</h3>
+<p>Se muestran 10 sugerencias concretas. Marque <em>Implementar</em> en las que el equipo adoptará, edite su título y detalle, quite las que no sirvan o agregue una propia. Las seleccionadas pasan al PDF y a la presentación.</p>
+
+<h2 id="a8">8. Trabajo en equipo: asignar, avisos y fecha tope</h2>
+<h3>Asignar puntos (equipo de gestión)</h3>
+<ul>
+<li>En cada punto, elija un funcionario en <em>Asignar a…</em> y presione <span class="btn">Asignar</span>. Puede agregar <strong>más de una persona</strong> al mismo punto: lo completan entre varios.</li>
+<li>Al asignar, la persona recibe un <strong>correo</strong> y un <strong>aviso al ingresar</strong>.</li>
+<li>En <span class="menu">Todos los cursos</span> puede usar <em>Asignar observaciones docentes</em> para asignar de una vez los 8 puntos al profesor jefe de cada curso (a los cursos que tienen profesor jefe registrado como funcionario).</li>
+</ul>
+<h3>Si usted es quien completa</h3>
+<ul>
+<li>Vea sus puntos en <span class="menu">Mis tareas</span> (también al ingresar). Cada punto muestra su fecha tope con cuenta regresiva.</li>
+<li>Puede escribir sin que otros pisen su trabajo: cada sección se guarda por separado y se conserva la versión más reciente.</li>
+</ul>
+<h3>Fecha tope</h3>
+<p>El administrador fija una fecha tope general y, si hace falta, excepciones por funcionario o curso. La cuenta regresiva se ve en cada punto y en el aviso.</p>
+
+<h2 id="a9">9. Guardar, PDF y presentación</h2>
+<ul>
+<li><span class="btn">Guardar ficha</span> guarda todo. Los cambios en textos, sugerencias y conclusión también se guardan automáticamente.</li>
+<li><span class="btn">PDF de la ficha</span>: abre las opciones de descarga (PDF o Word, tamaño carta u oficio, firmas). El informe incluye gráficos, textos de los docentes, conclusión, planes de acompañamiento y sugerencias seleccionadas.</li>
+<li><span class="btn">Presentación</span>: genera un <strong>.pptx</strong> con la insignia del colegio, gráficos, las observaciones docentes en tarjetas, la conclusión en letra grande y las acciones elegidas. Pregunta si incluye <em>nombres</em> o solo cantidades. Abre en PowerPoint, Google Slides o Canva. El estilo visual lo define el administrador.</li>
+</ul>
+
+<h2 id="a10">10. Seguimiento para el equipo de gestión</h2>
+<ul>
+<li><span class="btn">Todos los cursos</span> muestra el avance de cada ficha (anillos y porcentajes), quién tiene qué pendiente y cuántos puntos están completos.</li>
+<li>Desde allí asigne puntos, avise y revise qué cursos están atrasados respecto de la fecha tope.</li>
+<li>Presione una ficha para abrirla y ayudar a completarla.</li>
+</ul>
+
+<h2 id="a11">11. Lista de verificación y preguntas frecuentes</h2>
+<h3>Lista para cerrar una ficha</h3>
+<ul class="check">
+<li>Las 8 observaciones docentes están completas.</li>
+<li>Las 13 secciones están revisadas y marcadas como completas (ninguna «Por revisar»).</li>
+<li>Se indicaron los estudiantes a focalizar (o se marcó que no hay).</li>
+<li>Se generó la conclusión con IA y se editó lo necesario.</li>
+<li>Se revisó la lista de estudiantes que requieren plan de acompañamiento.</li>
+<li>Se seleccionaron las sugerencias que el equipo implementará.</li>
+<li>Se guardó la ficha y se descargó el PDF o la presentación.</li>
+</ul>
+<table>
+<tr><th>Pregunta</th><th>Respuesta</th></tr>
+<tr><td>El botón «Interpretar con IA» está apagado</td><td>Faltan observaciones docentes por completar; la ficha indica cuántas. También puede faltar la clave de IA si dice que no está configurada.</td></tr>
+<tr><td>No puedo marcar una sección como completa</td><td>Si fue autocompletada, debe confirmar que revisó la información. Revise el texto y vuelva a intentarlo.</td></tr>
+<tr><td>El curso no tiene DIA</td><td>Es normal: no todos los cursos lo rinden. La ficha lo indica y la IA no lo interpreta.</td></tr>
+<tr><td>No puedo editar un punto</td><td>Debe estar asignado a usted (o ser equipo de gestión). Pida la asignación.</td></tr>
+<tr><td>Dos personas editan el mismo punto</td><td>Funciona: cada sección guarda la versión más reciente. Avísense para no escribir al mismo tiempo en el mismo texto.</td></tr>
+<tr><td>La ficha del año anterior no se deja editar</td><td>Los años cerrados son archivo de solo lectura.</td></tr>
+</table>
+
+<footer><img src="../img/logo-colegio.png" alt="" style="height:38px;display:block;margin:0 auto .4rem">Trayectoria Escolar · Colegio Marina de Chile · SLEP Andalién Sur · Manual de la ficha de traspaso · © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.</footer>
+</div>
+</body>
+</html>

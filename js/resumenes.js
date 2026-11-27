@@ -40,8 +40,8 @@ Object.assign(app, {
       <select class="input" aria-label="Curso" onchange="app.openDia(this.value)">${options([['', 'Todos los cursos'], ...ALL_COURSES.filter(c => cursos.includes(c)).map(c => [c, `${c}${(State.dia || []).some(d => d.course === c) ? ' ●' : ''}`])], '')}</select>
       ${this.canDia() ? `<button class="btn btn--primary" onclick="app.openDiaUpload()">${ico('upload')}Subir informes DIA</button>` : ''}</div>`;
     const sel = (k, opts, label) => fieldHtml(label, `<select class="input" onchange="State.diaFiltro.${k}=this.value; app.renderDia()"><option value="">Todos</option>${options(opts.map(o => [o, o]), f[k])}</select>`);
-    el('dia-body').innerHTML = `<article class="entry"><div class="entry__head"><div class="entry__id"><h1 class="entry__name">Resultados DIA · Todos los cursos</h1>
-        <div class="chips">${chip('Diagnóstico Integral de Aprendizajes', 'neutral')}</div></div></div>
+    el('dia-body').innerHTML = `<article class="entry"><div class="entry__head"><div class="entry__id"><h1 class="entry__name">Resultados DIA y Dominio lector · Todos los cursos</h1>
+        <div class="chips">${chip('Diagnóstico Integral de Aprendizajes', 'neutral')}${chip('Dominio lector', 'neutral', 'book-open-check')}</div></div></div>
         <p class="entry__note entry__note--info">${ico('info')}Vista general para revisar todos los cursos. Pinche "Ver curso" para el detalle (ejes, estudiantes y conclusiones). Los resultados DIA no se usan para calificar ni para comparar cursos.</p></article>
       <div class="stats stats--4">${this.ovStat(`${conInforme.size}/${cursos.length}`, 'Cursos con informes', 'obs')}${this.ovStat(lista.length, 'Informes', 'conv')}${this.ovStat(asigs.length, 'Asignaturas')}${this.ovStat(apoyo, 'Estudiantes que requieren apoyo', apoyo ? 'warn' : 'conv')}</div>
       <section class="panel"><div class="filters">${sel('anio', anios, 'Año')}${sel('asignatura', asigs, 'Asignatura')}${sel('periodo', DIA_PERIODOS, 'Periodo')}</div></section>
