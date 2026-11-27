@@ -1558,7 +1558,7 @@ window.app = {
     const email = String(f.email || '').trim().toLowerCase();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('El correo no es válido', 'error'); return false; }
     if (email && State.users.some(u => !sameId(u.id, State.editingUserId) && String(u.email || '').toLowerCase() === email)) { toast('Ese correo ya está asignado a otro funcionario', 'error'); return false; }
-    const data = { id: State.editingUserId || String(Date.now()), name: f.name.trim(), role: f.role, customRole: f.customRole || '', email, active: f.active !== false, functions: f.functions, assignedCourses: f.assignedCourses, cursosAtiende: f.cursosAtiende || [] };
+    const data = { id: State.editingUserId || String(Date.now()), name: f.name.trim(), role: f.role, customRole: f.customRole || '', email, active: f.active !== false, functions: f.functions, assignedCourses: f.assignedCourses, cursosAtiende: f.cursosAtiende || [], reemplazaA: f.reemplazaA || '', reemplazoDesde: f.reemplazaA ? (f.reemplazoDesde || '') : '', reemplazoHasta: f.reemplazaA ? (f.reemplazoHasta || '') : '', reemplazoVisible: f.reemplazaA ? f.reemplazoVisible !== false : true };
     if (pass) data.password = pass;
     else if (isNew) data.password = newId().slice(-8); // clave provisoria: se reemplaza al enviar el aviso de acceso
     await DB.save('users', data);
