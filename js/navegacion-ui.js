@@ -35,6 +35,22 @@
     return r;
   };
 
+  // Versión instalada y archivos que faltan (ayuda a detectar subidas incompletas a GitHub)
+  const ESPERADOS = { 'js/reportes.js': 'rptDatos', 'js/cargas.js': 'renderCargas', 'js/accesos.js': 'accHtml', 'js/accesos-estado.js': 'accEstadoDe', 'js/meta-entrevistas.js': 'metaExento', 'js/jefes-conteo.js': 'jcGuardar', 'js/registro-entrevistas.js': 'renderRegistroEntrevistas', 'js/historial-funcionario.js': 'hfInforme', 'js/enfermeria-rapida.js': 'quickEnfermeria', 'js/enfermeria-panel.js': 'renderEnfermeria', 'js/enfermeria-estadisticas.js': 'enfDatos', 'js/seguro-escolar.js': 'segAbrir', 'js/reportes-ppt.js': 'rptPresentacion', 'js/reemplazos.js': 'reemplazoAplicar', 'js/asistencia-rapida.js': 'renderAsistenciaRapida', 'js/asistencia-mensual.js': 'asmGuardar', 'js/lector-atencion.js': 'lecAtencionHtml', 'js/entrevistas-previas.js': 'epAbrir' };
+  const versionHtml = () => {
+    const s = document.querySelector('script[src*="js/navegacion-ui.js"]'), v = s && (s.src.match(/[?&]v=([^&]+)/) || [])[1] || '?';
+    const faltan = Object.entries(ESPERADOS).filter(([, fn]) => typeof app[fn] !== 'function').map(([f]) => f);
+    return `Versión ${esc(v)}${faltan.length ? ` · <button type="button" class="link-btn app-version__alerta" title="${esc(faltan.join(', '))}" onclick="alert('Faltan estos archivos en el servidor (súbalos a GitHub):\\n\\n${faltan.join('\\n')}')">⚠ faltan ${faltan.length} archivo(s)</button>` : ''}`;
+  };
+  const render1 = app.render;
+  app.render = function () {
+    const r = render1.apply(this, arguments);
+    try {
+      const m = document.querySelector('[data-autoria="menu"]'); if (m) { let d = document.getElementById('app-version'); if (!d) { m.insertAdjacentHTML('afterend', '<div id="app-version" class="app-version"></div>'); d = document.getElementById('app-version'); } d.innerHTML = versionHtml(); }
+    } catch (e) { /* solo informativo */ }
+    return r;
+  };
+
   const nav0 = app.navigate;
   app.navigate = function (v) {
     const prev = State.__snap;
