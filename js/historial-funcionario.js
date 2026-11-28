@@ -238,7 +238,8 @@ Object.assign(app, {
   hfDocHtml() {
     const ctx = State.export.context, r = this.REPORTS[ctx].call(this, ctx, {}), v = State.variables;
     const header = `<table class="doc-header"><tr><td class="doc-header__l"><img src="${esc(v.schoolLogo)}" alt="" crossorigin="anonymous"></td><td class="doc-header__c"><h2>COLEGIO MARINA DE CHILE</h2></td><td class="doc-header__r"><img src="${esc(v.slepLogo)}" alt="" crossorigin="anonymous"></td></tr></table>`;
-    return { r, html: `${header}<h1 class="doc-title">${r.title}</h1><div>${r.body}</div>${State.export.__sig !== false ? this.signaturesHtml() : ''}` };
+    const s = r.student ? this.current() : null, info = s ? docKv([[['Estudiante', esc(this.formatStudentName(s.name))], ['RUT', esc(s.rut)]], [['Curso', esc(s.curso)], ['Fecha', fmtDate(today())]]]) : '';
+    return { r, html: `${header}<h1 class="doc-title">${r.title}</h1>${info}<div>${r.body}</div>${State.export.__sig !== false ? this.signaturesHtml() : ''}` };
   },
   hfVer() {
     this.hfSigActual(); const { html } = this.hfDocHtml();
@@ -300,5 +301,27 @@ Object.assign(app, {
   // Modo demostración
   const dh = Demo.handle.bind(Demo);
   Demo.handle = function (action, p) { if (action === 'enviarInforme') return { enviado: p.to }; return dh(action, p); };
+})();
+
+
+// =====================================================================
+// VER ANTES DE DESCARGAR, EN TODOS LOS DOCUMENTOS
+// Cada ventana de «Opciones de descarga» (cartas, informes, planes...) ofrece «Ver en pantalla» y «Enviar por
+// correo». Una carta recién generada se muestra de inmediato para verla antes de descargarla o imprimirla.
+// =====================================================================
+Object.assign(app, {
+  /** Muestra una carta compromiso de la ficha tal como saldrá (con sus firmas) para descargarla, imprimirla o enviarla. */
+  cartaVer(id, esPie) {
+    State.export.tempCartaId = id; State.export.tempCartaIsPie = !!esPie; State.export.__sig = true;
+    this.openExportModal('single_carta'); this.hfVer();
+  }
+});
+(() => {
+  const oe = app.openExportModal;
+  app.openExportModal = function () {
+    const r = oe.apply(this, arguments), b = el('modal-body');
+    if (b && !b.querySelector('[data-hf-ver]')) b.insertAdjacentHTML('afterbegin', `<div class="subpanel hf-otras" data-hf-ver><strong>Antes de descargar:</strong> <div class="row-actions"><button type="button" class="btn btn--primary" onclick="app.hfVer()">${ico('eye')}Ver en pantalla</button><button type="button" class="btn" onclick="app.hfEnviar()">${ico('mail')}Enviar por correo</button></div></div>`);
+    icons(); return r;
+  };
 })();
 

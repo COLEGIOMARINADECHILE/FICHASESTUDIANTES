@@ -474,8 +474,9 @@ ${txtNormativoPlano()}`;
           extraRole = el('carta-extra-role').value.trim().toUpperCase();
           if (!extraName || !extraRole) { toast('Complete nombre y cargo de la firma adicional', 'error'); return false; }
         }
+        const cartaId = Date.now();
         await DB.save('interventions', {
-          id: Date.now(), studentId: s.id, studentName: s.name, date: today(), type: 'Carta Compromiso',
+          id: cartaId, studentId: s.id, studentName: s.name, date: today(), type: 'Carta Compromiso',
           professional: State.currentUser.name, professionalId: State.currentUser.id,
           background: '**DOCUMENTO OFICIAL:**\n\n' + el('carta-edit-area').value,
           isPrivate: false, sharedWith: [], agreements: [{ text: 'Firmar Carta Compromiso Familiar', progress: 'Logrado' }],
@@ -484,6 +485,8 @@ ${txtNormativoPlano()}`;
         toast('Carta generada correctamente');
         State.detailTab = 'cartas';
         this.renderStudentDetail();
+        // Se muestra la carta terminada para verla antes de descargarla o imprimirla
+        setTimeout(() => { if (this.cartaVer) this.cartaVer(cartaId, false); }, 80);
       }
     });
   }

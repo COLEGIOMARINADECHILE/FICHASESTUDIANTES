@@ -1227,9 +1227,9 @@ window.app = {
         <footer class="record__foot"><span>${ico('user')}Emitido por ${esc(c.professional)}</span>
           <span class="row-actions">${chip(...origin[c.kind])}
             ${c.kind === 'plan' ? `<button class="icon-btn" aria-label="Abrir plan" title="Abrir plan" onclick="app.editStudentPlan(${jsq(s.id)}, ${jsq(c.id)})">${ico('pencil')}</button><button class="icon-btn" aria-label="Imprimir PDF" title="Imprimir PDF" onclick="app.printStudentPlan(${jsq(c.id)})">${ico('printer')}</button>`
-              : `<button class="icon-btn" aria-label="Imprimir PDF oficial" title="Imprimir PDF oficial" onclick="app.printSingleCarta(${jsq(c.id)}, ${c.kind === 'pie'})">${ico('printer')}</button>`}
+              : `<button class="icon-btn" aria-label="Ver la carta" title="Ver la carta antes de descargarla" onclick="app.cartaVer(${jsq(c.id)}, ${c.kind === 'pie'})">${ico('eye')}</button><button class="icon-btn" aria-label="Imprimir PDF oficial" title="Imprimir PDF oficial" onclick="app.printSingleCarta(${jsq(c.id)}, ${c.kind === 'pie'})">${ico('printer')}</button>`}
             ${c.kind === 'conv' ? this.actaButtonHtml(s, c) : ''}
-            ${c.kind === 'conv' ? `<button class="icon-btn icon-btn--danger" aria-label="Eliminar carta" title="Eliminar carta" onclick="app.deleteIntervention(${jsq(c.id)})">${ico('trash-2')}</button>` : ''}
+            ${c.kind === 'conv' && (!this.cfPuedeEliminar || this.cfPuedeEliminar(c)) ? `<button class="icon-btn icon-btn--danger" aria-label="Eliminar carta" title="Eliminar carta (solo quien la creó o el autor de la plataforma)" onclick="app.deleteIntervention(${jsq(c.id)})">${ico('trash-2')}</button>` : ''}
           </span></footer>
       </article>`).join('');
     this.panel(`${this.panelHead('Documentos y cartas formales', 'folder-open', this.canUploadActas() ? `<button class="btn btn--sm" onclick="app.openActasImport({ studentId: ${jsq(s.id)} })">${ico('file-up')}Subir acta firmada (PDF)</button>` : '')}${html ? `<div class="grid-2">${html}</div>` : empty('file-warning', 'No hay cartas, reportes ni planes registrados.', 'warn')}`);
