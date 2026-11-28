@@ -192,13 +192,22 @@ Object.assign(app, {
     const meses = this.asjDiasMes(s), jm = this.asjJustPorMes(s), sinAnotar = meses.reduce((t, m) => t + m.u, 0);
     const pl = j ? Math.min(j.justificados || 0, dj) : 0, cert = Math.max(0, dj - pl);
     return `<div class="asj-detalle"><h4>${ico('calendar-check')}Días en que no asistió</h4>
-      <p class="small"><span class="asj-chip asj-chip--j">justificado (con respaldo)</span> <span class="asj-chip asj-chip--n">sin justificar</span>${sinAnotar ? ' <span class="asj-chip asj-chip--u">?</span> <span class="muted">día no anotado</span>' : ''}</p>
-      ${meses.length ? `<div class="asj-meses">${meses.map(m => `<div class="asj-mes"><strong>${MESES_NOMBRE[m.k]} <span class="muted small">(${m.tot} día${m.tot === 1 ? '' : 's'})</span></strong>${m.j.map(d => `<span class="asj-chip asj-chip--j">${d}</span>`).join('')}${m.n.map(d => `<span class="asj-chip asj-chip--n">${d}</span>`).join('')}${'<span class="asj-chip asj-chip--u" title="Día no anotado">?</span>'.repeat(m.u)}</div>`).join('')}</div>` : '<p class="muted small">No hay inasistencias por mes cargadas.</p>'}
+      <p class="small"><span class="asj-chip asj-chip--j">justificado (con respaldo)</span> <span class="asj-chip asj-chip--n">sin justificar</span>${sinAnotar ? ' <span class="asj-chip asj-chip--u">?</span> <span class="muted">día ausente sin fecha informada (toque para ver qué significa)</span>' : ''}</p>
+      ${meses.length ? `<div class="asj-meses">${meses.map(m => `<div class="asj-mes"><strong>${MESES_NOMBRE[m.k]} <span class="muted small">(${m.tot} día${m.tot === 1 ? '' : 's'})</span></strong>${m.j.map(d => `<button type="button" class="asj-chip asj-chip--j" onclick="app.asjExplica('j', ${jsq(MESES_NOMBRE[m.k])}, ${d})">${d}</button>`).join('')}${m.n.map(d => `<button type="button" class="asj-chip asj-chip--n" onclick="app.asjExplica('n', ${jsq(MESES_NOMBRE[m.k])}, ${d})">${d}</button>`).join('')}${`<button type="button" class="asj-chip asj-chip--u" onclick="app.asjExplica('u', ${jsq(MESES_NOMBRE[m.k])}, 0, ${m.tot}, ${m.j.length + m.n.length})">?</button>`.repeat(m.u)}</div>`).join('')}</div>` : '<p class="muted small">No hay inasistencias por mes cargadas.</p>'}
       <p class="small"><strong>${inas}</strong> inasistencia(s) en total = <strong>${dj}</strong> justificada(s)${cert ? ` (${pl} de la planilla y ${cert} por certificados médicos)` : ''} + <strong>${Math.max(0, inas - dj)}</strong> sin justificar.</p>
       ${jm.sinMes > 0 ? `<p class="muted small">${jm.sinMes} día(s) justificado(s) no se pudieron ubicar en un mes (sin fecha o fuera de los meses con inasistencias).</p>` : ''}
       ${meses.some(m => m.sobra) ? `<p class="muted small">En ${meses.filter(m => m.sobra).map(m => MESES_NOMBRE[m.k].toLowerCase()).join(", ")} la planilla anota más días que el total mensual cargado; se muestran los primeros hasta completar el total del mes.</p>` : ''}
       ${sinAnotar ? `<p class="muted small">Los días con «?» están contados en el total del mes, pero la planilla no anota qué día fueron.</p>` : ''}
       ${j ? `<p class="muted small">Fuente: ${esc(j.fuente)} (${fmtDate(j.actualizado)}).</p>` : ''}</div>`;
+  },
+  /** Explica qué significa un día al tocarlo (verde, rojo o «?»). */
+  asjExplica(tipo, mes, dia, total, conDia) {
+    const cfg = {
+      j: ['check-circle-2', 'conv', `${dia} de ${mes}: día justificado`, 'El estudiante faltó este día y la falta tiene respaldo (por ejemplo un certificado médico o un justificativo registrado). Cuenta como inasistencia, pero se suma a la «asistencia con días justificados».'],
+      n: ['x-circle', 'proto', `${dia} de ${mes}: día sin justificar`, 'El estudiante faltó este día y no hay respaldo registrado. Cuenta como inasistencia en la asistencia real y también en la asistencia con días justificados.'],
+      u: ['help-circle', 'warn', `Día ausente sin fecha informada (${mes})`, `En ${mes} el estudiante tiene <strong>${total} inasistencia(s)</strong> cargadas, pero solo se conoce qué día fueron <strong>${conDia}</strong>. Cada «?» es un día ausente que ya está contado en el total y se considera <strong>sin justificar</strong>, pero no se sabe en qué fecha ocurrió. Para ver la fecha, cargue la planilla de asistencia con el detalle de los días (columna Monitoreo) en «Cargas masivas → Días justificados».`]
+    }[tipo];
+    ui.modal({ title: cfg[2], icon: cfg[0], tone: cfg[1], size: 'sm', hideOk: true, cancelText: 'Entendido', body: `<p class="modal__msg">${cfg[3]}</p>` });
   },
   /** Días justificados de cada mes (planilla + certificados médicos con sus fechas), sin pasar de las inasistencias del mes. */
   asjJustPorMes(s) {

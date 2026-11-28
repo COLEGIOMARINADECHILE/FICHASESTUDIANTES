@@ -1931,3 +1931,5 @@ tr.is-sel td { background: var(--tone-warn-soft, #fff7d6); }
 .app-version{font-size:10px;opacity:.7;text-align:center;margin-top:4px}.app-version__alerta{color:#fbbf24;font-size:10px}
 .hf-vista{max-height:68vh;overflow:auto;border:1px solid var(--color-rule);border-radius:10px;background:#fff;padding:10px;margin-top:10px}.hf-doc-vista{min-width:760px}.hf-vista-acc{margin-bottom:4px}.hf-otras{margin-bottom:12px}
 .asj-chip--u{background:transparent;border:1.5px dashed #dc2626;color:#b91c1c}
+
+button.asj-chip{cursor:pointer;font:inherit}button.asj-chip:hover{filter:brightness(.95);transform:translateY(-1px)}

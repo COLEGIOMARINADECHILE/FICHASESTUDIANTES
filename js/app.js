@@ -785,7 +785,7 @@ window.app = {
     el('input-just-tipo').innerHTML = `<option value="">Ninguno</option>${options(JUSTIFICATIVO_TYPES)}`;
 
 
-    const just = (s.justificativos || []).map((j, i) => `<li class="just">${chip(`${fmtDate(j.fecha)}: ${j.tipo} (${j.dias} días)`, 'conv')}<button type="button" class="icon-btn icon-btn--sm icon-btn--danger" aria-label="Eliminar justificativo" title="Eliminar justificativo" onclick="app.deleteJustificativo(${jsq(s.id)}, ${i})">${ico('x')}</button></li>`).join('');
+    const just = (s.justificativos || []).map(j => `<li class="just">${chip(`${fmtDate(j.fecha)}: ${j.tipo} (${j.dias} días)`, 'conv')}</li>`).join('');
 
     el('detail-header').innerHTML = `
       <div class="entry__head">
