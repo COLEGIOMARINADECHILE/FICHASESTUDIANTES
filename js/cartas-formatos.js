@@ -42,7 +42,13 @@ Object.assign(app, {
     try {
       const src = State.variables.schoolLogo || 'img/logo-colegio.png';
       const img = await new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
-      const w = Math.min(700, img.naturalWidth), h = Math.round(img.naturalHeight * w / img.naturalWidth), c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+      let w = Math.min(700, img.naturalWidth), h = Math.round(img.naturalHeight * w / img.naturalWidth), c = document.createElement('canvas'); c.width = w; c.height = h; const cx = c.getContext('2d'); cx.drawImage(img, 0, 0, w, h);
+      // Se recortan los márgenes vacíos (blancos o transparentes) para que la insignia se vea del tamaño correcto
+      try {
+        const d = cx.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (d[i + 3] > 30 && !(d[i] > 238 && d[i + 1] > 238 && d[i + 2] > 238)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+        if (x1 > x0 && y1 > y0) { x0 = Math.max(0, x0 - 4); y0 = Math.max(0, y0 - 4); x1 = Math.min(w - 1, x1 + 4); y1 = Math.min(h - 1, y1 + 4); const nw = x1 - x0 + 1, nh = y1 - y0 + 1, c2 = document.createElement('canvas'); c2.width = nw; c2.height = nh; c2.getContext('2d').drawImage(c, x0, y0, nw, nh, 0, 0, nw, nh); c = c2; w = nw; h = nh; }
+      } catch (e) { /* sin recorte */ }
       const blob = await new Promise(r => c.toBlob(r, 'image/png')); State.cfLogo = { bytes: new Uint8Array(await blob.arrayBuffer()), w, h };
     } catch (e) { State.cfLogo = null; }
     return State.cfLogo;
@@ -82,7 +88,7 @@ Object.assign(app, {
       t.textContent = nuevo; t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
       // Un espacio en blanco grande (línea ____) pasa a letra normal al completarse
       const r = t.parentNode, sz = r && r.getElementsByTagNameNS(CF_W, 'sz')[0];
-      if (sz && parseInt(sz.getAttributeNS(CF_W, 'val')) > 24 && !/_{3,}/.test(nuevo)) { sz.setAttributeNS(CF_W, 'w:val', '20'); const cs = r.getElementsByTagNameNS(CF_W, 'szCs')[0]; if (cs) cs.setAttributeNS(CF_W, 'w:val', '20'); }
+      if (sz && parseInt(sz.getAttributeNS(CF_W, 'val')) > 24 && !/[_＿]{3,}/.test(nuevo)) { sz.setAttributeNS(CF_W, 'w:val', '20'); const cs = r.getElementsByTagNameNS(CF_W, 'szCs')[0]; if (cs) cs.setAttributeNS(CF_W, 'w:val', '20'); }
     });
     this._cfCambios = (this._cfCambios || 0) + 1;
     return true;
@@ -151,8 +157,10 @@ Object.assign(app, {
           // La palabra más cercana antes de la línea; si no hay, la que viene justo después («____ apoderado/a de estudiante»)
           let mejor = -1, clave = ''; CLAVES.forEach(([re, k]) => { let x, ult = -1; re.lastIndex = 0; while ((x = re.exec(antes))) ult = x.index; if (ult > mejor) { mejor = ult; clave = k; } });
           if (!clave) CLAVES.forEach(([re, k]) => { re.lastIndex = 0; const x = re.exec(despues); if (x && x.index < 3 && !clave) clave = k; });
-          const v = clave ? D[clave] : ''; if (!v) break; this.cfReemplazar(p, m[0], v);
+          // Sin dato para esta línea: se deja en blanco (marcada) y se sigue con las demás
+          const v = clave ? D[clave] : ''; this.cfReemplazar(p, m[0], v || m[0].replace(/_/g, '＿'));
         }
+        g = 0; while (g++ < 12) { const m = /＿{3,}/.exec(this.cfTextoP(p)); if (!m) break; this.cfReemplazar(p, m[0], '_'.repeat(m[0].length)); }
       });
       // 4) El nombre del estudiante del ejemplo, en el resto del documento, se cambia por el del nuevo estudiante
       if (ejemplo) ps().forEach(p => { let g = 0; while (g++ < 6 && this.cfReemplazar(p, ejemplo, D.ESTUDIANTE)); });
@@ -175,10 +183,20 @@ Object.assign(app, {
         zip.file(ruta, logo.bytes);
         let cont = b.parentNode; while (cont && !['inline', 'anchor'].includes(cont.localName)) cont = cont.parentNode; if (!cont) return;
         const ext = [...cont.getElementsByTagNameNS(NS.wp, 'extent')][0]; if (!ext) return;
-        const cx0 = parseInt(ext.getAttribute('cx')); let cx = cx0 < 800000 ? 1000000 : cx0, cy = Math.round(cx * logo.h / logo.w);
-        if (cy > 620000) { cy = 620000; cx = Math.round(cy * logo.w / logo.h); } // la insignia no debe invadir el texto
+        const cx0 = parseInt(ext.getAttribute('cx')), enEncabezado = /header/.test(parte); let cx = cx0 < 800000 ? 1000000 : cx0, cy = Math.round(cx * logo.h / logo.w);
+        const tope = enEncabezado ? 600000 : 620000; if (cy > tope) { cy = tope; cx = Math.round(cy * logo.w / logo.h); } // la insignia no debe invadir el texto
         ext.setAttribute('cx', cx); ext.setAttribute('cy', cy); [...cont.getElementsByTagNameNS(NS.a, 'ext')].forEach(e => { e.setAttribute('cx', cx); e.setAttribute('cy', cy); });
-        const ph = [...cont.getElementsByTagNameNS(NS.wp, 'positionH')][0], off = ph && [...ph.getElementsByTagNameNS(NS.wp, 'posOffset')][0]; if (off && cx !== cx0) off.textContent = String(Math.max(0, parseInt(off.textContent) + cx0 - cx));
+        // En el encabezado la insignia va en línea y a la derecha (se ve igual en Word, Google Docs y LibreOffice)
+        if (enEncabezado && cont.localName === 'anchor') {
+          const inl = doc.createElementNS(NS.wp, 'wp:inline'); ['distT', 'distB', 'distL', 'distR'].forEach(k => inl.setAttribute(k, '0'));
+          ['extent', 'docPr'].forEach(n => { const e = [...cont.getElementsByTagNameNS(NS.wp, n)][0]; if (e) inl.appendChild(e.cloneNode(true)); });
+          const g = [...cont.getElementsByTagNameNS(NS.a, 'graphic')][0]; if (g) inl.appendChild(g.cloneNode(true));
+          let p = cont.parentNode; while (p && p.localName !== 'p') p = p.parentNode;
+          cont.parentNode.replaceChild(inl, cont);
+          if (p) { const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'; let pPr = [...p.childNodes].find(n => n.localName === 'pPr'); if (!pPr) { pPr = doc.createElementNS(W, 'w:pPr'); p.insertBefore(pPr, p.firstChild); } let jc = [...pPr.childNodes].find(n => n.localName === 'jc'); if (!jc) { jc = doc.createElementNS(W, 'w:jc'); const rp = [...pPr.childNodes].find(n => n.localName === 'rPr'); pPr.insertBefore(jc, rp || null); } jc.setAttributeNS(W, 'w:val', 'right'); const ind = [...pPr.childNodes].find(n => n.localName === 'ind'); if (ind) { ind.setAttributeNS(W, 'w:firstLine', '0'); ind.setAttributeNS(W, 'w:left', '0'); } }
+          tocado = true; return;
+        }
+        const ph =[...cont.getElementsByTagNameNS(NS.wp, 'positionH')][0], off = ph && [...ph.getElementsByTagNameNS(NS.wp, 'posOffset')][0]; if (off && cx !== cx0) off.textContent = String(Math.max(0, parseInt(off.textContent) + cx0 - cx));
         tocado = true;
       });
       if (tocado) zip.file(parte, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + ser.serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, ''));
@@ -231,6 +249,7 @@ Object.assign(app, {
   /** Ver una carta ya registrada: se vuelve a completar con los datos actuales del estudiante. */
   async cfVerCarta(id) {
     const h = (State.rawInterventions || []).find(x => sameId(x.id, id)); if (!h) return;
+    if (!(h.cartaMeta && h.cartaMeta.formato)) return this.cartaVer(h.id, false); // carta creada con el generador antiguo
     const f = this.cfTodos().find(x => x.id === (h.cartaMeta && h.cartaMeta.formato)), s = State.rawStudents.find(x => sameId(x.id, h.studentId));
     if (!f || !s) return toast('No se encontró el formato de esta carta (¿se quitó el formato propio?)', 'error');
     const done = ui.busy('Preparando la carta', '');
@@ -260,7 +279,7 @@ Object.assign(app, {
   cfPendientes() {
     const out = [];
     State.rawStudents.forEach(s => (State.rawInterventions || []).forEach(() => {}));
-    (State.rawInterventions || []).filter(h => h.cartaMeta && h.cartaMeta.formato).forEach(h => { const s = State.rawStudents.find(x => sameId(x.id, h.studentId)); if (s) out.push({ h, s, firmada: !!(this.actaOf && this.actaOf(h.id)) }); });
+    (State.rawInterventions || []).filter(h => (h.cartaMeta && h.cartaMeta.formato) || this.isCarta(h)).forEach(h => { const s = State.rawStudents.find(x => sameId(x.id, h.studentId)); if (s) out.push({ h, s, firmada: !!(this.actaOf && this.actaOf(h.id)) }); });
     return out.sort((a, b) => String(b.h.date).localeCompare(String(a.h.date)));
   },
   async cfEnBlanco(id) {
