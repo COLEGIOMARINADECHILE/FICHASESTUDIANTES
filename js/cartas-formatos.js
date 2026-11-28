@@ -201,7 +201,7 @@ Object.assign(app, {
         <p class="muted small">Suba el PDF escaneado con las cartas firmadas (de a una o varias juntas). Se reconoce al estudiante, se <strong>coteja con la carta generada</strong> (estudiante, título del formato, fecha) y se le avisa de cualquier diferencia para que la revise y confirme antes de guardar. Cada carta firmada queda en la ficha del estudiante que corresponde.</p>
         <div class="row-actions">${up ? `<button class="btn btn--primary" onclick="app.openActasImport()">${ico('upload')}Subir cartas firmadas (PDF)</button>` : '<span class="muted small">Disponible para quien registra cartas.</span>'}</div></section>
       <section class="panel"><div class="panel__head"><h2><span class="rpt-n">3</span>Cartas generadas y su firma</h2><span class="chip">${pend.filter(p => !p.firmada).length} pendientes · ${pend.filter(p => p.firmada).length} firmadas</span></div>
-        ${pend.length ? `<div class="table-wrap"><table class="table table--dense"><thead><tr><th>Estudiante</th><th>Curso</th><th>Formato</th><th>Fecha</th><th>Estado</th><th class="t-actions">Carta</th></tr></thead><tbody>${pend.slice(0, 200).map(p => `<tr><td><button type="button" class="link-btn" onclick="app.openStudent(${jsq(p.s.id)})">${esc(this.formatStudentName(this.clean(p.s.name)))}</button></td><td class="small">${esc(this.courseNameOf(p.s))}</td><td class="small">${esc(p.h.type)}</td><td class="num small">${fmtDate(p.h.date)}</td><td>${p.firmada ? chip('Firmada y guardada', 'conv', 'file-check') : chip('Pendiente de firma', 'warn', 'clock')}<span class="cell-sub">Creada por ${esc(p.h.professional || '')}</span></td><td class="t-actions"><div class="row-actions"><button class="btn btn--sm" onclick="app.cfVerCarta(${jsq(p.h.id)})">${ico('eye')}Ver</button>${this.cfPuedeEliminar(p.h) ? `<button class="icon-btn icon-btn--danger" aria-label="Eliminar esta carta" title="Eliminar esta carta" onclick="app.cfEliminar(${jsq(p.h.id)})">${ico('trash-2')}</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Aún no se han generado cartas desde un formato.</p>'}</section>
+        ${pend.length ? `<div class="table-wrap"><table class="table table--dense"><thead><tr><th>Estudiante</th><th>Curso</th><th>Formato</th><th>Fecha</th><th>Estado</th><th class="t-actions">Carta</th></tr></thead><tbody>${pend.slice(0, 200).map(p => `<tr><td><button type="button" class="link-btn" onclick="app.openStudent(${jsq(p.s.id)})">${esc(this.formatStudentName(this.clean(p.s.name)))}</button></td><td class="small">${esc(this.courseNameOf(p.s))}</td><td class="small">${esc(p.h.type)}</td><td class="num small">${fmtDate(p.h.date)}</td><td>${p.firmada ? chip('Firmada y guardada', 'conv', 'file-check') : chip('Pendiente de firma', 'warn', 'clock')}<span class="cell-sub">Creada por ${esc(p.h.professional || '')}</span></td><td class="t-actions"><div class="row-actions"><button class="btn btn--sm" onclick="app.cfVerCarta(${jsq(p.h.id)})">${ico('eye')}Ver / Imprimir</button>${this.cfPuedeEliminar(p.h) ? `<button class="icon-btn" aria-label="Editar esta carta" title="Editar esta carta" onclick="app.cfEditar(${jsq(p.h.id)})">${ico('pencil')}</button><button class="icon-btn icon-btn--danger" aria-label="Eliminar esta carta" title="Eliminar esta carta" onclick="app.cfEliminar(${jsq(p.h.id)})">${ico('trash-2')}</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Aún no se han generado cartas desde un formato.</p>'}</section>
       ${admin ? `<section class="panel"><div class="panel__head"><h2><span class="rpt-n">4</span>Subir un formato propio (Word)</h2></div>
         <p class="muted small">Suba su formato de carta en Word (.docx) y quedará disponible para todos. Se completa solo: reconoce las etiquetas de las tablas (Estudiante, RUT, Curso, Profesor jefe, Apoderado, Parentesco, Teléfono, Correo, Fecha), las líneas en blanco (____) según la palabra que las precede, y las marcas <code>{{ESTUDIANTE}}</code> <code>{{RUT}}</code> <code>{{CURSO}}</code> <code>{{PROFESOR_JEFE}}</code> <code>{{APODERADO}}</code> <code>{{PARENTESCO}}</code> <code>{{TELEFONO}}</code> <code>{{CORREO}}</code> <code>{{FECHA}}</code> <code>{{ASISTENCIA}}</code>.</p>
         <div class="grid-2">${fieldHtml('Nombre del formato', '<input id="cf-nombre" class="input" placeholder="Ej: Compromiso de puntualidad">')}${fieldHtml('Archivo Word (.docx)', '<input id="cf-file" type="file" class="input" accept=".docx">')}</div>
@@ -236,6 +236,20 @@ Object.assign(app, {
     const done = ui.busy('Preparando la carta', '');
     try { this._cfCambios = 0; const bytes = await this.cfRellenar(await this.cfBytes(f), s); State.cfSalida = { f, salida: [{ s, nombre: this.cfNombreArchivo(f, s), bytes, cambios: this._cfCambios, faltan: this.cfFaltantes(s), registrada: true, texto: await this.cfTextoPlano(bytes) }], registrar: false, curso: '', actual: 0 }; done(); await this.cfMostrarVista(); }
     catch (e) { done(); notice({ type: 'error', title: 'No se pudo mostrar la carta', msg: e.message }); }
+  },
+  /** Editar el texto de una carta registrada y el nombre del apoderado (solo quien la creó o el autor). */
+  cfEditar(id) {
+    const h = (State.rawInterventions || []).find(x => sameId(x.id, id)); if (!h) return;
+    if (!this.cfPuedeEliminar(h)) return toast('Solo quien creó la carta o el autor de la plataforma puede editarla', 'error');
+    const m = h.cartaMeta || {}, txt = String(h.background || '').replace(/^\*\*DOCUMENTO OFICIAL:\*\*\s*/, '');
+    ui.modal({ title: 'Editar la carta', icon: 'pencil', size: 'lg', okText: 'Guardar cambios',
+      body: `<div class="stack">${fieldHtml('Apoderado(a)', `<input id="cf-ed-apo" class="input" value="${esc(m.apoderado || '')}">`)}${fieldHtml('Fecha', `<input id="cf-ed-fecha" type="date" class="input" value="${esc(String(h.date || '').slice(0, 10))}">`)}${fieldHtml('Texto de la carta', `<textarea id="cf-ed-txt" class="input" rows="14">${esc(txt)}</textarea>`)}<p class="muted small">Esto corrige el registro en la ficha. Para cambiar el documento Word, use «Ver / Imprimir» y descárguelo.</p></div>`,
+      onOk: async () => {
+        const t = el('cf-ed-txt').value.trim(), d = el('cf-ed-fecha').value || h.date;
+        if (!t) { toast('El texto no puede quedar vacío', 'error'); return false; }
+        await DB.patch('interventions', h.id, { background: `**DOCUMENTO OFICIAL:**\n\n${t}`, date: d, cartaMeta: { ...m, apoderado: el('cf-ed-apo').value.trim(), editada: today() } });
+        toast('Carta actualizada'); if (State.currentView === 'cartas_fmt') this.renderCartasFmt(); else this.render();
+      } });
   },
   cfEliminar(id) {
     const h = (State.rawInterventions || []).find(x => sameId(x.id, id)); if (!h) return;
@@ -282,7 +296,7 @@ Object.assign(app, {
         ${c.curso ? `<div class="cf-lista">${lista.length ? lista.map(s => `<label class="check"><input type="checkbox" ${c.sel.has(String(s.id)) ? 'checked' : ''} onchange="this.checked ? State.cf.sel.add('${esc(s.id)}') : State.cf.sel.delete('${esc(s.id)}')"><span>${esc(this.formatStudentName(s.name))}${s.asistencia ? ` <span class="muted small">· asistencia ${String(s.asistencia.real).replace('.', ',')} %</span>` : ''}</span></label>`).join('') : '<p class="muted small">Ningún estudiante cumple el criterio. Desmarque el filtro para ver todo el curso.</p>'}</div>` : ''}`;
     }
     el('cf-modal').innerHTML = `<div class="stack"><div class="segs" role="group"><button type="button" class="seg" aria-pressed="${c.modo === 'uno'}" onclick="State.cf.modo='uno'; app.cfRenderModal()">${ico('user')}Un estudiante</button><button type="button" class="seg" aria-pressed="${c.modo === 'curso'}" onclick="State.cf.modo='curso'; app.cfRenderModal()">${ico('users')}Varios de un curso</button></div>${cuerpo}
-      <label class="check"><input type="checkbox" ${c.registrar ? 'checked' : ''} onchange="State.cf.registrar=this.checked"><span><strong>Registrar la carta en la ficha de cada estudiante</strong> como «pendiente de firma» (así la carta firmada se coteja y queda vinculada)</span></label>
+      <p class="note">${ico('info')}<span>Cada carta queda <strong>guardada en la lista «Cartas generadas»</strong> y en la ficha del estudiante como «pendiente de firma», para poder verla, editarla o eliminarla después.</span></p>
       <p class="note">${ico('info')}Se descarga el Word completado (o un ZIP con varios). Revíselo, corríjalo si hace falta, imprímalo y pídale la firma al apoderado y al estudiante.</p></div>`;
     icons();
   },
@@ -294,7 +308,8 @@ Object.assign(app, {
     try {
       const base = await this.cfBytes(f), salida = [];
       for (const [i, s] of est.entries()) { el('busy-msg').textContent = `${i + 1} de ${est.length}: ${this.clean(s.name)}`; this._cfCambios = 0; const bytes = await this.cfRellenar(base, s); salida.push({ s, nombre: this.cfNombreArchivo(f, s), bytes, cambios: this._cfCambios, faltan: this.cfFaltantes(s), registrada: false, texto: await this.cfTextoPlano(bytes) }); }
-      State.cfSalida = { f, salida, registrar: c.registrar, curso: c.curso, actual: 0 };
+      await this.cfRegistrar(salida, f); // siempre queda en la lista y en la ficha (pendiente de firma)
+      State.cfSalida = { f, salida, registrar: false, curso: c.curso, actual: 0 }; if (State.currentView === 'cartas_fmt') this.renderCartasFmt();
       done(); await this.cfMostrarVista();
     } catch (e) { done(); notice({ type: 'error', title: 'No se pudieron completar las cartas', msg: e.message }); }
   },
@@ -310,7 +325,7 @@ Object.assign(app, {
         ${o.cambios ? `<p class="note">${ico('check-circle-2')}Se completaron <strong>${o.cambios}</strong> dato(s) con la información cargada del estudiante.</p>` : `<p class="note" data-tone="warn">${ico('alert-triangle')}<span><strong>No se pudo completar automáticamente</strong> este formato (no se reconocieron etiquetas ni líneas en blanco). Puede completarlo a mano en el Word.</span></p>`}
         ${o.texto && !this.cfNorm(o.texto).includes(this.cfNorm(this.clean(o.s.name).split(' ')[0])) ? `<p class="note" data-tone="warn">${ico('alert-triangle')}<span><strong>El nombre del estudiante no aparece en la carta.</strong> Este formato no tiene un espacio reconocible para el nombre: escríbalo en el Word o use las marcas {{ESTUDIANTE}} en el formato.</span></p>` : ''}
         <details class="subpanel"><summary><strong>Datos usados en la carta</strong>${o.faltan.length ? ` · faltan: ${esc(o.faltan.join(', '))}` : ''}</summary>${this.cfResumenDatos(o.s)}</details>
-        <div class="row-actions"><button type="button" class="btn btn--primary" onclick="app.cfDescargarSalida(${S.actual})">${ico('file-down')}Descargar Word${S.registrar ? ' y registrar en la ficha' : ''}</button>${multi ? `<button type="button" class="btn" onclick="app.cfDescargarSalida('todas')">${ico('files')}Descargar todas (ZIP)</button>` : ''}<button type="button" class="btn" onclick="app.cfImprimirVista()">${ico('printer')}Imprimir</button></div>
+        <div class="row-actions"><button type="button" class="btn btn--primary" onclick="app.cfDescargarSalida(${S.actual})">${ico('file-down')}Descargar Word</button>${multi ? `<button type="button" class="btn" onclick="app.cfDescargarSalida('todas')">${ico('files')}Descargar todas (ZIP)</button>` : ''}<button type="button" class="btn" onclick="app.cfImprimirVista()">${ico('printer')}Imprimir</button></div>
         <div class="cf-vista"><div class="doc" id="cf-vista-doc"><p class="muted">Preparando la vista…</p></div></div>
         <p class="muted small">Esta vista es una referencia de los datos y el texto. El Word descargado conserva exactamente el diseño del formato (encabezado, insignia, tablas y firmas).</p></div>` });
     // Vista fiel con tablas e imagen; si no se puede, se muestra el texto completado de la carta
@@ -327,10 +342,10 @@ Object.assign(app, {
   async cfDescargarSalida(cual) {
     const S = State.cfSalida; if (!S) return;
     const lista = cual === 'todas' ? S.salida : [S.salida[cual]];
-    if (S.registrar) await this.cfRegistrar(lista, S.f);
+    // (la carta ya quedó registrada al generarla)
     if (lista.length === 1) this.cfDescargar(lista[0].bytes, lista[0].nombre);
     else { await this.cfJSZip(); const zip = new JSZip(); lista.forEach(x => zip.file(x.nombre, x.bytes)); this.cfDescargar(await zip.generateAsync({ type: 'uint8array' }), `Cartas_${S.f.tipoCarta.replace(/\s+/g, '_')}_${(S.curso || 'varios').replace(/\s+/g, '_')}.zip`, 'application/zip'); }
-    toast(`${lista.length} carta(s) descargada(s)${S.registrar ? ' y registrada(s) como pendientes de firma' : ''}`);
+    toast(`${lista.length} carta(s) descargada(s)`);
     if (State.currentView === 'cartas_fmt') this.renderCartasFmt();
     if (cual !== 'todas') this.cfMostrarVista();
   },
@@ -338,7 +353,7 @@ Object.assign(app, {
   async cfRegistrar(lista, f) {
     const nuevas = lista.filter(x => !x.registrada); if (!nuevas.length) return;
     const ops = nuevas.map((o, i) => ({ col: 'interventions', id: String(Date.now() + i), merge: false, data: { id: Date.now() + i, studentId: String(o.s.id), studentName: o.s.name, date: today(), type: f.tipoCarta, professional: State.currentUser.name, professionalId: State.currentUser.id, background: `**DOCUMENTO OFICIAL:**\n\n${o.texto || `${f.tipoCarta} de ${this.clean(o.s.name)}.`}\n\n(${f.tipoCarta} generada desde el formato «${f.t}». Pendiente de firma y de subir el documento firmado.)`, cartaMeta: { formato: f.id, titulo: f.titulo || String(f.t).toUpperCase(), generada: today(), apoderado: (this.cfDatos(o.s).APODERADO || '') }, estadoCarta: 'pendiente', isPrivate: false, sharedWith: [], agreements: [] } }));
-    try { for (let i = 0; i < ops.length; i += 50) await DB.batch(ops.slice(i, i + 50)); nuevas.forEach(x => { x.registrada = true; }); }
+    try { for (let i = 0; i < ops.length; i += 50) await DB.batch(ops.slice(i, i + 50)); nuevas.forEach((x, i) => { x.registrada = true; x.recId = ops[i].data.id; }); }
     catch (e) { toast('No se pudieron registrar en las fichas: ' + e.message, 'error'); }
   },
 
