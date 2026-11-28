@@ -1,4 +1,4 @@
-﻿/*!
+/*!
  * Trayectoria Educativa — © 2026 Leandro Bascuñán Valdebenito. Todos los derechos reservados.
  * Obra protegida por la Ley N° 17.336 de Propiedad Intelectual (Chile). Prohibida su copia,
  * adaptación o distribución sin autorización escrita del autor: leandro.bascunan@andaliensur.cl
@@ -176,29 +176,42 @@ Object.assign(app, {
     if (!x.diasJustificados) return `<span class="cell-sub muted">Sin días justificados</span>`;
     const e = this.asjExactos(s);
     return `<span class="cell-sub asj-sub"><strong>${e.con}%</strong> con ${x.diasJustificados} día${x.diasJustificados === 1 ? '' : 's'} justificado${x.diasJustificados === 1 ? '' : 's'}</span>`;
-  },  /** Días de inasistencia por mes: justificados (verde) y sin justificar (rojo). */
+  },  /** Días de inasistencia de cada mes: justificados (verde), sin justificar (rojo) y días sin anotar (?). Siempre suman las inasistencias del mes. */
+  asjDiasMes(s) {
+    const pm = s.justificacion?.porMes || {}, jm = this.asjJustPorMes(s);
+    return MESES.map(k => {
+      const tot = parseInt(s.inasistenciasMensuales?.[k]) || ((pm[k]?.j.length || 0) + (pm[k]?.n.length || 0));
+      const j = (jm.dias[k] || []).slice().sort((a, b) => a - b); let n = (pm[k]?.n || []).filter(d => !j.includes(d)).sort((a, b) => a - b);
+      n = n.slice(0, Math.max(0, tot - j.length));
+      return { k, tot, j, n, u: Math.max(0, tot - j.length - n.length), sobra: Math.max(0, (pm[k]?.j.length || 0) + (pm[k]?.n.length || 0) - tot) };
+    }).filter(m => m.tot > 0);
+  },
   asjDetalleHtml(s) {
-    const j = s.justificacion; if (!j) return '';
-    const meses = MESES.filter(m => j.porMes?.[m] && (j.porMes[m].j.length || j.porMes[m].n.length));
-    return `<div class="asj-detalle"><h4>${ico('calendar-check')}Días de inasistencia: justificados y sin justificar</h4>
-      <p class="small"><span class="asj-chip asj-chip--j">justificado (con respaldo)</span> <span class="asj-chip asj-chip--n">sin justificar</span></p>
-      ${meses.length ? `<div class="asj-meses">${meses.map(m => `<div class="asj-mes"><strong>${MESES_NOMBRE[m]}</strong>${(j.porMes[m].j).map(d => `<span class="asj-chip asj-chip--j">${d}</span>`).join('')}${(j.porMes[m].n).map(d => `<span class="asj-chip asj-chip--n">${d}</span>`).join('')}</div>`).join('')}</div>` : `<p class="muted small">${j.sinDetalle ? `La planilla indica ${j.justificados} día(s) justificados sin detallar cuáles.` : 'No hay días marcados como justificados.'}</p>`}
-      ${(() => { const x = s.asistencia || {}, dj = x.diasJustificados || 0, inas = x.inasistencias || 0, pl = Math.min(j.justificados || 0, dj), cert = Math.max(0, dj - pl), listados = MESES.reduce((t, m) => t + (j.porMes?.[m] ? j.porMes[m].j.length + j.porMes[m].n.length : 0), 0);
-        return `<p class="small"><strong>${dj}</strong> día(s) justificados${cert ? ` (${pl} de la planilla y ${cert} por certificados médicos)` : ''} · <strong>${Math.max(0, inas - dj)}</strong> sin justificar · de <strong>${inas}</strong> inasistencias en total.</p>
-        ${listados && listados < inas ? `<p class="muted small">La planilla detalla los días de ${listados} de las ${inas} inasistencias; las demás se cuentan por mes pero no tienen el día anotado.</p>` : ''}
-        <p class="muted small">Fuente: ${esc(j.fuente)} (${fmtDate(j.actualizado)}).</p>`; })()}</div>`;
+    const x = s.asistencia || {}, inas = x.inasistencias || 0, dj = x.diasJustificados || 0, j = s.justificacion;
+    if (!j && !inas) return '';
+    const meses = this.asjDiasMes(s), jm = this.asjJustPorMes(s), sinAnotar = meses.reduce((t, m) => t + m.u, 0);
+    const pl = j ? Math.min(j.justificados || 0, dj) : 0, cert = Math.max(0, dj - pl);
+    return `<div class="asj-detalle"><h4>${ico('calendar-check')}Días en que no asistió</h4>
+      <p class="small"><span class="asj-chip asj-chip--j">justificado (con respaldo)</span> <span class="asj-chip asj-chip--n">sin justificar</span>${sinAnotar ? ' <span class="asj-chip asj-chip--u">?</span> <span class="muted">día no anotado</span>' : ''}</p>
+      ${meses.length ? `<div class="asj-meses">${meses.map(m => `<div class="asj-mes"><strong>${MESES_NOMBRE[m.k]} <span class="muted small">(${m.tot} día${m.tot === 1 ? '' : 's'})</span></strong>${m.j.map(d => `<span class="asj-chip asj-chip--j">${d}</span>`).join('')}${m.n.map(d => `<span class="asj-chip asj-chip--n">${d}</span>`).join('')}${'<span class="asj-chip asj-chip--u" title="Día no anotado">?</span>'.repeat(m.u)}</div>`).join('')}</div>` : '<p class="muted small">No hay inasistencias por mes cargadas.</p>'}
+      <p class="small"><strong>${inas}</strong> inasistencia(s) en total = <strong>${dj}</strong> justificada(s)${cert ? ` (${pl} de la planilla y ${cert} por certificados médicos)` : ''} + <strong>${Math.max(0, inas - dj)}</strong> sin justificar.</p>
+      ${jm.sinMes > 0 ? `<p class="muted small">${jm.sinMes} día(s) justificado(s) no se pudieron ubicar en un mes (sin fecha o fuera de los meses con inasistencias).</p>` : ''}
+      ${meses.some(m => m.sobra) ? `<p class="muted small">En ${meses.filter(m => m.sobra).map(m => MESES_NOMBRE[m.k].toLowerCase()).join(", ")} la planilla anota más días que el total mensual cargado; se muestran los primeros hasta completar el total del mes.</p>` : ''}
+      ${sinAnotar ? `<p class="muted small">Los días con «?» están contados en el total del mes, pero la planilla no anota qué día fueron.</p>` : ''}
+      ${j ? `<p class="muted small">Fuente: ${esc(j.fuente)} (${fmtDate(j.actualizado)}).</p>` : ''}</div>`;
   },
   /** Días justificados de cada mes (planilla + certificados médicos con sus fechas), sin pasar de las inasistencias del mes. */
   asjJustPorMes(s) {
-    const pm = s.justificacion?.porMes || {}, out = {}; let resto = s.asistencia?.diasJustificados || 0;
+    const pm = s.justificacion?.porMes || {}, out = {}, dias = {}; let resto = s.asistencia?.diasJustificados || 0;
     const tot = k => parseInt(s.inasistenciasMensuales?.[k]) || ((pm[k]?.j.length || 0) + (pm[k]?.n.length || 0));
-    MESES.forEach(k => { const n = Math.min(pm[k]?.j.length || 0, tot(k), resto); out[k] = n; resto -= n; });
+    MESES.forEach(k => { const n = Math.min(pm[k]?.j.length || 0, tot(k), resto); out[k] = n; dias[k] = (pm[k]?.j || []).slice(0, n); resto -= n; });
     (s.justificativos || []).filter(x => x.fuente !== 'planilla' && x.inicio).forEach(x => {
       for (let d = new Date(x.inicio + 'T12:00:00'), fin = new Date((x.termino || x.inicio) + 'T12:00:00'); d <= fin && resto > 0; d.setDate(d.getDate() + 1)) {
-        const w = d.getDay(); if (w === 0 || w === 6) continue; const k = MESES[d.getMonth() - 2]; if (k && out[k] < tot(k)) { out[k]++; resto--; }
+        const w = d.getDay(); if (w === 0 || w === 6) continue; const k = MESES[d.getMonth() - 2];
+        if (k && out[k] < tot(k) && !dias[k].includes(d.getDate())) { out[k]++; dias[k].push(d.getDate()); resto--; }
       }
     });
-    return { out, sinMes: resto };
+    return { out, dias, sinMes: resto };
   }
 });
 
@@ -207,7 +220,7 @@ Object.assign(app, {
   const rm = app.renderMonthlyAbsences;
   app.renderMonthlyAbsences = function (s) {
     rm.apply(this, arguments);
-    const box = el('monthly-absences'); if (!box || !s.justificacion) return;
+    const box = el('monthly-absences'); if (!box || !(s.justificacion || (s.asistencia && s.asistencia.inasistencias))) return;
     box.hidden = false; box.querySelector('.asj-detalle')?.remove(); box.insertAdjacentHTML('beforeend', this.asjDetalleHtml(s));
   };
   // Botón de carga en el directorio y en Administración
