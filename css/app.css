@@ -1952,3 +1952,5 @@ button.asj-chip{cursor:pointer;font:inherit}button.asj-chip:hover{filter:brightn
 #admin-content td.t-actions{white-space:normal}#admin-content td.t-actions .row-actions{flex-wrap:wrap;justify-content:flex-end;gap:6px}
 
 #admin-content table.table td .input--email{min-width:200px}
+
+.cf-vista{max-height:60vh;overflow:auto;border:1px solid var(--color-rule);border-radius:10px;background:#fff;padding:14px 18px}.cf-vista .doc{width:auto!important;max-width:760px;margin:0 auto;font-size:13px}.cf-vista table{border-collapse:collapse;width:100%}.cf-vista td,.cf-vista th{border:1px solid #cbd5e1;padding:4px 6px;vertical-align:top}.cf-vista img{max-width:160px}

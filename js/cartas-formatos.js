@@ -84,9 +84,18 @@ Object.assign(app, {
       const r = t.parentNode, sz = r && r.getElementsByTagNameNS(CF_W, 'sz')[0];
       if (sz && parseInt(sz.getAttributeNS(CF_W, 'val')) > 24 && !/_{3,}/.test(nuevo)) { sz.setAttributeNS(CF_W, 'w:val', '20'); const cs = r.getElementsByTagNameNS(CF_W, 'szCs')[0]; if (cs) cs.setAttributeNS(CF_W, 'w:val', '20'); }
     });
+    this._cfCambios = (this._cfCambios || 0) + 1;
     return true;
   },
+  /** Algunos programas guardan los .docx con «\» en las rutas internas; se normalizan para poder editarlos. */
+  async cfNormalizarZip(zip) {
+    if (!Object.keys(zip.files).some(n => n.includes('\\'))) return zip;
+    const nuevo = new JSZip();
+    for (const [n, e] of Object.entries(zip.files)) { if (!e.dir) nuevo.file(n.replace(/\\/g, '/'), await e.async('uint8array')); }
+    return nuevo;
+  },
   cfPonerCelda(tc, valor) {
+    this._cfCambios = (this._cfCambios || 0) + 1;
     const ps = [...tc.getElementsByTagNameNS(CF_W, 'p')], p = ps[0]; if (!p) return;
     const ts = [...p.getElementsByTagNameNS(CF_W, 't')];
     if (ts.length) { ts[0].textContent = valor; ts[0].setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve'); ts.slice(1).forEach(t => t.textContent = ''); }
@@ -109,7 +118,7 @@ Object.assign(app, {
   /** Completa un documento de Word (en bytes) con los datos del estudiante. Devuelve los bytes del Word listo. */
   async cfRellenar(bytes, s) {
     await this.cfJSZip();
-    const zip = await JSZip.loadAsync(bytes), D = this.cfDatos(s), parser = new DOMParser(), ser = new XMLSerializer();
+    const zip = await this.cfNormalizarZip(await JSZip.loadAsync(bytes)), D = this.cfDatos(s), parser = new DOMParser(), ser = new XMLSerializer();
     const partes = Object.keys(zip.files).filter(n => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n));
     let ejemplo = '';
     for (const nom of partes) {
@@ -208,7 +217,7 @@ Object.assign(app, {
   async cfEnBlanco(id) {
     const f = this.cfTodos().find(x => x.id === id); if (!f) return;
     const done = ui.busy('Preparando el formato', '');
-    try { await this.cfJSZip(); const zip = await JSZip.loadAsync(await this.cfBytes(f)); await this.cfCambiarInsignia(zip); this.cfDescargar(await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }), `Formato_${f.tipoCarta.replace(/\s+/g, '_')}.docx`); }
+    try { await this.cfJSZip(); const zip = await this.cfNormalizarZip(await JSZip.loadAsync(await this.cfBytes(f))); await this.cfCambiarInsignia(zip); this.cfDescargar(await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }), `Formato_${f.tipoCarta.replace(/\s+/g, '_')}.docx`); }
     catch (e) { notice({ type: 'error', title: 'No se pudo preparar el formato', msg: e.message }); } finally { done(); }
   },
 
@@ -249,16 +258,49 @@ Object.assign(app, {
     ui.close(); const done = ui.busy('Completando las cartas', `${est.length} estudiante(s)`);
     try {
       const base = await this.cfBytes(f), salida = [];
-      for (const [i, s] of est.entries()) { el('busy-msg').textContent = `${i + 1} de ${est.length}: ${this.clean(s.name)}`; salida.push({ s, nombre: this.cfNombreArchivo(f, s), bytes: await this.cfRellenar(base, s) }); }
-      if (c.registrar) {
-        const ops = salida.map((o, i) => ({ col: 'interventions', id: String(Date.now() + i), merge: false, data: { id: Date.now() + i, studentId: String(o.s.id), studentName: o.s.name, date: today(), type: f.tipoCarta, professional: State.currentUser.name, professionalId: State.currentUser.id, background: `**DOCUMENTO OFICIAL:**\n\n${f.tipoCarta} generada desde el formato «${f.t}». Pendiente de firma y de subir el documento firmado.`, cartaMeta: { formato: f.id, titulo: f.titulo || String(f.t).toUpperCase(), generada: today() }, isPrivate: false, sharedWith: [], agreements: [] } }));
-        try { for (let i = 0; i < ops.length; i += 50) await DB.batch(ops.slice(i, i + 50)); } catch (e) { toast('Las cartas se completaron, pero no se pudieron registrar en las fichas: ' + e.message, 'error'); }
-      }
-      if (salida.length === 1) this.cfDescargar(salida[0].bytes, salida[0].nombre);
-      else { const zip = new JSZip(); salida.forEach(o => zip.file(o.nombre, o.bytes)); this.cfDescargar(await zip.generateAsync({ type: 'uint8array' }), `Cartas_${f.tipoCarta.replace(/\s+/g, '_')}_${(c.curso || 'varios').replace(/\s+/g, '_')}.zip`, 'application/zip'); }
-      notice({ type: 'success', title: 'Cartas completadas', items: [`${salida.length} carta(s) descargada(s)`, c.registrar ? 'Quedaron registradas en la ficha como pendientes de firma.' : 'No se registraron en la ficha.'] });
-      if (State.currentView === 'cartas_fmt') this.renderCartasFmt();
-    } catch (e) { notice({ type: 'error', title: 'No se pudieron completar las cartas', msg: e.message }); } finally { done(); }
+      for (const [i, s] of est.entries()) { el('busy-msg').textContent = `${i + 1} de ${est.length}: ${this.clean(s.name)}`; this._cfCambios = 0; const bytes = await this.cfRellenar(base, s); salida.push({ s, nombre: this.cfNombreArchivo(f, s), bytes, cambios: this._cfCambios, faltan: this.cfFaltantes(s), registrada: false }); }
+      State.cfSalida = { f, salida, registrar: c.registrar, curso: c.curso, actual: 0 };
+      done(); await this.cfMostrarVista();
+    } catch (e) { done(); notice({ type: 'error', title: 'No se pudieron completar las cartas', msg: e.message }); }
+  },
+  /** Datos que la carta necesita y que todavía no están cargados en la ficha del estudiante. */
+  cfFaltantes(s) { const D = this.cfDatos(s), N = { RUT: 'RUN', APODERADO: 'apoderado(a)', PARENTESCO: 'parentesco', TELEFONO: 'teléfono', CORREO: 'correo', PROFESOR_JEFE: 'profesor(a) jefe' }; return Object.keys(N).filter(k => !D[k]).map(k => N[k]); },
+  /** La carta ya completada, para verla antes de descargarla (y descargarla, imprimirla o corregirla en Word). */
+  async cfMostrarVista() {
+    const S = State.cfSalida; if (!S) return; const o = S.salida[S.actual];
+    const multi = S.salida.length > 1;
+    ui.modal({ title: `Vista de la carta: ${S.f.t}`, icon: 'eye', tone: 'warn', size: 'xl', hideOk: true, cancelText: 'Cerrar',
+      body: `<div class="stack">
+        ${multi ? fieldHtml('Estudiante', `<select class="input" onchange="State.cfSalida.actual=+this.value; app.cfMostrarVista()">${S.salida.map((x, i) => `<option value="${i}" ${i === S.actual ? 'selected' : ''}>${esc(this.formatStudentName(this.clean(x.s.name)))}${x.registrada ? ' ✓' : ''}</option>`).join('')}</select>`) : `<p class="modal__msg"><strong>${esc(this.formatStudentName(this.clean(o.s.name)))}</strong> · ${esc(this.courseNameOf(o.s))}</p>`}
+        ${o.cambios ? `<p class="note">${ico('check-circle-2')}Se completaron <strong>${o.cambios}</strong> dato(s) con la información cargada del estudiante.</p>` : `<p class="note" data-tone="warn">${ico('alert-triangle')}<span><strong>No se pudo completar automáticamente</strong> este formato (no se reconocieron etiquetas ni líneas en blanco). Puede completarlo a mano en el Word.</span></p>`}
+        ${o.faltan.length ? `<p class="note">${ico('info')}Datos que no están cargados en la ficha y quedan en blanco: <strong>${esc(o.faltan.join(', '))}</strong>. Puede escribirlos en el Word.</p>` : ''}
+        <div class="row-actions"><button type="button" class="btn btn--primary" onclick="app.cfDescargarSalida(${S.actual})">${ico('file-down')}Descargar Word${S.registrar ? ' y registrar en la ficha' : ''}</button>${multi ? `<button type="button" class="btn" onclick="app.cfDescargarSalida('todas')">${ico('files')}Descargar todas (ZIP)</button>` : ''}<button type="button" class="btn" onclick="app.cfImprimirVista()">${ico('printer')}Imprimir</button></div>
+        <div class="cf-vista"><div class="doc" id="cf-vista-doc"><p class="muted">Preparando la vista…</p></div></div>
+        <p class="muted small">Esta vista es una referencia de los datos y el texto. El Word descargado conserva exactamente el diseño del formato (encabezado, insignia, tablas y firmas).</p></div>` });
+    try { const html = await this.docxToHtml(o.bytes); o.html = html; if (el('cf-vista-doc')) el('cf-vista-doc').innerHTML = html; } catch (e) { if (el('cf-vista-doc')) el('cf-vista-doc').innerHTML = `<p class="muted">No se pudo mostrar la vista previa (${esc(e.message)}). Puede descargar el Word igualmente.</p>`; }
+    icons();
+  },
+  cfImprimirVista() {
+    const o = State.cfSalida && State.cfSalida.salida[State.cfSalida.actual]; if (!o || !o.html) return toast('La vista todavía no está lista', 'error');
+    const w = window.open('', '_blank'); if (!w) return toast('El navegador bloqueó la ventana. Permita ventanas emergentes para imprimir.', 'error');
+    w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(o.nombre)}</title><style>@page{size:letter;margin:18mm}body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.35;color:#000}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px 6px;vertical-align:top}img{max-width:200px}p{margin:6px 0}</style></head><body>${o.html}<script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`); w.document.close();
+  },
+  async cfDescargarSalida(cual) {
+    const S = State.cfSalida; if (!S) return;
+    const lista = cual === 'todas' ? S.salida : [S.salida[cual]];
+    if (S.registrar) await this.cfRegistrar(lista, S.f);
+    if (lista.length === 1) this.cfDescargar(lista[0].bytes, lista[0].nombre);
+    else { await this.cfJSZip(); const zip = new JSZip(); lista.forEach(x => zip.file(x.nombre, x.bytes)); this.cfDescargar(await zip.generateAsync({ type: 'uint8array' }), `Cartas_${S.f.tipoCarta.replace(/\s+/g, '_')}_${(S.curso || 'varios').replace(/\s+/g, '_')}.zip`, 'application/zip'); }
+    toast(`${lista.length} carta(s) descargada(s)${S.registrar ? ' y registrada(s) como pendientes de firma' : ''}`);
+    if (State.currentView === 'cartas_fmt') this.renderCartasFmt();
+    if (cual !== 'todas') this.cfMostrarVista();
+  },
+  /** Deja la carta registrada en la ficha como «pendiente de firma» (una sola vez por carta). */
+  async cfRegistrar(lista, f) {
+    const nuevas = lista.filter(x => !x.registrada); if (!nuevas.length) return;
+    const ops = nuevas.map((o, i) => ({ col: 'interventions', id: String(Date.now() + i), merge: false, data: { id: Date.now() + i, studentId: String(o.s.id), studentName: o.s.name, date: today(), type: f.tipoCarta, professional: State.currentUser.name, professionalId: State.currentUser.id, background: `**DOCUMENTO OFICIAL:**\n\n${f.tipoCarta} generada desde el formato «${f.t}». Pendiente de firma y de subir el documento firmado.`, cartaMeta: { formato: f.id, titulo: f.titulo || String(f.t).toUpperCase(), generada: today() }, estadoCarta: 'pendiente', isPrivate: false, sharedWith: [], agreements: [] } }));
+    try { for (let i = 0; i < ops.length; i += 50) await DB.batch(ops.slice(i, i + 50)); nuevas.forEach(x => { x.registrada = true; }); }
+    catch (e) { toast('No se pudieron registrar en las fichas: ' + e.message, 'error'); }
   },
 
   // ---------------- FORMATOS PROPIOS ----------------

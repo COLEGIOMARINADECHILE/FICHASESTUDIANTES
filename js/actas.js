@@ -100,9 +100,12 @@ Object.assign(app, {
     return '';
   },
   /** Carta por defecto para un acta: la primera sin acta; si no hay, se registra una nueva. */
-  cartaPorDefecto(studentId, preset) {
+  cartaPorDefecto(studentId, preset, texto = '') {
     if (preset && preset.cartaId) return String(preset.cartaId);
-    const libre = this.cartasOf(studentId).find(c => !this.actaOf(c.id));
+    const libres = this.cartasOf(studentId).filter(c => !this.actaOf(c.id)), t = this.normalizarTexto(texto).toLowerCase();
+    // Si el documento dice cuál es el formato (COMPROMISO DE ASISTENCIA, REFORZAMIENTO...), se elige la carta pendiente de ese formato
+    const porTitulo = t && libres.find(c => c.cartaMeta && c.cartaMeta.titulo && t.includes(this.normalizarTexto(c.cartaMeta.titulo).toLowerCase()));
+    const libre = porTitulo || libres[0];
     return libre ? String(libre.id) : '__new';
   },
   async handleActas(files, preset = {}) {
@@ -190,7 +193,7 @@ Object.assign(app, {
     groups.forEach(g => {
       const f = g.first;
       if (f.studentId === undefined) f.studentId = a.preset.studentId ? String(a.preset.studentId) : (g.pages.find(p => p.detected)?.detected || '');
-      if (f.cartaId === undefined && f.studentId) f.cartaId = this.cartaPorDefecto(f.studentId, a.preset);
+      if (f.cartaId === undefined && f.studentId) f.cartaId = this.cartaPorDefecto(f.studentId, a.preset, g.pages.map(p => p.texto || '').join(' '));
       if (f.fechaCarta === undefined) f.fechaCarta = (g.pages.find(p => p.fechaDoc && p.fechaDoc <= today()) || {}).fechaDoc || today();
       if (f.tipoCarta === undefined) f.tipoCarta = 'Carta Compromiso';
       if (f.incluir === undefined) f.incluir = true;
@@ -415,6 +418,8 @@ Object.assign(app, {
         const nombre = `${fecha}_Acta_firmada_${this.clean(s.name).replace(/\s+/g, '_')}.pdf`;
         const up = await API.call('upload', { folderName: `${s.curso} - ${s.name}`, fileName: nombre, mimeType: 'application/pdf', base64: this.u8ToBase64(bytes) });
         await DB.save('evidences', { id: newId(), studentId: String(s.id), studentName: s.name, course: s.curso, date: fecha, type: ACTA_TIPO, cartaId: carta ? String(carta.id) : '', description: carta ? `Acta firmada de ${carta.type} del ${fmtDate(carta.date)}` : 'Acta firmada de carta de compromiso', fileName: nombre, mimeType: 'application/pdf', uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: up.fileId, url: up.url, archivado: true, paginas: g.pages.length });
+        // Una carta generada desde un formato deja de estar «pendiente de firma»
+        if (carta && carta.cartaMeta) { try { await DB.patch('interventions', carta.id, { estadoCarta: 'firmada', fechaFirma: fecha, background: String(carta.background || '').replace(/Pendiente de firma[^.]*\./i, `Firmada y guardada el ${fmtDate(fecha)}.`) }); } catch (e) { /* el acta ya quedó guardada */ } }
         ok++;
       }
       notice({ type: 'success', title: 'Actas firmadas guardadas', msg: `${ok} acta(s) quedaron en la ficha de cada estudiante, vinculadas a su carta.` });
