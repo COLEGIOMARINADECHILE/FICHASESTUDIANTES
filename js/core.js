@@ -276,7 +276,7 @@ const API = {
     if (this.demo) return Demo.handle(action, payload);
     let res;
     // Tiempo máximo de espera: si el servidor no responde, la página no queda bloqueada
-    const largas = ['ai', 'cerrarAnio', 'exportarTodo', 'restaurarTodo', 'indexarCarpeta', 'upload', 'ocrPagina', 'subirCertificado', 'convertirWord', 'exportarDocumento', 'crearDocumento', 'guardarDocumento', 'archivarDocumentos', 'import', 'batch'];
+    const largas = ['ai', 'cerrarAnio', 'exportarTodo', 'restaurarTodo', 'indexarCarpeta', 'upload', 'ocrPagina', 'subirCertificado', 'convertirWord', 'exportarDocumento', 'crearDocumento', 'guardarDocumento', 'archivarDocumentos', 'import', 'batch', 'enviarInforme'];
     const ms = largas.includes(action) ? 300000 : action === 'getAll' ? 120000 : 60000;
     const ctrl = window.AbortController ? new AbortController() : null;
     const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;

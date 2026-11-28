@@ -85,7 +85,7 @@ Object.assign(app, {
     const cuerpo = `${docKv([[['Funcionario', `${esc(name)}${prof?.customRole ? ' — ' + esc(prof.customRole) : ''}`]], [['Período', esc(periodoTxt)]], [['Total de registros', `<strong>${regs.length}</strong>`]]])}
         ${docH('Resumen por tipo de acción')}${docTable(['Tipo de acción', 'Cantidad'], Object.entries(resumen).map(([k, v]) => [esc(k), `<strong>${v}</strong>`]), 'Sin registros en el período.')}
         ${regs.length ? `<div class="doc-avoid" style="text-align:center"><img src="${app.hfDonaImg(Object.entries(resumen), regs.length)}" alt="Distribución de los registros por tipo" style="width:100%;max-width:760px"></div>` : ''}
-        ${docH('Detalle cronológico')}${docTable(cols, regs.map(r => [fmtDate(r[0]), `<strong>${esc(r[1])}</strong>`, esc(r[2]), esc(r[3]), ...(o.detalle === 'sin' ? [] : [esc(r[4])])]), 'No se registran acciones en el período seleccionado.')}
+        ${docH('Detalle cronológico')}${app.hfTablaPartida(cols, regs.map(r => [fmtDate(r[0]), `<strong>${esc(r[1])}</strong>`, esc(r[2]), esc(r[3]), ...(o.detalle === 'sin' ? [] : [esc(r[4])])]), o.detalle === 'sin' ? [12, 24, 40, 24] : [9, 16, 22, 8, 45], r => { const t = x => String(x).replace(/<[^>]+>/g, '').length; return Math.max(1, Math.ceil(t(r[1]) / 15), Math.ceil(t(r[2]) / 22), r[4] !== undefined ? Math.ceil(t(r[4]) / 48) : 1); })}
         ${reservados.n && !o.privadas ? `<p class="doc-muted">${reservados.n} registro(s) confidencial(es) con el detalle reservado.</p>` : ''}`;
     return { name, nomPer, cuerpo, total: regs.length, prof };
   },
@@ -218,3 +218,76 @@ Object.assign(app, {
     } catch (e) { return h; }
   };
 })();
+
+// =====================================================================
+// VER EL INFORME EN PANTALLA, IMPRIMIRLO O ENVIARLO POR CORREO (sin tener que descargarlo)
+// Y tablas que no se cortan al pasar de una hoja a otra: el detalle se arma en bloques que se mueven completos.
+// =====================================================================
+Object.assign(app, {
+  /** Tabla en bloques de filas que no se parten entre hojas (columnas de ancho fijo para que alineen). */
+  hfTablaPartida(cols, rows, anchos, lineasDe) {
+    const MAX = 20, chunks = []; let cur = [], n = 0;
+    rows.forEach(r => { const l = lineasDe(r); if (cur.length && n + l > MAX) { chunks.push(cur); cur = []; n = 0; } cur.push(r); n += l; });
+    if (cur.length) chunks.push(cur);
+    if (!chunks.length) return docTable(cols, [], 'No se registran acciones en el período seleccionado.');
+    const cg = `<colgroup>${anchos.map(a => `<col style="width:${a}%">`).join('')}</colgroup>`;
+    return chunks.map(ch => `<div class="doc-avoid"><table class="doc-table hf-fix" style="table-layout:fixed;width:100%;margin:0">${cg}<thead><tr>${cols.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${ch.map(r => `<tr>${r.map(x => `<td style="word-break:break-word;overflow-wrap:anywhere">${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`).join('');
+  },
+  hfSigActual() { const c = el('export-sig'); if (c) State.export.__sig = c.checked; return State.export.__sig !== false; },
+  /** El documento tal como saldrá (logos, título, cuerpo y firmas). */
+  hfDocHtml() {
+    const ctx = State.export.context, r = this.REPORTS[ctx].call(this, ctx, {}), v = State.variables;
+    const header = `<table class="doc-header"><tr><td class="doc-header__l"><img src="${esc(v.schoolLogo)}" alt="" crossorigin="anonymous"></td><td class="doc-header__c"><h2>COLEGIO MARINA DE CHILE</h2></td><td class="doc-header__r"><img src="${esc(v.slepLogo)}" alt="" crossorigin="anonymous"></td></tr></table>`;
+    return { r, html: `${header}<h1 class="doc-title">${r.title}</h1><div>${r.body}</div>${State.export.__sig !== false ? this.signaturesHtml() : ''}` };
+  },
+  hfVer() {
+    this.hfSigActual(); const { html } = this.hfDocHtml();
+    ui.modal({ title: 'Vista del informe', icon: 'eye', size: 'xl', hideOk: true, cancelText: 'Cerrar',
+      body: `<div class="row-actions hf-vista-acc"><button type="button" class="btn btn--primary" onclick="app.hfDescargarDesdeVista()">${ico('file-down')}Descargar PDF</button><button type="button" class="btn" onclick="app.hfImprimirVista()">${ico('printer')}Imprimir</button><button type="button" class="btn" onclick="app.hfEnviar()">${ico('mail')}Enviar por correo</button></div><div class="hf-vista"><div class="doc hf-doc-vista">${html}</div></div>` });
+  },
+  hfDescargarDesdeVista() { ui.close(); this.executeExport({ includeSig: State.export.__sig !== false }); },
+  hfImprimirVista() {
+    const { html } = this.hfDocHtml(), w = window.open('', '_blank'); if (!w) return toast('El navegador bloqueó la ventana. Permita ventanas emergentes para imprimir.', 'error');
+    const css = new URL('css/app.css', location.href).href;
+    w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe</title><link rel="stylesheet" href="${css}"><style>@page{size:letter landscape;margin:12mm}body{background:#fff;margin:0}.doc{width:auto!important;padding:0!important}tr,.doc-avoid{page-break-inside:avoid}</style></head><body><div class="doc">${html}</div><script>window.onload=()=>setTimeout(()=>window.print(),700)<\/script></body></html>`);
+    w.document.close();
+  },
+  hfEnviar() {
+    this.hfSigActual();
+    ui.modal({ title: 'Enviar el informe por correo', icon: 'mail', size: 'sm', okText: 'Enviar',
+      body: `<div class="stack"><p class="modal__msg">Se envía el PDF como archivo adjunto a un correo institucional.</p>${fieldHtml('Correo de destino', `<input type="email" id="hf-mail" class="input" value="${esc(State.currentUser.email || '')}" placeholder="nombre.apellido@${this.domain()}">`)}<p class="note">${ico('shield-check')}Solo se puede enviar a correos @${esc(this.domain())}. El informe puede tener información confidencial de estudiantes: no lo reenvíe.</p></div>`,
+      onOk: () => this.hfEnviarAhora(el('hf-mail').value.trim().toLowerCase()) });
+  },
+  async hfPdfBase64() {
+    const { r, html } = this.hfDocHtml(), size = State.export.size || 'letter', paperW = size === 'legal' ? 355.6 : 279.4, widthPx = Math.round((paperW - 30) * (96 / 25.4));
+    const host = document.createElement('div'); host.className = 'doc-host'; host.innerHTML = `<div id="capture-mail" class="doc" style="width:${widthPx}px">${html}<div class="doc-pad"></div></div>`;
+    document.body.appendChild(host); document.documentElement.classList.add('is-exporting');
+    try {
+      await Promise.all(Array.from(host.querySelectorAll('img')).map(img => (img.complete && img.naturalHeight) ? null : new Promise(res => { img.onload = img.onerror = res; setTimeout(res, 4000); })));
+      const uri = await html2pdf().set({ margin: [15, 15, 15, 15], filename: r.filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 1.6, useCORS: true, letterRendering: true, backgroundColor: cssVar('--doc-paper') || null, width: widthPx, windowWidth: widthPx, scrollX: 0, scrollY: 0, x: 0, y: 0 }, jsPDF: { unit: 'mm', format: size, orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['.doc-avoid', 'tr', 'h4'] } }).from(host.firstChild).outputPdf('datauristring');
+      return { base64: String(uri).split(',')[1], filename: r.filename, titulo: r.title };
+    } finally { host.remove(); document.documentElement.classList.remove('is-exporting'); }
+  },
+  async hfEnviarAhora(to) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { toast('Escriba un correo válido', 'error'); return false; }
+    if (!window.html2pdf) { toast('No se pudo cargar el generador de PDF. Revise su conexión.', 'error'); return false; }
+    const done = ui.busy('Enviando el informe', 'Preparando el PDF y enviándolo...');
+    try { const p = await this.hfPdfBase64(); const out = await API.call('enviarInforme', { to, fileName: p.filename, base64: p.base64, subject: `${p.titulo} · ${today()}` }); notice({ type: 'success', title: 'Informe enviado', msg: `Se envió a ${out.enviado || to}.` }); }
+    catch (e) { notice({ type: 'error', title: 'No se pudo enviar el informe', msg: e.message }); }
+    finally { done(); }
+  }
+});
+
+(() => {
+  // Botones «Ver en pantalla» y «Enviar por correo» dentro de las opciones de descarga del informe
+  const ae = app.hfAbrirExport;
+  app.hfAbrirExport = function () {
+    const r = ae.apply(this, arguments), b = el('modal-body');
+    if (b && !b.querySelector('[data-hf-ver]')) b.insertAdjacentHTML('afterbegin', `<div class="subpanel hf-otras" data-hf-ver><strong>Sin descargar:</strong> <div class="row-actions"><button type="button" class="btn btn--primary" onclick="app.hfVer()">${ico('eye')}Ver en pantalla</button><button type="button" class="btn" onclick="app.hfEnviar()">${ico('mail')}Enviar por correo</button></div></div>`);
+    return r;
+  };
+  // Modo demostración
+  const dh = Demo.handle.bind(Demo);
+  Demo.handle = function (action, p) { if (action === 'enviarInforme') return { enviado: p.to }; return dh(action, p); };
+})();
+
