@@ -312,6 +312,7 @@ Object.assign(app, {
 Object.assign(app, {
   /** Muestra una carta compromiso de la ficha tal como saldrá (con sus firmas) para descargarla, imprimirla o enviarla. */
   cartaVer(id, esPie) {
+    const hc = (State.rawInterventions || []).find(x => sameId(x.id, id)); if (hc && hc.studentId) State.selectedStudentId = String(hc.studentId); // los datos del estudiante y las firmas salen de la carta
     State.export.tempCartaId = id; State.export.tempCartaIsPie = !!esPie; State.export.__sig = true;
     this.openExportModal('single_carta'); this.hfVer();
   }

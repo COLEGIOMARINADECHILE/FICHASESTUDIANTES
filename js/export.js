@@ -171,7 +171,9 @@ Object.assign(app, {
       if (!found && ex.tempCartaIsPie) {
         State.rawInclusionReports.forEach(r => (r.reportesFamilia || []).forEach(rf => { if (sameId(rf.id, ex.tempCartaId)) found = { type: rf.tipoDocumento || 'Documento PIE', background: rf.contenido || '' }; }));
       }
-      return { filename: 'Documento_Oficial.pdf', title: String(found?.type || 'DOCUMENTO DE COMPROMISO').toUpperCase(), student: true, body: `<div class="doc-pre doc-letter">${esc(String(found?.background || '').replace(/\*\*/g, '').replace(/DOCUMENTO OFICIAL:/g, '').trim())}</div>`, normative: true };
+      const acta = found && found.id && app.actaOf ? app.actaOf(found.id) : null, firmada = !!acta || found?.estadoCarta === 'firmada';
+      const datos = found && found.id ? docKv([[['Documento', esc(found.type || '')], ['Fecha', fmtDate(found.date)]], [['Registrado por', esc(found.professional || '-')], ['Estado', firmada ? 'Firmada' + (acta ? ' · acta escaneada guardada en la ficha' : '') : 'Pendiente de firma']]]) : '';
+      return { filename: 'Documento_Oficial.pdf', title: String(found?.type || 'DOCUMENTO DE COMPROMISO').toUpperCase(), student: true, body: `${datos}<div class="doc-pre doc-letter">${esc(String(found?.background || '').replace(/\*\*/g, '').replace(/DOCUMENTO OFICIAL:/g, '').trim())}</div>`, normative: true };
     },
     protocolo_informe() {
       const r = State.rawInterventions.find(i => sameId(i.id, State.export.tempIntId));
