@@ -18,25 +18,31 @@ const HF_TIPOS = [['entrevistas', 'Entrevistas e intervenciones'], ['anotaciones
 
 Object.assign(app, {
   gsPdfGestion(uid) { this.hfAbrir(uid); },
+  /** «Reportes funcionario» del menú: elegir al funcionario y el período, y obtener el informe de gestión completo. */
+  openStaffReportModal() { this.hfAbrir(null); },
   hfAbrir(uid) {
-    const u = State.users.find(x => sameId(x.id, uid)); if (!u) return;
+    const selector = !uid, todosRep = hasAccess('ver_todos_reportes'), gente = State.users.filter(x => !x.eliminado && (todosRep || sameId(x.id, State.currentUser.id))).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const u = selector ? State.currentUser : State.users.find(x => sameId(x.id, uid)); if (!u) return;
     const per = this.gsPeriodo(), puedeConf = hasAccess('gestionar_protocolos') || hasAccess('acceso_total');
-    State.hf = { uid: String(uid) };
+    State.hf = { uid: selector ? '' : String(uid) };
     ui.modal({ title: 'Informe de gestión del funcionario', icon: 'file-text', size: 'md', okText: 'Generar PDF',
-      body: `<div class="stack"><p class="modal__msg"><strong>${esc(u.name)}</strong>${u.customRole ? ` · ${esc(u.customRole)}` : ''}</p>
+      body: `<div class="stack">${selector ? fieldHtml('Funcionario', `<select id="hf-uid" class="input">${gente.map(x => `<option value="${esc(x.id)}" ${sameId(x.id, State.currentUser.id) ? 'selected' : ''}>${esc(x.name)}${x.customRole ? ' · ' + esc(x.customRole) : ''}</option>`).join('')}</select>`) : `<p class="modal__msg"><strong>${esc(u.name)}</strong>${u.customRole ? `  · ${esc(u.customRole)}` : ''}</p>`}
         <div class="grid-2">
-          ${fieldHtml('Período', `<select id="hf-per" class="input" onchange="el('hf-mes-w').hidden=this.value!=='mes'; el('hf-anio-w').hidden=this.value!=='anio'"><option value="pantalla">El de la pantalla (${esc(this.gsPeriodoTxt(per))})</option><option value="todo">Todo el historial</option><option value="anio">Un año</option><option value="mes">Un mes</option></select>`)}
-          <div id="hf-anio-w" hidden>${fieldHtml('Año', `<input type="number" id="hf-anio" class="input num" min="2020" max="2100" value="${today().slice(0, 4)}">`)}</div>
+          ${fieldHtml('Período', `<select id="hf-per" class="input" onchange="el('hf-mes-w').hidden=this.value!=='mes'; el('hf-anio-w').hidden=this.value!=='anio'">${selector ? '' : `<option value="pantalla">El de la pantalla (${esc(this.gsPeriodoTxt(per))})</option>`}<option value="anio" ${selector ? 'selected' : ''}>Un año</option><option value="todo">Todo el historial</option><option value="mes">Un mes</option></select>`)}
+          <div id="hf-anio-w" ${selector ? '' : 'hidden'}>${fieldHtml('Año', `<input type="number" id="hf-anio" class="input num" min="2020" max="2100" value="${today().slice(0, 4)}">`)}</div>
           <div id="hf-mes-w" hidden>${fieldHtml('Mes y año', `<input type="month" id="hf-mes" class="input" value="${today().slice(0, 7)}">`)}</div>
           ${fieldHtml('Ordenar por', '<select id="hf-ord" class="input"><option value="fecha">Fecha</option><option value="tipo">Tipo de acción</option><option value="curso">Curso</option></select>')}
           ${fieldHtml('Detalle de cada registro', '<select id="hf-det" class="input"><option value="resumen">Resumen (200 letras)</option><option value="completo">Completo</option><option value="sin">Solo el listado</option></select>')}</div>
         <div><span class="field__label">Qué incluir</span><div class="grid-2 checks">${HF_TIPOS.map(([k, l]) => `<label class="check"><input type="checkbox" id="hf-t-${k}" checked><span>${esc(l)}</span></label>`).join('')}</div></div>
         <label class="check"><input type="checkbox" id="hf-priv" ${puedeConf ? '' : 'disabled'}><span><strong>Incluir el detalle de las entrevistas confidenciales</strong>${puedeConf ? '' : ' <span class="muted small">(solo quien tiene permiso para verlas)</span>'}</span></label>
+        ${selector ? `<p class="small"><button type="button" class="link-btn" onclick="ui.close(); app.navigate('staff_report')">${ico('bar-chart-3')}Ver el logro de entrevistas de todos los funcionarios (otro reporte)</button></p>` : ''}
         <p class="note">${ico('shield-check')}Si no marca la casilla, las entrevistas confidenciales y los protocolos aparecen en el listado (fecha, estudiante y curso) pero con el detalle reservado. Solo se muestra lo que usted tiene permiso de ver.</p></div>`,
       onOk: () => this.hfGenerar() });
   },
   hfGenerar() {
-    const u = State.users.find(x => String(x.id) === State.hf.uid), modo = el('hf-per').value; let per;
+    if (el('hf-uid')) State.hf.uid = el('hf-uid').value;
+    if (!State.hf.uid) { toast('Elija al funcionario', 'error'); return false; }
+    const modo = el('hf-per').value; let per;
     if (modo === 'todo') per = { anio: '', mes: '', todo: true }; else if (modo === 'pantalla') per = { ...this.gsPeriodo() };
     else if (modo === 'anio') per = { anio: String(el('hf-anio').value), mes: '' }; else { const m = el('hf-mes').value; if (!m) { toast('Elija el mes', 'error'); return false; } per = { anio: m.slice(0, 4), mes: m.slice(5, 7) }; }
     const tipos = Object.fromEntries(HF_TIPOS.map(([k]) => [k, el('hf-t-' + k).checked]));

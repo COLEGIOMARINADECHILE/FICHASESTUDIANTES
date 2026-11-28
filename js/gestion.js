@@ -350,8 +350,8 @@ Object.assign(app, {
     const per = this.gsPeriodo(), todos = hasAccess('ver_todos_reportes');
     const periodoTxt = app.gsPeriodoTxt(per);
     return `<section class="panel gs-detalle"><div class="panel__head"><h2>${ico('user-check')}${esc(f.u.name)}</h2><div class="row-actions">
-        <button class="btn btn--primary" onclick="app.gsPdfLogro(${jsq(f.u.id)})">${ico('file-down')}Descargar PDF del logro</button>
-        <button class="btn" onclick="app.gsPdfGestion(${jsq(f.u.id)})">${ico('file-text')}Informe de gestión (PDF)</button>
+        <button class="btn btn--primary" onclick="app.gsPdfGestion(${jsq(f.u.id)})">${ico('file-text')}Informe de gestión (PDF)</button>
+        <button class="btn" onclick="app.gsPdfLogro(${jsq(f.u.id)})">${ico('file-down')}Logro de entrevistas (PDF)</button>
         ${todos ? `<button class="icon-btn" aria-label="Cerrar detalle" onclick="State.sr.sel=''; app.renderStaffReport()">${ico('x')}</button>` : ''}</div></div>
       <p class="muted small">${esc(f.u.customRole || f.u.role)} · ${periodoTxt}</p>
       <div class="gs-detalle__top"><div class="gs-ring" data-tone="${this.gsTono(f.pct)}" style="--p:${f.pct || 0}"><span>${f.pct === null ? '-' : f.pct + '%'}</span></div>
