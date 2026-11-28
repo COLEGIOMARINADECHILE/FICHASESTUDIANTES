@@ -21,9 +21,11 @@ Object.assign(app, {
   },
   /** Opción automática: la carta que viaja con el acta; si era transversal sigue siéndolo; si no, la primera carta libre del estudiante. */
   actaCartaAuto(studentId, e) {
-    if (this.actaCartaPropia(e)) return '__keep';
     if (!e.cartaId) return '';
-    return this.cartaPorDefecto(studentId, {}, '');
+    // Si el estudiante ya tiene una carta pendiente de firma, el acta se adjunta a esa (y deja de estar pendiente)
+    const libres = this.cartasOf(studentId).filter(c => !(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, c.id) && !sameId(x.id, e.id)));
+    if (libres.length) return String(libres[0].id);
+    return this.actaCartaPropia(e) ? '__keep' : '__new';
   },
   actaElegirEstudiante(valor) {
     const s = this.studentByLabel(valor); State.ar.studentId = s ? String(s.id) : '';
@@ -62,13 +64,37 @@ Object.assign(app, {
         toast(`Acta cambiada a ${this.formatStudentName(this.clean(st.name))}`);
         if (State.currentView === 'cartas_fmt') this.renderCartasFmt(); else this.render();
       } });
-  },  /** Todas las actas guardadas (para encontrar las que están en el estudiante equivocado). */
+  },  /** Actas ya cambiadas de estudiante (con la versión anterior) que quedaron sueltas o con una carta duplicada, mientras el estudiante tiene una carta pendiente. */
+  actasPorReparar() {
+    const out = [], usadas = new Set();
+    (State.rawEvidences || []).filter(e => e.reasignadaDe || e.reasignadaFecha).forEach(e => {
+      const cartas = this.cartasOf(e.studentId), propia = e.cartaId && cartas.find(c => sameId(c.id, e.cartaId));
+      if (propia && !propia.cartaEscaneada) return; // ya está en una carta real
+      const libre = cartas.find(c => !sameId(c.id, e.cartaId) && !usadas.has(String(c.id)) && !(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, c.id)));
+      if (libre) { usadas.add(String(libre.id)); out.push({ e, libre, vieja: propia || null }); }
+    });
+    return out;
+  },
+  actasReparar() {
+    const lista = this.actasPorReparar(); if (!lista.length) return toast('No hay actas por reparar');
+    ui.confirm({ title: 'Unir actas con la carta pendiente', icon: 'link', okText: 'Sí, unir', msg: `Se adjuntarán <strong>${lista.length}</strong> acta(s) a la carta que su estudiante tiene pendiente de firma, que pasará a «Firmada y guardada». La carta «firmada en papel» duplicada se elimina.`,
+      action: async () => {
+        for (const { e, libre, vieja } of lista) {
+          await DB.patch('evidences', e.id, { cartaId: String(libre.id), transversal: false, description: `Acta firmada de ${libre.type} del ${fmtDate(libre.date)}` });
+          if (libre.cartaMeta) await DB.patch('interventions', libre.id, { estadoCarta: 'firmada', fechaFirma: today() });
+          if (vieja && vieja.cartaEscaneada && !(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, vieja.id))) await DB.remove('interventions', vieja.id);
+        }
+        toast(`${lista.length} acta(s) unidas a su carta`); if (State.currentView === 'cartas_fmt') this.renderCartasFmt(); else this.render();
+      } });
+  },
+  /** Todas las actas guardadas (para encontrar las que están en el estudiante equivocado). */
   actasGuardadasHtml() {
     const lista = (State.rawEvidences || []).filter(e => this.esActa(e)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const filas = lista.slice(0, 300).map(e => { const s = State.rawStudents.find(x => sameId(x.id, e.studentId)), c = e.cartaId && (State.rawInterventions || []).find(h => sameId(h.id, e.cartaId));
       return `<tr><td>${s ? `<button type="button" class="link-btn" onclick="app.openStudent(${jsq(s.id)})">${esc(this.formatStudentName(this.clean(s.name)))}</button>` : esc(e.studentName || '—')}</td><td class="small">${s ? esc(this.courseNameOf(s)) : ''}</td><td class="small">${c ? esc(c.type) : chip('Transversal', 'conv')}</td><td class="num small">${fmtDate(e.date)}</td><td class="t-actions"><div class="row-actions"><button class="btn btn--sm" onclick="app.openEvidence(${jsq(e.id)})">${ico('eye')}Ver acta</button>${this.actaCambiarBtn(e)}</div></td></tr>`; }).join('');
     return `<section class="panel" data-actas-guardadas><div class="panel__head"><h2><span class="rpt-n">5</span>Actas firmadas guardadas</h2><span class="chip">${lista.length} acta(s)</span></div>
       <p class="muted small">Un estudiante puede tener varias actas a la vez. Si un acta quedó en el estudiante equivocado, use el botón ${ico('repeat')} para pasarla al que corresponde.</p>
+      ${this.actasPorReparar().length ? `<div class="note" data-tone="warn">${ico('alert-triangle')}<span><strong>${this.actasPorReparar().length} acta(s) cambiadas antes</strong> no quedaron unidas a la carta pendiente de su estudiante.</span><button type="button" class="btn btn--primary btn--sm" onclick="app.actasReparar()">${ico('link')}Unir con su carta</button></div>` : ''}
       ${lista.length ? `<div class="table-wrap"><table class="table table--dense"><thead><tr><th>Estudiante</th><th>Curso</th><th>Carta</th><th>Fecha</th><th class="t-actions">Acta</th></tr></thead><tbody>${filas}</tbody></table></div>` : '<p class="muted small">Aún no hay actas firmadas guardadas.</p>'}</section>`;
   }
 });
