@@ -208,6 +208,24 @@ Object.assign(app, {
         <div class="row-actions"><button class="btn btn--primary" onclick="app.cfSubirFormato()">${ico('upload')}Subir formato</button></div></section>` : ''}`;
     icons();
   },
+  /** El texto de la carta ya completada (para guardarlo en la ficha y mostrarlo aunque no haya vista de Word). */
+  async cfTextoPlano(bytes) {
+    try {
+      await this.cfJSZip(); const zip = await this.cfNormalizarZip(await JSZip.loadAsync(bytes)), doc = new DOMParser().parseFromString(await zip.file('word/document.xml').async('string'), 'application/xml');
+      const body = doc.getElementsByTagNameNS(CF_W, 'body')[0], lineas = [];
+      const tp = p => [...p.getElementsByTagNameNS(CF_W, 't')].map(x => x.textContent).join('').replace(/\s+/g, ' ').trim();
+      [...body.childNodes].forEach(n => {
+        if (n.localName === 'p') { const x = tp(n); if (x) lineas.push(x); }
+        else if (n.localName === 'tbl') [...n.getElementsByTagNameNS(CF_W, 'tr')].forEach(tr => { const c = [...tr.childNodes].filter(k => k.localName === 'tc').map(tc => [...tc.getElementsByTagNameNS(CF_W, 'p')].map(tp).filter(Boolean).join(' ')).filter(Boolean); if (c.length) lineas.push(c.join('   |   ')); });
+      });
+      return lineas.join('\n\n');
+    } catch (e) { return ''; }
+  },
+  /** Qué datos del estudiante usará la carta y cuáles no están cargados. */
+  cfResumenDatos(s) {
+    const D = this.cfDatos(s), filas = [['Estudiante', D.ESTUDIANTE], ['RUN', D.RUT], ['Curso', D.CURSO], ['Profesor(a) jefe', D.PROFESOR_JEFE], ['Apoderado(a)', D.APODERADO], ['Parentesco', D.PARENTESCO], ['Teléfono', D.TELEFONO], ['Correo', D.CORREO], ['Asistencia', /____/.test(D.ASISTENCIA) ? '' : D.ASISTENCIA]];
+    return `<ul class="cf-datos">${filas.map(([k, v]) => `<li data-ok="${!!v}"><span>${esc(k)}</span><strong>${v ? esc(v) : 'no cargado en la ficha'}</strong></li>`).join('')}</ul>`;
+  },
   /** Solo quien creó la carta o el autor de la plataforma pueden eliminarla. */
   cfPuedeEliminar(h) { return sameId(h.professionalId, State.currentUser.id) || !!(this.esAutorPlataforma && this.esAutorPlataforma()); },
   /** Ver una carta ya registrada: se vuelve a completar con los datos actuales del estudiante. */
@@ -216,7 +234,7 @@ Object.assign(app, {
     const f = this.cfTodos().find(x => x.id === (h.cartaMeta && h.cartaMeta.formato)), s = State.rawStudents.find(x => sameId(x.id, h.studentId));
     if (!f || !s) return toast('No se encontró el formato de esta carta (¿se quitó el formato propio?)', 'error');
     const done = ui.busy('Preparando la carta', '');
-    try { this._cfCambios = 0; const bytes = await this.cfRellenar(await this.cfBytes(f), s); State.cfSalida = { f, salida: [{ s, nombre: this.cfNombreArchivo(f, s), bytes, cambios: this._cfCambios, faltan: this.cfFaltantes(s), registrada: true }], registrar: false, curso: '', actual: 0 }; done(); await this.cfMostrarVista(); }
+    try { this._cfCambios = 0; const bytes = await this.cfRellenar(await this.cfBytes(f), s); State.cfSalida = { f, salida: [{ s, nombre: this.cfNombreArchivo(f, s), bytes, cambios: this._cfCambios, faltan: this.cfFaltantes(s), registrada: true, texto: await this.cfTextoPlano(bytes) }], registrar: false, curso: '', actual: 0 }; done(); await this.cfMostrarVista(); }
     catch (e) { done(); notice({ type: 'error', title: 'No se pudo mostrar la carta', msg: e.message }); }
   },
   cfEliminar(id) {
@@ -256,7 +274,7 @@ Object.assign(app, {
   cfRenderModal() {
     const c = State.cf, f = this.cfTodos().find(x => x.id === c.id), cursos = ALL_COURSES.filter(k => State.rawStudents.some(s => s.status !== 'blocked' && this.courseNameOf(s) === k));
     let cuerpo = '';
-    if (c.modo === 'uno') cuerpo = `${this.studentDatalist('cf-est')}${fieldHtml('Estudiante', `<input id="cf-est-in" class="input" list="cf-est" placeholder="Escriba el nombre o RUN" value="${esc((State.rawStudents.find(x => sameId(x.id, c.studentId)) && this.studentLabel(State.rawStudents.find(x => sameId(x.id, c.studentId)))) || '')}" onchange="const s=app.studentByLabel(this.value); State.cf.studentId=s?String(s.id):''">`)}`;
+    if (c.modo === 'uno') cuerpo = `${this.studentDatalist('cf-est')}${fieldHtml('Estudiante', `<input id="cf-est-in" class="input" list="cf-est" placeholder="Escriba el nombre o RUN" value="${esc((State.rawStudents.find(x => sameId(x.id, c.studentId)) && this.studentLabel(State.rawStudents.find(x => sameId(x.id, c.studentId)))) || '')}" onchange="const s=app.studentByLabel(this.value); State.cf.studentId=s?String(s.id):''; app.cfRenderModal()">`)}${c.studentId && State.rawStudents.find(x => sameId(x.id, c.studentId)) ? `<div class="subpanel"><h4>${ico('user-check')}Datos que se usarán en la carta</h4>${this.cfResumenDatos(State.rawStudents.find(x => sameId(x.id, c.studentId)))}<p class="muted small">Si falta algún dato, la carta lo deja en blanco para completarlo a mano.</p></div>` : `<p class="muted small">Elija al estudiante de la lista para ver los datos que se completarán.</p>`}`;
     else {
       const lista = c.curso ? this.cfCandidatos(f, c.curso, c.solo) : []; if (!c.sel) c.sel = new Set(lista.map(s => String(s.id)));
       cuerpo = `${fieldHtml('Curso', `<select class="input" onchange="State.cf.curso=this.value; State.cf.sel=null; app.cfRenderModal()"><option value="">Elija un curso</option>${options(cursos, c.curso)}</select>`)}
@@ -275,7 +293,7 @@ Object.assign(app, {
     ui.close(); const done = ui.busy('Completando las cartas', `${est.length} estudiante(s)`);
     try {
       const base = await this.cfBytes(f), salida = [];
-      for (const [i, s] of est.entries()) { el('busy-msg').textContent = `${i + 1} de ${est.length}: ${this.clean(s.name)}`; this._cfCambios = 0; const bytes = await this.cfRellenar(base, s); salida.push({ s, nombre: this.cfNombreArchivo(f, s), bytes, cambios: this._cfCambios, faltan: this.cfFaltantes(s), registrada: false }); }
+      for (const [i, s] of est.entries()) { el('busy-msg').textContent = `${i + 1} de ${est.length}: ${this.clean(s.name)}`; this._cfCambios = 0; const bytes = await this.cfRellenar(base, s); salida.push({ s, nombre: this.cfNombreArchivo(f, s), bytes, cambios: this._cfCambios, faltan: this.cfFaltantes(s), registrada: false, texto: await this.cfTextoPlano(bytes) }); }
       State.cfSalida = { f, salida, registrar: c.registrar, curso: c.curso, actual: 0 };
       done(); await this.cfMostrarVista();
     } catch (e) { done(); notice({ type: 'error', title: 'No se pudieron completar las cartas', msg: e.message }); }
@@ -290,11 +308,15 @@ Object.assign(app, {
       body: `<div class="stack">
         ${multi ? fieldHtml('Estudiante', `<select class="input" onchange="State.cfSalida.actual=+this.value; app.cfMostrarVista()">${S.salida.map((x, i) => `<option value="${i}" ${i === S.actual ? 'selected' : ''}>${esc(this.formatStudentName(this.clean(x.s.name)))}${x.registrada ? ' ✓' : ''}</option>`).join('')}</select>`) : `<p class="modal__msg"><strong>${esc(this.formatStudentName(this.clean(o.s.name)))}</strong> · ${esc(this.courseNameOf(o.s))}</p>`}
         ${o.cambios ? `<p class="note">${ico('check-circle-2')}Se completaron <strong>${o.cambios}</strong> dato(s) con la información cargada del estudiante.</p>` : `<p class="note" data-tone="warn">${ico('alert-triangle')}<span><strong>No se pudo completar automáticamente</strong> este formato (no se reconocieron etiquetas ni líneas en blanco). Puede completarlo a mano en el Word.</span></p>`}
-        ${o.faltan.length ? `<p class="note">${ico('info')}Datos que no están cargados en la ficha y quedan en blanco: <strong>${esc(o.faltan.join(', '))}</strong>. Puede escribirlos en el Word.</p>` : ''}
+        ${o.texto && !this.cfNorm(o.texto).includes(this.cfNorm(this.clean(o.s.name).split(' ')[0])) ? `<p class="note" data-tone="warn">${ico('alert-triangle')}<span><strong>El nombre del estudiante no aparece en la carta.</strong> Este formato no tiene un espacio reconocible para el nombre: escríbalo en el Word o use las marcas {{ESTUDIANTE}} en el formato.</span></p>` : ''}
+        <details class="subpanel"><summary><strong>Datos usados en la carta</strong>${o.faltan.length ? ` · faltan: ${esc(o.faltan.join(', '))}` : ''}</summary>${this.cfResumenDatos(o.s)}</details>
         <div class="row-actions"><button type="button" class="btn btn--primary" onclick="app.cfDescargarSalida(${S.actual})">${ico('file-down')}Descargar Word${S.registrar ? ' y registrar en la ficha' : ''}</button>${multi ? `<button type="button" class="btn" onclick="app.cfDescargarSalida('todas')">${ico('files')}Descargar todas (ZIP)</button>` : ''}<button type="button" class="btn" onclick="app.cfImprimirVista()">${ico('printer')}Imprimir</button></div>
         <div class="cf-vista"><div class="doc" id="cf-vista-doc"><p class="muted">Preparando la vista…</p></div></div>
         <p class="muted small">Esta vista es una referencia de los datos y el texto. El Word descargado conserva exactamente el diseño del formato (encabezado, insignia, tablas y firmas).</p></div>` });
-    try { const html = await this.docxToHtml(o.bytes); o.html = html; if (el('cf-vista-doc')) el('cf-vista-doc').innerHTML = html; } catch (e) { if (el('cf-vista-doc')) el('cf-vista-doc').innerHTML = `<p class="muted">No se pudo mostrar la vista previa (${esc(e.message)}). Puede descargar el Word igualmente.</p>`; }
+    // Vista fiel con tablas e imagen; si no se puede, se muestra el texto completado de la carta
+    const texto = () => `<h3>${esc(S.f.titulo || S.f.t)}</h3>` + String(o.texto || '').split(/\n\n+/).map(p => `<p>${esc(p)}</p>`).join('');
+    try { const html = await this.docxToHtml(o.bytes); const ok = html && html.replace(/<[^>]+>/g, '').trim().length > 80; o.html = ok ? html : texto(); if (el('cf-vista-doc')) el('cf-vista-doc').innerHTML = o.html; }
+    catch (e) { o.html = texto(); if (el('cf-vista-doc')) el('cf-vista-doc').innerHTML = o.html; }
     icons();
   },
   cfImprimirVista() {
@@ -315,7 +337,7 @@ Object.assign(app, {
   /** Deja la carta registrada en la ficha como «pendiente de firma» (una sola vez por carta). */
   async cfRegistrar(lista, f) {
     const nuevas = lista.filter(x => !x.registrada); if (!nuevas.length) return;
-    const ops = nuevas.map((o, i) => ({ col: 'interventions', id: String(Date.now() + i), merge: false, data: { id: Date.now() + i, studentId: String(o.s.id), studentName: o.s.name, date: today(), type: f.tipoCarta, professional: State.currentUser.name, professionalId: State.currentUser.id, background: `**DOCUMENTO OFICIAL:**\n\n${f.tipoCarta} generada desde el formato «${f.t}». Pendiente de firma y de subir el documento firmado.`, cartaMeta: { formato: f.id, titulo: f.titulo || String(f.t).toUpperCase(), generada: today() }, estadoCarta: 'pendiente', isPrivate: false, sharedWith: [], agreements: [] } }));
+    const ops = nuevas.map((o, i) => ({ col: 'interventions', id: String(Date.now() + i), merge: false, data: { id: Date.now() + i, studentId: String(o.s.id), studentName: o.s.name, date: today(), type: f.tipoCarta, professional: State.currentUser.name, professionalId: State.currentUser.id, background: `**DOCUMENTO OFICIAL:**\n\n${o.texto || `${f.tipoCarta} de ${this.clean(o.s.name)}.`}\n\n(${f.tipoCarta} generada desde el formato «${f.t}». Pendiente de firma y de subir el documento firmado.)`, cartaMeta: { formato: f.id, titulo: f.titulo || String(f.t).toUpperCase(), generada: today(), apoderado: (this.cfDatos(o.s).APODERADO || '') }, estadoCarta: 'pendiente', isPrivate: false, sharedWith: [], agreements: [] } }));
     try { for (let i = 0; i < ops.length; i += 50) await DB.batch(ops.slice(i, i + 50)); nuevas.forEach(x => { x.registrada = true; }); }
     catch (e) { toast('No se pudieron registrar en las fichas: ' + e.message, 'error'); }
   },
