@@ -183,7 +183,22 @@ Object.assign(app, {
     return `<div class="asj-detalle"><h4>${ico('calendar-check')}Días de inasistencia: justificados y sin justificar</h4>
       <p class="small"><span class="asj-chip asj-chip--j">justificado (con respaldo)</span> <span class="asj-chip asj-chip--n">sin justificar</span></p>
       ${meses.length ? `<div class="asj-meses">${meses.map(m => `<div class="asj-mes"><strong>${MESES_NOMBRE[m]}</strong>${(j.porMes[m].j).map(d => `<span class="asj-chip asj-chip--j">${d}</span>`).join('')}${(j.porMes[m].n).map(d => `<span class="asj-chip asj-chip--n">${d}</span>`).join('')}</div>`).join('')}</div>` : `<p class="muted small">${j.sinDetalle ? `La planilla indica ${j.justificados} día(s) justificados sin detallar cuáles.` : 'No hay días marcados como justificados.'}</p>`}
-      <p class="small"><strong>${j.justificados}</strong> día(s) justificados · <strong>${j.noJustificados}</strong> sin justificar · Fuente: ${esc(j.fuente)} (${fmtDate(j.actualizado)}).</p></div>`;
+      ${(() => { const x = s.asistencia || {}, dj = x.diasJustificados || 0, inas = x.inasistencias || 0, pl = Math.min(j.justificados || 0, dj), cert = Math.max(0, dj - pl), listados = MESES.reduce((t, m) => t + (j.porMes?.[m] ? j.porMes[m].j.length + j.porMes[m].n.length : 0), 0);
+        return `<p class="small"><strong>${dj}</strong> día(s) justificados${cert ? ` (${pl} de la planilla y ${cert} por certificados médicos)` : ''} · <strong>${Math.max(0, inas - dj)}</strong> sin justificar · de <strong>${inas}</strong> inasistencias en total.</p>
+        ${listados && listados < inas ? `<p class="muted small">La planilla detalla los días de ${listados} de las ${inas} inasistencias; las demás se cuentan por mes pero no tienen el día anotado.</p>` : ''}
+        <p class="muted small">Fuente: ${esc(j.fuente)} (${fmtDate(j.actualizado)}).</p>`; })()}</div>`;
+  },
+  /** Días justificados de cada mes (planilla + certificados médicos con sus fechas), sin pasar de las inasistencias del mes. */
+  asjJustPorMes(s) {
+    const pm = s.justificacion?.porMes || {}, out = {}; let resto = s.asistencia?.diasJustificados || 0;
+    const tot = k => parseInt(s.inasistenciasMensuales?.[k]) || ((pm[k]?.j.length || 0) + (pm[k]?.n.length || 0));
+    MESES.forEach(k => { const n = Math.min(pm[k]?.j.length || 0, tot(k), resto); out[k] = n; resto -= n; });
+    (s.justificativos || []).filter(x => x.fuente !== 'planilla' && x.inicio).forEach(x => {
+      for (let d = new Date(x.inicio + 'T12:00:00'), fin = new Date((x.termino || x.inicio) + 'T12:00:00'); d <= fin && resto > 0; d.setDate(d.getDate() + 1)) {
+        const w = d.getDay(); if (w === 0 || w === 6) continue; const k = MESES[d.getMonth() - 2]; if (k && out[k] < tot(k)) { out[k]++; resto--; }
+      }
+    });
+    return { out, sinMes: resto };
   }
 });
 

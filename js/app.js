@@ -467,7 +467,8 @@ window.app = {
     const total = parseInt(s.diasTotales) || State.variables.diasTotalesClases || 180;
     const inas = parseInt(s.inasistencias) || 0;
     const atrasos = parseInt(s.atrasos) || 0;
-    const dj = (s.justificativos || []).reduce((a, j) => a + (parseInt(j.dias) || 0), 0);
+    // No se pueden justificar más días de los que se faltó
+    const dj = Math.min(inas, (s.justificativos || []).reduce((a, j) => a + (parseInt(j.dias) || 0), 0));
     const asistidos = Math.max(0, total - inas);
     const real = Math.max(0, Math.round((asistidos / total) * 100)) || 0;
     const byDate = (a, b) => new Date(b.date) - new Date(a.date);
