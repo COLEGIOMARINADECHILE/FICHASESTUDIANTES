@@ -665,7 +665,7 @@ ${anon}` });
         ${otros.length ? `<optgroup label="Otros documentos del área">${otros.slice(0, 60).map(opt).join('')}</optgroup>` : ''}
       </select>`)}
       <label class="check"><input type="checkbox" ${c.limpiar ? 'checked' : ''} onchange="State.createDoc.limpiar=this.checked"><span>Usar solo la estructura del modelo (borra las respuestas del otro estudiante y desmarca las casillas)</span></label>
-      <label class="check"><input type="checkbox" ${c.completar ? 'checked' : ''} onchange="State.createDoc.completar=this.checked"><span>Completar automáticamente nombre, RUN, curso, fecha, profesor jefe y asistencia</span></label>
+      <label class="check"><input type="checkbox" ${c.completar ? 'checked' : ''} onchange="State.createDoc.completar=this.checked"><span>Completar automáticamente los datos que ya están (estudiante, RUN, curso, fecha de nacimiento y edad, apoderado y contacto, domicilio, profesor jefe, asistencia, fecha y profesional). Podrá corregirlos después.</span></label>
       <p class="note">${ico('info')}Los modelos son los documentos que ya se cargaron (marcados con ★ los elegidos como "modelo"). Abra cualquier documento y presione "Usar como modelo" para que aparezca primero.</p>
     </div>`;
   },
@@ -745,11 +745,20 @@ ${anon}` });
         [/^fecha( de (elaboracion|emision|inicio|confeccion))?$/, fmtDate(today())],
         [/^fecha de nacimiento$/, s.fechaNacimiento ? fmtDate(s.fechaNacimiento) : ''],
         [/^edad$/, edad],
-        [/^profesor(a)? jef(e|a)$/, this.profJefeOf(s.curso) || ''],
-        [/^(establecimiento|colegio|escuela)$/, this.brand ? this.brand().tagline : 'Colegio Marina de Chile'],
-        [/^ano( escolar)?$/, today().slice(0, 4)],
-        [/^(porcentaje de )?asistencia$/, s.asistencia ? `${s.asistencia.real} %` : ''],
-        [/^apoderad(o|a)( \(a\))?$/, s.contacto?.apoderado || '']
+        [/^profesor(a)? jef(e|a)( del curso)?$/, this.profJefeOf(s.curso) || ''],
+        [/^(nombre del )?(establecimiento|colegio|escuela)( educacional)?$/, this.brand ? this.brand().tagline : 'Colegio Marina de Chile'],
+        [/^ano( escolar| lectivo)?$/, today().slice(0, 4)],
+        [/^(porcentaje de )?asistencia( real| anual| actual)?$/, s.asistencia ? `${s.asistencia.real} %` : ''],
+        [/^inasistencias$/, s.asistencia ? String(s.asistencia.inasistencias) : ''],
+        [/^(nombre( del| de la)? )?(apoderad(o|a)|madre,? padre o apoderad(o|a)|padre o apoderad(o|a))( \(a\))?( titular)?$/, s.contacto?.apoderado || ''],
+        [/^(parentesco|vinculo|relacion con el estudiante)$/, s.contacto?.parentesco || ''],
+        [/^(telefono|telefono de contacto|telefono apoderad(o|a)|fono|celular)$/, s.contacto?.telefono || ''],
+        [/^(correo|correo electronico|email|e mail)$/, s.contacto?.email || ''],
+        [/^(domicilio|direccion|direccion del estudiante)$/, s.direccion || s.contacto?.direccion || ''],
+        [/^(nivel|nivel educativo|curso nivel)$/, s.curso || ''],
+        [/^(sexo|genero)$/, s.sexo || s.genero || ''],
+        [/^(profesional|profesional responsable|responsable|elaborado por|especialista|profesional especialista|profesional a cargo|encargad(o|a))$/, State.currentUser?.name || ''],
+        [/^cargo$/, State.currentUser?.customRole || State.currentUser?.role || '']
       ];
       const valor = t => { const k = N(t).toLowerCase().replace(/[:.]/g, '').replace(/\s+/g, ' ').trim(); const hit = datos.find(([re]) => re.test(k)); return hit && hit[1] ? hit[1] : null; };
       root.querySelectorAll('td, th').forEach(c => {
@@ -759,14 +768,14 @@ ${anon}` });
       });
       // Párrafos del tipo "Nombre: ______"
       textNodes().forEach(n => {
-        n.nodeValue = n.nodeValue.replace(/(Nombre(?: completo)?(?: del estudiante)?|RUN|RUT|Curso|Fecha)\s*:\s*_{2,}/gi, (m, lab) => { const v = valor(lab); return v ? `${lab}: ${v}` : m; });
+        n.nodeValue = n.nodeValue.replace(/(Nombre(?: completo)?(?: del estudiante)?|RUN|RUT|Curso|Fecha(?: de nacimiento)?|Edad|Profesor(?:a)? jefe|Apoderad[oa]|Tel[eé]fono|Correo(?: electr[oó]nico)?|Domicilio|Direcci[oó]n|Asistencia|Establecimiento|Profesional(?: responsable)?|Nivel)\s*:\s*_{2,}/gi, (m, lab) => { const v = valor(lab); return v ? `${lab}: ${v}` : m; });
       });
     }
     return root.innerHTML;
   },
   /** Formatos básicos cuando todavía no hay un modelo cargado. */
   baseTemplate(area, type) {
-    const id = `<table><tr><td><strong>Nombre completo</strong></td><td></td><td><strong>RUN</strong></td><td></td></tr><tr><td><strong>Curso</strong></td><td></td><td><strong>Fecha</strong></td><td></td></tr><tr><td><strong>Profesor jefe</strong></td><td></td><td><strong>Asistencia</strong></td><td></td></tr></table>`;
+    const id = `<table><tr><td><strong>Nombre completo</strong></td><td></td><td><strong>RUN</strong></td><td></td></tr><tr><td><strong>Curso</strong></td><td></td><td><strong>Fecha</strong></td><td></td></tr><tr><td><strong>Fecha de nacimiento</strong></td><td></td><td><strong>Edad</strong></td><td></td></tr><tr><td><strong>Profesor jefe</strong></td><td></td><td><strong>Asistencia</strong></td><td></td></tr><tr><td><strong>Apoderado</strong></td><td></td><td><strong>Teléfono</strong></td><td></td></tr><tr><td><strong>Domicilio</strong></td><td></td><td><strong>Correo</strong></td><td></td></tr><tr><td><strong>Profesional responsable</strong></td><td></td><td><strong>Establecimiento</strong></td><td></td></tr></table>`;
     const ambito = n => `<tr><td><strong>ÁMBITO ${n}</strong></td><td></td><td></td><td></td></tr><tr><td><strong>INDICADOR</strong></td><td><strong>ACCIONES</strong></td><td><strong>RESPONSABLE</strong></td><td><strong>SEGUIMIENTO</strong></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr>`;
     const evalTabla = items => `<table><tr><td><strong>Objetivos abordados durante el periodo</strong></td><td><strong>L</strong></td><td><strong>EP</strong></td><td><strong>NL</strong></td><td><strong>NO</strong></td></tr>${items.map(i => `<tr><td>${i}</td><td>☐</td><td>☐</td><td>☐</td><td>☐</td></tr>`).join('')}</table><p><em>L: logrado. EP: en proceso. NL: no logrado. NO: no observado.</em></p>`;
     const firmas = `<p></p><table><tr><td><p>_______________________</p><p>Profesional responsable</p></td><td><p>_______________________</p><p>Apoderado(a)</p></td><td><p>_______________________</p><p>Coordinación</p></td></tr></table>`;

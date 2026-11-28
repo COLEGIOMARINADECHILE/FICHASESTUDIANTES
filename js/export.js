@@ -404,6 +404,12 @@ Object.assign(app, {
   },
 
   // ---------------- GENERACIÓN DEL PDF ----------------
+  /** Escala de dibujo del PDF. Los navegadores (sobre todo en celular y Safari) dejan el PDF en blanco si la imagen
+   *  del documento es demasiado grande; en informes largos se baja la escala para que nunca salga en blanco. */
+  pdfEscala(anchoPx, elemento) {
+    const alto = Math.max(400, ((elemento && elemento.scrollHeight) || 1200) * 1.12), s = Math.sqrt(11e6 / (anchoPx * alto));
+    return Math.round(Math.max(0.7, Math.min(2, s)) * 100) / 100;
+  },
   async executeExport(opts = {}) {
     const word = State.export.format === 'word' && !opts.forcePdf;
     if (!word && !window.html2pdf) { toast('No se pudo cargar el generador de PDF. Revise su conexión.', 'error'); return false; }
@@ -447,7 +453,7 @@ Object.assign(app, {
       if (word) { await this.exportWord(el('capture-area'), r.filename, size, landscape, [mv, mh]); return false; }
       await html2pdf().set({
         margin: [mv, mh, mv, mh], filename: r.filename, image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true, backgroundColor: cssVar('--doc-paper') || null, width: widthPx, windowWidth: widthPx, scrollX: 0, scrollY: 0, x: 0, y: 0 },
+        html2canvas: { scale: this.pdfEscala(widthPx, el('capture-area')), useCORS: true, letterRendering: true, backgroundColor: cssVar('--doc-paper') || null, width: widthPx, windowWidth: widthPx, scrollX: 0, scrollY: 0, x: 0, y: 0 },
         jsPDF: { unit: 'mm', format: size, orientation: landscape ? 'landscape' : 'portrait' },
         pagebreak: { mode: ['css', 'legacy'], avoid: ['.doc-avoid', 'tr', 'h4'] }
       }).from(el('capture-area')).save();

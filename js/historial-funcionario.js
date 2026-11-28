@@ -261,18 +261,29 @@ Object.assign(app, {
   async hfPdfBase64() {
     const { r, html } = this.hfDocHtml(), size = State.export.size || 'letter', paperW = size === 'legal' ? 355.6 : 279.4, widthPx = Math.round((paperW - 30) * (96 / 25.4));
     const host = document.createElement('div'); host.className = 'doc-host'; host.innerHTML = `<div id="capture-mail" class="doc" style="width:${widthPx}px">${html}<div class="doc-pad"></div></div>`;
+    const sy = window.scrollY; window.scrollTo(0, 0);
     document.body.appendChild(host); document.documentElement.classList.add('is-exporting');
     try {
       await Promise.all(Array.from(host.querySelectorAll('img')).map(img => (img.complete && img.naturalHeight) ? null : new Promise(res => { img.onload = img.onerror = res; setTimeout(res, 4000); })));
-      const uri = await html2pdf().set({ margin: [15, 15, 15, 15], filename: r.filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 1.6, useCORS: true, letterRendering: true, backgroundColor: cssVar('--doc-paper') || null, width: widthPx, windowWidth: widthPx, scrollX: 0, scrollY: 0, x: 0, y: 0 }, jsPDF: { unit: 'mm', format: size, orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['.doc-avoid', 'tr', 'h4'] } }).from(host.firstChild).outputPdf('datauristring');
+      const uri = await html2pdf().set({ margin: [15, 15, 15, 15], filename: r.filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: Math.min(1.6, this.pdfEscala(widthPx, host.firstChild)), useCORS: true, letterRendering: true, backgroundColor: cssVar('--doc-paper') || null, width: widthPx, windowWidth: widthPx, scrollX: 0, scrollY: 0, x: 0, y: 0 }, jsPDF: { unit: 'mm', format: size, orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['.doc-avoid', 'tr', 'h4'] } }).from(host.firstChild).outputPdf('datauristring');
       return { base64: String(uri).split(',')[1], filename: r.filename, titulo: r.title };
-    } finally { host.remove(); document.documentElement.classList.remove('is-exporting'); }
+    } finally { host.remove(); document.documentElement.classList.remove('is-exporting'); window.scrollTo(0, sy); }
+  },
+  /** Datos del informe para el cuerpo del correo (cuadro de datos, resumen y gráfico), así se ve sin abrir el adjunto. */
+  hfDatosCorreo() {
+    const { r, html } = this.hfDocHtml(), d = document.createElement('div'); d.innerHTML = html;
+    const t = x => (x.textContent || '').replace(/\s+/g, ' ').trim();
+    const datos = [...d.querySelectorAll('table.doc-kv tr')].flatMap(tr => { const c = [...tr.children], o = []; for (let i = 0; i + 1 < c.length; i += 2) o.push([t(c[i]), t(c[i + 1])]); return o; });
+    const tabla = [...d.querySelectorAll('table.doc-table')].find(x => x.querySelectorAll('thead th').length === 2 && x.querySelectorAll('tbody tr').length >= 1);
+    const resumen = tabla ? { titulo: t(tabla.previousElementSibling || {}), filas: [...tabla.querySelectorAll('tbody tr')].slice(0, 14).map(tr => [...tr.children].map(t)).filter(f => f.length === 2) } : null;
+    const img = d.querySelector('img[alt^="Distribuci"]'), src = img ? img.getAttribute('src') : '';
+    return { titulo: r.title, datos, resumen, imagen: /^data:image\/png;base64,/.test(src) ? src.split(',')[1] : '', cabecera: tabla ? [...tabla.querySelectorAll('thead th')].map(t) : [] };
   },
   async hfEnviarAhora(to) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { toast('Escriba un correo válido', 'error'); return false; }
     if (!window.html2pdf) { toast('No se pudo cargar el generador de PDF. Revise su conexión.', 'error'); return false; }
     const done = ui.busy('Enviando el informe', 'Preparando el PDF y enviándolo...');
-    try { const p = await this.hfPdfBase64(); const out = await API.call('enviarInforme', { to, fileName: p.filename, base64: p.base64, subject: `${p.titulo} · ${today()}` }); notice({ type: 'success', title: 'Informe enviado', msg: `Se envió a ${out.enviado || to}.` }); }
+    try { const p = await this.hfPdfBase64(); const out = await API.call('enviarInforme', { to, fileName: p.filename, base64: p.base64, subject: `${p.titulo} · ${today()}`, ...this.hfDatosCorreo() }); notice({ type: 'success', title: 'Informe enviado', msg: `Se envió a ${out.enviado || to}.` }); }
     catch (e) { notice({ type: 'error', title: 'No se pudo enviar el informe', msg: e.message }); }
     finally { done(); }
   }
