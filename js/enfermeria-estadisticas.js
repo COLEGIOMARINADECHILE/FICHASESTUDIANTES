@@ -39,12 +39,16 @@ Object.assign(app, {
     const contar = (lista, defs, otro) => { const m = {}; lista.forEach(x => { const d = defs.find(([, re]) => re.test(texto(x))); const k = d ? d[0] : otro; m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
     const meses = Array.from({ length: 12 }, (_, i) => ({ k: i + 1, n: 0, acc: 0 })); at.forEach(x => { const m = parseInt(String(x.n.date).slice(5, 7)); if (m >= 1 && m <= 12) { meses[m - 1].n++; if (x.n.accidente) meses[m - 1].acc++; } });
     const dias = ENF_DIAS.map((d, i) => ({ k: d, n: 0 })); at.forEach(x => { const d = new Date(String(x.n.date) + 'T12:00:00'); if (!isNaN(d)) dias[d.getDay()].n++; });
+    // Tipo de atención por día de la semana (para ver qué prevenir cada día)
+    const cats = [...ENF_CATEGORIAS.map(c => c[0]), 'Otros motivos'];
+    const matriz = lista => { const m = ENF_DIAS.map(dia => ({ dia, tot: 0, por: Object.fromEntries(cats.map(c => [c, 0])) })); lista.forEach(x => { const f = new Date(String(x.n.date) + 'T12:00:00'); if (isNaN(f)) return; const cat = (ENF_CATEGORIAS.find(([, re]) => re.test(texto(x))) || [])[0] || 'Otros motivos'; const o = m[f.getDay()]; o.tot++; o.por[cat]++; }); return m; };
+    const diaTipo = matriz(at), diaTipoAcc = matriz(acc);
     const horas = {}; acc.forEach(x => { const h = String(x.n.accidente?.declaracion?.hora || '').slice(0, 2); if (/^\d\d$/.test(h)) horas[h + ':00'] = (horas[h + ':00'] || 0) + 1; });
     const cnt = {}; at.forEach(x => { const k = String(x.s.id); cnt[k] = (cnt[k] || 0) + 1; });
     const reiter = Object.entries(cnt).filter(([, v]) => v >= 3).map(([id, v]) => ({ s: porId.get(id), n: v, acc: at.filter(x => String(x.s.id) === id && x.n.accidente).length })).sort((a, b) => b.n - a.n);
     return { per, alcance, valor, at, estAlc, acc, segSi, segNo, segPend, estDistintos: new Set(at.map(x => String(x.s.id))).size,
       porCiclo: grupo(c => this.enfCicloDe(c), ciclos), porNivel: grupo(c => this.enfNivelDe(c), niveles), porCurso: grupo(c => c, cursos),
-      categorias: contar(at, ENF_CATEGORIAS, 'Otros motivos'), lugares: contar(acc.length ? acc : at, ENF_LUGARES, 'Sin lugar identificado'), meses, dias, horas: Object.entries(horas).sort(), reiter };
+      cats, diaTipo, diaTipoAcc, categorias: contar(at, ENF_CATEGORIAS, 'Otros motivos'), lugares: contar(acc.length ? acc : at, ENF_LUGARES, 'Sin lugar identificado'), meses, dias, horas: Object.entries(horas).sort(), reiter };
   },
 
   // ---------------- PANTALLA ----------------
@@ -77,8 +81,20 @@ Object.assign(app, {
         ${lista('Día de la semana', d.dias.filter(x => x.n || ![0, 6].includes(ENF_DIAS.indexOf(x.k))).map(x => [x.k, x.n]))}</div>
         <div class="enfe-lista"><h4>Atenciones por mes <span class="muted small">(la parte oscura son accidentes escolares)</span></h4><div class="enfe-meses">${d.meses.map(m => `<div class="enfe-mes" title="${MESES_NOMBRE?.[MESES?.[m.k - 3]] || m.k}: ${m.n} atenciones, ${m.acc} accidentes"><span class="num small">${m.n || ''}</span><div class="enfe-col"><i style="height:${Math.round(m.n / mesesMax * 100)}%"><b style="height:${m.n ? Math.round(m.acc / m.n * 100) : 0}%"></b></i></div><span class="small">${['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][m.k - 1]}</span></div>`).join('')}</div></div>
         ${d.horas.length ? lista('Hora de los accidentes (declaración)', d.horas) : ''}</section>
+      ${this.enfDiaTipoHtml(d, !!f.soloAcc)}
       <section class="panel"><div class="panel__head"><h2>${ico('user-search')}Estudiantes con 3 o más atenciones (${d.reiter.length})</h2></div>
         ${d.reiter.length ? `<div class="table-wrap"><table class="table table--dense"><thead><tr><th>Estudiante</th><th>Curso</th><th class="t-num">Atenciones</th><th class="t-num">Accidentes</th></tr></thead><tbody>${d.reiter.slice(0, 40).map(r => `<tr><td><button type="button" class="link-btn" onclick="app.openStudent(${jsq(r.s.id)})">${esc(this.formatStudentName(this.clean(r.s.name)))}</button></td><td class="small">${esc(this.courseNameOf(r.s))}</td><td class="t-num num">${r.n}</td><td class="t-num num">${r.acc}</td></tr>`).join('')}</tbody></table></div><p class="muted small">Información de salud confidencial (Ley N° 21.719): úsela solo para el seguimiento y la prevención.</p>` : '<p class="muted small">Ningún estudiante con 3 o más atenciones en el período.</p>'}</section>`;
+  },
+  /** Gráfico de columnas apiladas: tipos de atención en cada día de la semana. */
+  enfDiaTipoHtml(d, soloAcc) {
+    const mat = (soloAcc ? d.diaTipoAcc : d.diaTipo).filter((x, i) => x.tot || (i >= 1 && i <= 5)), cats = d.cats.filter(c => mat.some(x => x.por[c])), pal = ['#2563eb', '#dc2626', '#f59e0b', '#16a34a', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#6b7280'];
+    const col = c => pal[d.cats.indexOf(c) % pal.length], max = Math.max(...mat.map(x => x.tot), 1);
+    return `<section class="panel"><div class="panel__head"><h2>${ico('calendar-range')}Tipos de ${soloAcc ? 'accidente' : 'atención'} por día de la semana</h2></div>
+      <p class="muted small">Qué ocurre cada día: la altura de la columna es la cantidad total y los colores son los tipos. Sirve para decidir qué prevenir y qué día reforzar la supervisión.</p>
+      <label class="check"><input type="checkbox" ${soloAcc ? 'checked' : ''} onchange="State.enfE.soloAcc=this.checked; app.renderEnfermeria()"><span>Mostrar solo los accidentes escolares</span></label>
+      ${mat.some(x => x.tot) ? `<div class="enfd"><div class="enfd-cols">${mat.map(x => `<div class="enfd-dia" title="${x.dia}: ${x.tot}"><span class="num small"><b>${x.tot || ''}</b></span><div class="enfd-col" style="height:${Math.round(x.tot / max * 100)}%">${cats.filter(c => x.por[c]).map(c => `<i style="flex:${x.por[c]};background:${col(c)}" title="${esc(c)}: ${x.por[c]}">${x.por[c]}</i>`).join('')}</div><span class="small">${x.dia.slice(0, 3)}</span></div>`).join('')}</div>
+        <div class="enfd-leyenda">${cats.map(c => `<span><i style="background:${col(c)}"></i>${esc(c)}</span>`).join('')}</div></div>
+        <div class="table-wrap"><table class="table table--dense"><thead><tr><th>Día</th>${cats.map(c => `<th class="t-num">${esc(c)}</th>`).join('')}<th class="t-num">Total</th></tr></thead><tbody>${mat.map(x => `<tr><td><strong>${x.dia}</strong></td>${cats.map(c => `<td class="t-num num">${x.por[c] || '-'}</td>`).join('')}<td class="t-num num"><strong>${x.tot}</strong></td></tr>`).join('')}</tbody></table></div>` : empty('calendar-x', 'No hay datos en el período.')}</section>`;
   },
   enfImprimirStats() { State.rpt = State.rpt || {}; Object.assign(State.rpt, { tipo: 'enf_stats', __enfPag: true }); try { this.rptImprimir(); } finally { State.rpt.__enfPag = false; } },
   enfPresentacion() { State.rpt = State.rpt || {}; Object.assign(State.rpt, { tipo: 'enf_stats', __enfPag: true }); let d; try { d = this.rptDatos('enf_stats'); } finally { State.rpt.__enfPag = false; } this.rptPresentacion(d); }
@@ -109,6 +125,7 @@ Object.assign(app, {
       nota: 'Información de salud confidencial (Ley N° 21.719). Los motivos y lugares se agrupan según las palabras registradas.',
       secciones: [{ titulo: 'Por ciclo', head: head('Ciclo'), rows: filas(d.porCiclo) }, { titulo: 'Por nivel', head: head('Nivel'), rows: filas(d.porNivel) }, { titulo: 'Por curso', head: head('Curso'), rows: filas(d.porCurso) },
         { titulo: 'Motivos de atención', head: ['Motivo', 'Atenciones'], rows: d.categorias.map(([k, n]) => [esc(k), n]) }, { titulo: 'Lugar o actividad de los accidentes', head: ['Lugar', 'Casos'], rows: d.lugares.map(([k, n]) => [esc(k), n]) },
-        { titulo: 'Día de la semana', head: ['Día', 'Atenciones'], rows: d.dias.map(x => [x.k, x.n]) }] };
+        { titulo: 'Día de la semana', head: ['Día', 'Atenciones'], rows: d.dias.map(x => [x.k, x.n]) },
+        (() => { const mat = d.diaTipo.filter((x, i) => x.tot || (i >= 1 && i <= 5)), cats = d.cats.filter(c => mat.some(x => x.por[c])); return { titulo: 'Tipos de atención por día de la semana', head: ['Día', ...cats, 'Total'], rows: mat.map(x => [`<strong>${x.dia}</strong>`, ...cats.map(c => x.por[c] || 0), `<strong>${x.tot}</strong>`]) }; })()] };
   };
 })();

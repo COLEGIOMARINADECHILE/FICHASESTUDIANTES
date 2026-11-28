@@ -14,35 +14,53 @@
 window.app = {
 
   // ---------------- ARRANQUE Y SESIÓN ----------------
+  /** Abre la aplicación. Con señal débil reintenta solo (hasta 4 veces) y, si no conecta, ofrece «Reintentar» sin cerrar la sesión. */
   async init() {
     State.demo = API.demo;
     el('demo-banner').hidden = !State.demo;
-    try {
-      State.loginOptions = await API.call('bootstrap');
-      this.applyPhoto(State.loginOptions.bgImage);
-      if (API.token && !State.demo) await DB.load();
-    } catch (e) {
-      API.setToken('');
-      State.currentUser = null;
-      if (!/sesi/i.test(e.message)) toast(e.message, 'error');
+    const esAuth = e => /sesi|expir|AUTH|no autorizado|credencial/i.test(String((e && (e.code || e.message)) || ''));
+    let ok = false, ultimo = null;
+    for (let i = 0; i < 4 && !ok; i++) {
+      try {
+        State.loginOptions = await API.call('bootstrap');
+        this.applyPhoto(State.loginOptions.bgImage);
+        if (API.token && !State.demo) await DB.load();
+        ok = true;
+      } catch (e) { ultimo = e; if (esAuth(e)) break; await new Promise(r => setTimeout(r, 700 * (i + 1))); }
     }
+    if (!ok) {
+      if (esAuth(ultimo)) { API.setToken(''); State.currentUser = null; if (!/sesi/i.test(ultimo.message)) toast(ultimo.message, 'error'); }
+      else {
+        State.bootFallos = (State.bootFallos || 0) + 1;
+        const v = el('loading-view'); v.hidden = false;
+        v.innerHTML = `<div class="spinner" aria-hidden="true" style="animation:none;opacity:.35"></div><h2>No se pudo conectar</h2><p>No hay una conexión estable con el servidor. Revise su señal de internet.</p><p class="muted small">Se reintentará automáticamente.</p><button type="button" class="btn btn--primary" id="boot-retry">Reintentar ahora</button>`;
+        const go = () => { v.innerHTML = '<div class="spinner" aria-hidden="true"></div><h2>Iniciando sistema</h2><p>Conectando con la base de datos</p>'; this.init(); };
+        el('boot-retry').onclick = go;
+        if (State.bootFallos < 4) setTimeout(() => { if (el('boot-retry')) go(); }, 6000);
+        return;
+      }
+    }
+    State.bootFallos = 0;
     State.loading = false;
     this.render();
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.refresh(); });
-    // Actualización automática cada 5 minutos y solo con la pestaña visible (menos carga para el servidor)
-    setInterval(() => { if (document.visibilityState === 'visible') this.refresh(); }, 300000);
+    if (!State.refreshEnlazado) {
+      State.refreshEnlazado = true;
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.refresh(); });
+      // Actualización automática cada 5 minutos y solo con la pestaña visible (menos carga para el servidor)
+      setInterval(() => { if (document.visibilityState === 'visible') this.refresh(); }, 300000);
+    }
   },
 
-  /** Vuelve a leer los datos del servidor cuando no hay nada a medio editar. */
+  /** Vuelve a leer los datos del servidor cuando no hay nada a medio editar; solo redibuja si algo cambió (sin parpadeos). */
   async refresh(force = false) {
     if (!State.currentUser || State.syncing) return;
     if (!force && Date.now() - State.lastSync < 60000) return;
     const quiet = ['dashboard', 'courses', 'students', 'alerts', 'course_summary'].includes(State.currentView) && el('modal').hidden;
     if (!quiet && !force) return;
     State.syncing = true;
-    try { await DB.load(); this.render(); } catch (e) { /* se reintenta luego */ } finally { State.syncing = false; }
+    const firma = () => { try { return [State.rawStudents, State.rawInterventions, State.rawNursings, State.rawObservations, State.users, State.studentPlans, State.coursePlans, State.rawEvidences, State.dia, State.traspasos, State.reuniones, State.variables].map(c => JSON.stringify(c || [])).join('|'); } catch (e) { return String(Math.random()); } };
+    try { const antes = firma(); await DB.load(); if (force || firma() !== antes) this.render(); } catch (e) { /* se reintenta luego */ } finally { State.syncing = false; }
   },
-
   sessionExpired(msg) {
     if (!State.currentUser) return;
     API.setToken('');

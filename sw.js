@@ -10,7 +10,7 @@
 // - Nunca guarda datos de estudiantes: las consultas al servidor (Apps Script, POST) no pasan por aquí.
 // - La página se pide primero a internet (siempre la versión más nueva) y, sin conexión, se usa la copia guardada.
 // - Archivos con versión (?v=...) y bibliotecas externas se guardan para abrir más rápido.
-const VERSION = 'trayectoria-2026-12-30x';
+const VERSION = 'trayectoria-2026-12-30z';
 const BASE = ['./', 'index.html', 'manifest.webmanifest', 'img/icons/icon-192.png', 'img/icons/icon-512.png', 'img/icons/apple-touch-icon.png', 'img/logo-colegio.png', 'img/creditos-autor.png'];
 const CDN = /^https:\/\/(unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 
@@ -18,7 +18,8 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => Promise.all(BASE.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  // Se conservan las 2 versiones anteriores: una página abierta con la versión previa sigue encontrando sus archivos (evita errores al actualizar con señal débil)
+  e.waitUntil(caches.keys().then(ks => { const viejas = ks.filter(k => k !== VERSION && k.startsWith('trayectoria-')).sort().reverse().slice(2); return Promise.all([...viejas, ...ks.filter(k => !k.startsWith('trayectoria-'))].map(k => caches.delete(k))); }).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const req = e.request;
@@ -36,7 +37,7 @@ self.addEventListener('fetch', e => {
   }
   // Con versión o externos: copia guardada y, si no existe, internet
   if (url.searchParams.has('v') || !propio) {
-    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => { if (r.ok || r.type === 'opaque') { const c = r.clone(); caches.open(VERSION).then(x => x.put(req, c)); } return r; })));
+    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => { if (r.ok || r.type === 'opaque') { const c = r.clone(); caches.open(VERSION).then(x => x.put(req, c)); } return r; }).catch(() => fetch(req).catch(() => caches.match(req, { ignoreSearch: true })))));
     return;
   }
   // Resto (imágenes, íconos): internet y, sin conexión, la copia

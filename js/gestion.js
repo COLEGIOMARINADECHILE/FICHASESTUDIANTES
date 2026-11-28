@@ -340,7 +340,7 @@ Object.assign(app, {
         <div class="table-wrap"><table class="table"><thead><tr><th>Funcionario</th><th>Cursos que atiende</th><th>Estudiantes</th><th class="gs-col">Logro de entrevistas</th><th>A su(s) curso(s)</th><th>A otros cursos</th><th class="t-actions"></th></tr></thead><tbody>
         ${vis.length ? vis.map(f => `<tr class="${String(f.u.id) === String(st.sel) ? 'is-sel' : ''}"><td><span class="cell-title">${esc(f.u.name)}${f.u.active === false ? ' ' + chip('Inactivo', 'neutral') : ''}</span><span class="cell-sub">${esc(f.u.customRole || f.u.role)}</span></td>
           <td class="small">${f.metaCursos.length ? f.metaCursos.map(c => chip(c, 'neutral')).join(' ') : '<span class="muted">Sin cursos asignados</span>'}</td>
-          <td class="num">${f.meta ? `${f.cubiertos} de ${f.meta}` : '-'}</td><td class="gs-col">${this.gsBarra(f.pct)}</td>
+          <td class="num">${f.meta ? `${f.cubiertos} de ${f.meta}` : '-'}</td><td class="gs-col">${f.pct === null ? '<span class="muted small">-</span>' : this.gsBarra(f.pct)}</td>
           <td class="num">${f.entPropias}</td><td class="num">${f.entOtros}</td>
           <td class="t-actions"><button class="btn btn--sm" onclick="State.sr.sel=${jsq(f.u.id)}; app.renderStaffReport(); window.scrollTo({top:0,behavior:'smooth'})">${ico('bar-chart-3')}Ver detalle</button></td></tr>`).join('') : `<tr><td colspan="7">${empty('search-x', 'Ningún funcionario coincide.')}</td></tr>`}
         </tbody></table></div></section>`;
@@ -351,7 +351,7 @@ Object.assign(app, {
     const periodoTxt = app.gsPeriodoTxt(per);
     return `<section class="panel gs-detalle"><div class="panel__head"><h2>${ico('user-check')}${esc(f.u.name)}</h2><div class="row-actions">
         <button class="btn btn--primary" onclick="app.gsPdfLogro(${jsq(f.u.id)})">${ico('file-down')}Descargar PDF del logro</button>
-        <button class="btn" onclick="app.gsPdfGestion(${jsq(f.u.id)})">${ico('file-text')}Historial completo (PDF)</button>
+        <button class="btn" onclick="app.gsPdfGestion(${jsq(f.u.id)})">${ico('file-text')}Informe de gestión (PDF)</button>
         ${todos ? `<button class="icon-btn" aria-label="Cerrar detalle" onclick="State.sr.sel=''; app.renderStaffReport()">${ico('x')}</button>` : ''}</div></div>
       <p class="muted small">${esc(f.u.customRole || f.u.role)} · ${periodoTxt}</p>
       <div class="gs-detalle__top"><div class="gs-ring" data-tone="${this.gsTono(f.pct)}" style="--p:${f.pct || 0}"><span>${f.pct === null ? '-' : f.pct + '%'}</span></div>

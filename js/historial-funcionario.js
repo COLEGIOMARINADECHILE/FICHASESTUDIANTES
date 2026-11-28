@@ -22,10 +22,10 @@ Object.assign(app, {
     const u = State.users.find(x => sameId(x.id, uid)); if (!u) return;
     const per = this.gsPeriodo(), puedeConf = hasAccess('gestionar_protocolos') || hasAccess('acceso_total');
     State.hf = { uid: String(uid) };
-    ui.modal({ title: 'Historial del funcionario', icon: 'file-text', size: 'md', okText: 'Generar PDF',
+    ui.modal({ title: 'Informe de gestión del funcionario', icon: 'file-text', size: 'md', okText: 'Generar PDF',
       body: `<div class="stack"><p class="modal__msg"><strong>${esc(u.name)}</strong>${u.customRole ? ` · ${esc(u.customRole)}` : ''}</p>
         <div class="grid-2">
-          ${fieldHtml('Período', `<select id="hf-per" class="input" onchange="el('hf-mes-w').hidden=this.value!=='mes'; el('hf-anio-w').hidden=this.value!=='anio'"><option value="todo">Todo el historial</option><option value="pantalla">El de la pantalla (${esc(this.gsPeriodoTxt(per))})</option><option value="anio">Un año</option><option value="mes">Un mes</option></select>`)}
+          ${fieldHtml('Período', `<select id="hf-per" class="input" onchange="el('hf-mes-w').hidden=this.value!=='mes'; el('hf-anio-w').hidden=this.value!=='anio'"><option value="pantalla">El de la pantalla (${esc(this.gsPeriodoTxt(per))})</option><option value="todo">Todo el historial</option><option value="anio">Un año</option><option value="mes">Un mes</option></select>`)}
           <div id="hf-anio-w" hidden>${fieldHtml('Año', `<input type="number" id="hf-anio" class="input num" min="2020" max="2100" value="${today().slice(0, 4)}">`)}</div>
           <div id="hf-mes-w" hidden>${fieldHtml('Mes y año', `<input type="month" id="hf-mes" class="input" value="${today().slice(0, 7)}">`)}</div>
           ${fieldHtml('Ordenar por', '<select id="hf-ord" class="input"><option value="fecha">Fecha</option><option value="tipo">Tipo de acción</option><option value="curso">Curso</option></select>')}
@@ -46,11 +46,10 @@ Object.assign(app, {
   }
 });
 
-Object.assign(app.REPORTS, {
-  staff_report() {
-    const ex = State.export, prof = State.users.find(u => sameId(u.id, ex.tempProfId)), pid = prof ? String(prof.id) : '';
-    const o = ex.tempOpts || { tipos: Object.fromEntries(HF_TIPOS.map(([k]) => [k, true])), orden: 'fecha', detalle: 'resumen', privadas: false };
-    const per = ex.tempPer || { anio: String(ex.tempTime || '').slice(0, 4), mes: String(ex.tempTime || '').slice(5, 7) };
+Object.assign(app, {
+  /** Informe de gestión de un funcionario (formato oficial: datos, resumen por tipo de acción y detalle cronológico). */
+  hfInforme(pid, per, o) {
+    const prof = State.users.find(u => String(u.id) === String(pid)); pid = String(pid);
     const inP = f => !!f && (per.todo || app.gsEnPeriodo(String(f).split('T')[0], per));
     const est = id => { const st = State.rawStudents.find(x => sameId(x.id, id)); return st ? [app.formatStudentName(String(st.name || '')), app.courseNameOf(st)] : ['No identificado', '-']; };
     const cortar = t => { t = String(t || '').trim(); return o.detalle === 'sin' ? '' : o.detalle === 'completo' ? t : t.substring(0, 200); };
@@ -75,14 +74,42 @@ Object.assign(app.REPORTS, {
     const cmp = { fecha: (a, b) => new Date(a[0]) - new Date(b[0]), tipo: (a, b) => String(a[1]).localeCompare(String(b[1]), 'es') || new Date(a[0]) - new Date(b[0]), curso: (a, b) => ALL_COURSES.indexOf(a[3]) - ALL_COURSES.indexOf(b[3]) || new Date(a[0]) - new Date(b[0]) }[o.orden] || ((a, b) => new Date(a[0]) - new Date(b[0]));
     regs.sort(cmp);
     const resumen = {}; regs.forEach(r => { const k = String(r[1]).replace(/ \((apoyo|compartida)\)$/, ''); resumen[k] = (resumen[k] || 0) + 1; });
-    const name = prof ? prof.name : 'Profesional', periodoTxt = per.todo ? 'Todo el historial' : (per.mes === 'S1' || per.mes === 'S2' || per.mes ? app.gsPeriodoTxt(per) : `Año ${per.anio}`), nomPer = per.todo ? 'historial' : (per.mes ? `${per.anio}_${per.mes}` : per.anio);
+    const name = prof ? prof.name : 'Profesional', periodoTxt = per.todo ? 'Todo el historial' : (per.mes ? app.gsPeriodoTxt(per) : `Año ${per.anio}`), nomPer = per.todo ? 'historial' : (per.mes ? `${per.anio}_${per.mes}` : per.anio);
     const cols = o.detalle === 'sin' ? ['Fecha', 'Tipo', 'Estudiante', 'Curso'] : ['Fecha', 'Tipo', 'Estudiante', 'Curso', 'Detalle'];
-    return {
-      filename: `Historial_${name.replace(/\s+/g, '_')}_${nomPer}.pdf`, title: 'HISTORIAL DE GESTIÓN DE FUNCIONARIO', wide: true,
-      body: `${docKv([[['Funcionario', `${esc(name)}${prof?.customRole ? ' — ' + esc(prof.customRole) : ''}`]], [['Período', esc(periodoTxt)], ['Orden', { fecha: 'Por fecha', tipo: 'Por tipo de acción', curso: 'Por curso' }[o.orden] || 'Por fecha']], [['Total de registros', `<strong>${regs.length}</strong>`], ['Entrevistas confidenciales', o.privadas ? 'Con detalle' : `${reservados.n} con detalle reservado`]]])}
+    const cuerpo = `${docKv([[['Funcionario', `${esc(name)}${prof?.customRole ? ' — ' + esc(prof.customRole) : ''}`]], [['Período', esc(periodoTxt)]], [['Total de registros', `<strong>${regs.length}</strong>`]]])}
         ${docH('Resumen por tipo de acción')}${docTable(['Tipo de acción', 'Cantidad'], Object.entries(resumen).map(([k, v]) => [esc(k), `<strong>${v}</strong>`]), 'Sin registros en el período.')}
-        ${docH('Detalle')}${docTable(cols, regs.map(r => [fmtDate(r[0]), `<strong>${esc(r[1])}</strong>`, esc(r[2]), esc(r[3]), ...(o.detalle === 'sin' ? [] : [esc(r[4])])]), 'No se registran acciones en el período seleccionado.')}`
-    };
+        ${docH('Detalle cronológico')}${docTable(cols, regs.map(r => [fmtDate(r[0]), `<strong>${esc(r[1])}</strong>`, esc(r[2]), esc(r[3]), ...(o.detalle === 'sin' ? [] : [esc(r[4])])]), 'No se registran acciones en el período seleccionado.')}
+        ${reservados.n && !o.privadas ? `<p class="doc-muted">${reservados.n} registro(s) confidencial(es) con el detalle reservado.</p>` : ''}`;
+    return { name, nomPer, cuerpo, total: regs.length };
+  },
+  /** Opciones por defecto del informe (todo el año de la pantalla, todos los tipos, detalle en resumen). */
+  hfOpcionesBase() { return { tipos: Object.fromEntries(HF_TIPOS.map(([k]) => [k, true])), orden: 'fecha', detalle: 'resumen', privadas: false }; },
+  /** Informe directo (sin preguntar) de una persona con el período de la pantalla. */
+  hfInformeDirecto(uid) {
+    const per = { ...this.gsPeriodo() }; if (!per.anio) per.todo = true;
+    Object.assign(State.export, { context: 'staff_report', customSignatures: [], tempProfId: String(uid), tempPer: per, tempOpts: this.hfOpcionesBase(), tempType: per.mes ? 'monthly' : 'annual', tempTime: per.mes ? `${per.anio}-${per.mes}` : per.anio });
+    this.executeExport({ includeSig: false });
+  },
+  /** Un solo PDF con el informe de varias personas (una por página). */
+  hfInformeVarios(ids) {
+    const per = { ...this.gsPeriodo() };
+    Object.assign(State.export, { context: 'staff_report_varios', customSignatures: [], tempIds: ids.map(String), tempPer: per, tempOpts: this.hfOpcionesBase(), tempType: per.mes ? 'monthly' : 'annual', tempTime: per.mes ? `${per.anio}-${per.mes}` : per.anio });
+    this.executeExport({ includeSig: false });
+  }
+});
+
+Object.assign(app.REPORTS, {
+  staff_report() {
+    const ex = State.export, per = ex.tempPer || { anio: String(ex.tempTime || '').slice(0, 4), mes: String(ex.tempTime || '').slice(5, 7) };
+    const inf = app.hfInforme(ex.tempProfId, per, ex.tempOpts || app.hfOpcionesBase());
+    return { filename: `Reporte_${inf.name.replace(/\s+/g, '_')}_${inf.nomPer}.pdf`, title: 'INFORME DE GESTIÓN DE FUNCIONARIO', wide: true, body: inf.cuerpo };
+  },
+  staff_report_varios() {
+    const ex = State.export, per = ex.tempPer, o = ex.tempOpts || app.hfOpcionesBase();
+    const infs = (ex.tempIds || []).map(id => app.hfInforme(id, per, o));
+    const nomPer = per.todo ? 'historial' : (per.mes ? `${per.anio}_${per.mes}` : per.anio);
+    return { filename: `Informes_de_gestion_${nomPer}.pdf`, title: 'INFORME DE GESTIÓN DE FUNCIONARIO', wide: true,
+      body: infs.map((i, n) => `<div${n ? ' style="page-break-before:always"' : ''}>${i.cuerpo}</div>`).join('') };
   }
 });
 
@@ -128,7 +155,12 @@ Object.assign(app, {
         const b = tr.querySelector('button[onclick*="State.sr.sel="]'); const m = b && b.getAttribute('onclick').match(/State\.sr\.sel=["']?([^"';]+)["']?;/); const u = m && State.users.find(x => String(x.id) === m[1]); if (!u) return;
         const a = this.gsActividad(u, per), cel = [...tr.children].filter(x => x.classList.contains('num')).pop();
         if (cel) cel.insertAdjacentHTML('afterend', `<td><strong class="num">${a.total}</strong><div class="gs-acts">${this.gsActividadChips(a)}</div></td>`);
+        const ac = tr.querySelector('.t-actions'); if (ac && !ac.querySelector('[data-inf]')) ac.insertAdjacentHTML('afterbegin', `<button class="btn btn--sm btn--primary" data-inf title="Informe de gestión de ${esc(u.name)} (PDF)" onclick="app.hfInformeDirecto(${jsq(u.id)})">${ico('file-down')}Informe PDF</button> `);
       });
+      // Informe de gestión de todas las personas del listado (un solo PDF)
+      const ids = [...(tabla ? tabla.querySelectorAll('tbody tr') : [])].map(tr => { const b = tr.querySelector('button[onclick*="State.sr.sel="]'); const m = b && b.getAttribute('onclick').match(/State\.sr\.sel=["']?([^"';]+)["']?;/); return m && m[1]; }).filter(Boolean);
+      const acts = body.querySelector('.page-head .row-actions');
+      if (acts && ids.length && !acts.querySelector('[data-inf-todos]')) acts.insertAdjacentHTML('afterbegin', `<button class="btn btn--primary" data-inf-todos onclick='app.hfInformeVarios(${JSON.stringify(ids)})'>${ico('files')}Informes de gestión del listado (${ids.length}) en un PDF</button>`);
       icons();
     } catch (e) { /* el reporte original sigue visible */ }
   };
