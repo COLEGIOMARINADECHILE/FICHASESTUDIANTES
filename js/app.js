@@ -427,9 +427,14 @@ window.app = {
       ['manual', 'book-open', 'Manual de uso', true, []],
       ['admin', 'settings', 'Administración', hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'), ['admin']]
     ];
-    el('nav-menu').innerHTML = items.filter(i => i[3]).map(([id, icon, label, , views]) =>
-      `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'manual' ? 'app.abrirManual()' : id === 'report' ? 'app.openStaffReportModal()' : id === 'cartas' ? 'app.openCartasHub()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`).join('');
-    this.setupNavScroll();
+    // Menú ordenado por cómo se usa: inicio, registrar, seguimiento de estudiantes, equipos, informes y datos, plataforma
+    const GRUPOS = [['', ['dashboard', 'mine', 'quick', 'courses']], ['Registrar', ['asistencia', 'enfermeria', 'cartas']], ['Seguimiento de estudiantes', ['pick_traspaso', 'pick_riesgos', 'alerts', 'consejo', 'pie', 'sin_reportes', 'pick_dia']], ['Equipos y reuniones', ['reuniones', 'entrevistas_reg', 'course_summary', 'presentaciones']], ['Informes y datos', ['reportes', 'report', 'cargas', 'audit']], ['Plataforma', ['manual', 'admin']]];
+    const visibles = items.filter(i => i[3]), usados = new Set();
+    const boton = ([id, icon, label, , views]) => `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'manual' ? 'app.abrirManual()' : id === 'report' ? 'app.openStaffReportModal()' : id === 'cartas' ? 'app.openCartasHub()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`;
+    let html = '';
+    GRUPOS.forEach(([titulo, ids]) => { const its = ids.map(id => visibles.find(i => i[0] === id)).filter(Boolean); if (!its.length) return; its.forEach(i => usados.add(i[0])); html += (titulo ? `<div class="nav__group" role="presentation">${titulo}</div>` : '') + its.map(boton).join(''); });
+    const otros = visibles.filter(i => !usados.has(i[0])); if (otros.length) html += `<div class="nav__group" role="presentation">Otros</div>` + otros.map(boton).join('');
+    el('nav-menu').innerHTML = html;    this.setupNavScroll();
   },
   /** Flechas para recorrer el menú lateral cuando no cabe completo en la pantalla. */
   setupNavScroll() {

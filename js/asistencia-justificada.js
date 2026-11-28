@@ -118,6 +118,9 @@ Object.assign(app, {
   },
   asjRender() {
     const a = State.asj; if (!a) return;
+    // Se contrasta cada estudiante con lo que ya hay en la plataforma
+    a.hojas.forEach(h => h.filas.forEach(f => { const raw = f.studentId ? State.rawStudents.find(s => sameId(s.id, f.studentId)) : null; f.control = raw && this.ascControl ? this.ascControl(raw, a.opts.actualizar ? { total: f.M, meses: f.meses, porMes: f.porMes, jDias: f.j } : { total: parseInt(raw.inasistencias) || 0, meses: raw.inasistenciasMensuales || null, porMes: f.porMes, jDias: f.j }) : []; }));
+    const nCtl = a.hojas.reduce((t, h) => t + h.filas.filter(f => f.control && f.control.length).length, 0);
     const todas = a.hojas.flatMap(h => h.filas.map(f => ({ ...f, curso: h.curso })));
     const vinc = todas.filter(f => f.studentId), conJ = vinc.filter(f => f.j > 0 || (a.opts.usarR && !f.hayTexto && f.R > 0)), totJ = vinc.reduce((t, f) => t + (f.j || (a.opts.usarR ? f.R : 0)), 0);
     el('asj-prev').innerHTML = `<div class="stats stats--4">
@@ -127,18 +130,22 @@ Object.assign(app, {
         <div class="stat" data-tone="warn"><span class="stat__num num">${totJ}</span><span class="stat__label">Días justificados</span></div></div>
       <div class="stack"><label class="check"><input type="checkbox" ${a.opts.actualizar ? 'checked' : ''} onchange="State.asj.opts.actualizar=this.checked; app.asjRender()"><span><strong>Actualizar también las inasistencias y los días de clases</strong> de cada estudiante con los de la planilla <span class="muted small">(si no, solo se agregan los días justificados)</span></span></label>
         <label class="check"><input type="checkbox" ${a.opts.usarR ? 'checked' : ''} onchange="State.asj.opts.usarR=this.checked; app.asjRender()"><span><strong>Si un estudiante no tiene días marcados</strong>, usar el número de la columna «dias justificados» <span class="muted small">(no se sabe qué días son)</span></span></label></div>
-      ${a.hojas.map(h => { const vi = h.filas.filter(f => f.studentId).length, cj = h.filas.reduce((t, f) => t + f.j, 0); return `<details class="subpanel"><summary><strong>${esc(h.curso)}</strong> <span class="muted small">· ${h.filas.length} estudiantes · ${vi} vinculados · ${cj} días justificados marcados</span></summary>
-        <div class="table-wrap"><table class="table table--dense"><thead><tr><th>Estudiante (planilla)</th><th class="t-num">Inasist.</th><th class="t-num">Justificados</th><th class="t-num">Sin justificar</th><th class="t-num">Asistencia real</th><th class="t-num">Con justificados</th><th>Ficha</th></tr></thead><tbody>
-        ${h.filas.map(f => { const j = f.j || (a.opts.usarR && !f.hayTexto ? f.R : 0), p = this.asjPct(f.N, f.M, j), raw = f.studentId ? State.rawStudents.find(s => sameId(s.id, f.studentId)) : null, dif = raw && raw.inasistencias !== undefined && +raw.inasistencias !== f.M;
-          return `<tr><td class="small">${esc(f.nombre)}</td><td class="t-num num">${f.M}${dif ? `<span class="cell-sub" title="En la plataforma">plataforma: ${+raw.inasistencias || 0}</span>` : ''}</td><td class="t-num num">${j ? `<strong class="asj-j">${j}</strong>` : '0'}</td><td class="t-num num">${f.hayTexto ? Math.max(0, f.M - j) : (f.M - j)}</td><td class="t-num num">${p.real === null ? '-' : String(p.real).replace('.', ',')} %</td><td class="t-num num">${p.con === null ? '-' : `<strong>${String(p.con).replace('.', ',')} %</strong>`}</td><td class="small">${f.studentId ? chip(f.otroCurso ? 'En otro curso' : 'Vinculado', f.otroCurso ? 'warn' : 'conv') : `<span class="muted">${esc(f.motivo)}</span>`}</td></tr>`; }).join('')}</tbody></table></div></details>`; }).join('')}
+      ${this.ascBanner ? this.ascBanner(nCtl, a.revisado, 'State.asj.revisado=this.checked') : ''}
+      ${a.hojas.map((h, hi) => { const vi = h.filas.filter(f => f.studentId).length, cj = h.filas.reduce((t, f) => t + f.j, 0); return `<details class="subpanel"><summary><strong>${esc(h.curso)}</strong> <span class="muted small">· ${h.filas.length} estudiantes · ${vi} vinculados · ${cj} días justificados marcados</span></summary>
+        <div class="table-wrap"><table class="table table--dense"><thead><tr><th>Estudiante (planilla)</th><th class="t-num">Inasist.</th><th class="t-num">Justificados</th><th class="t-num">Sin justificar</th><th class="t-num">Asistencia real</th><th class="t-num">Con justificados</th><th>Ficha</th><th>Control</th></tr></thead><tbody>
+        ${h.filas.map((f, fi) => { const j = f.j || (a.opts.usarR && !f.hayTexto ? f.R : 0), p = this.asjPct(f.N, f.M, j), raw = f.studentId ? State.rawStudents.find(s => sameId(s.id, f.studentId)) : null, dif = raw && raw.inasistencias !== undefined && +raw.inasistencias !== f.M;
+          return `<tr><td class="small">${esc(f.nombre)}</td><td class="t-num num">${f.M}${dif ? `<span class="cell-sub" title="En la plataforma">plataforma: ${+raw.inasistencias || 0}</span>` : ''}</td><td class="t-num num">${j ? `<strong class="asj-j">${j}</strong>` : '0'}</td><td class="t-num num">${f.hayTexto ? Math.max(0, f.M - j) : (f.M - j)}</td><td class="t-num num">${p.real === null ? '-' : String(p.real).replace('.', ',')} %</td><td class="t-num num">${p.con === null ? '-' : `<strong>${String(p.con).replace('.', ',')} %</strong>`}</td><td class="small">${f.studentId ? chip(f.otroCurso ? 'En otro curso' : 'Vinculado', f.otroCurso ? 'warn' : 'conv') : `<span class="muted">${esc(f.motivo)}</span>`}</td><td class="small">${this.ascCeldaHtml ? this.ascCeldaHtml(f, `app.asjOmitir.bind(app, ${hi}, ${fi})`) : ''}</td></tr>`; }).join('')}</tbody></table></div></details>`; }).join('')}
       <p class="note">${ico('info')}Asistencia real = sin considerar justificaciones. Con justificados = los días con respaldo cuentan como asistidos. Un estudiante que no justificó nada tiene los dos porcentajes iguales.</p>`;
     icons();
   },
+  asjOmitir(hi, fi, v) { State.asj.hojas[hi].filas[fi].omitir = !!v; },
   async asjGuardar() {
     const a = State.asj; if (!a) { toast('Seleccione primero la planilla', 'error'); return false; }
+    if (a.hojas.some(h => h.filas.some(f => f.control && f.control.length)) && !a.revisado) { toast('Hay contradicciones: revíselas y marque «Revisé las contradicciones y confirmo guardar»', 'error'); return false; }
     const ops = []; let conJ = 0, totJ = 0, sin = 0;
     a.hojas.forEach(h => h.filas.forEach(f => {
       if (!f.studentId) { sin++; return; }
+      if (f.omitir) return;
       const raw = State.rawStudents.find(s => sameId(s.id, f.studentId)); if (!raw) return;
       const jFmt = f.j, jUsar = f.j || (a.opts.usarR && !f.hayTexto ? f.R : 0);
       const data = { justificacion: { fuente: 'Planilla de asistencia', archivo: a.archivo, actualizado: today(), justificados: jUsar, noJustificados: Math.max(0, f.M - jUsar), porMes: jFmt ? f.porMes : {}, totalDiasPlanilla: f.N, inasistenciasPlanilla: f.M, sinDetalle: !jFmt && jUsar > 0 } };
@@ -181,7 +188,7 @@ Object.assign(app, {
     const pm = s.justificacion?.porMes || {}, jm = this.asjJustPorMes(s);
     return MESES.map(k => {
       const tot = parseInt(s.inasistenciasMensuales?.[k]) || ((pm[k]?.j.length || 0) + (pm[k]?.n.length || 0));
-      const j = (jm.dias[k] || []).slice().sort((a, b) => a - b); let n = (pm[k]?.n || []).filter(d => !j.includes(d)).sort((a, b) => a - b);
+      const j = (jm.dias[k] || []).slice().sort((a, b) => a - b); let n = [...new Set([...(pm[k]?.n || []), ...(this.ascDiasMes ? [...this.ascDiasMes(s, k)] : [])])].filter(d => !j.includes(d)).sort((a, b) => a - b);
       n = n.slice(0, Math.max(0, tot - j.length));
       return { k, tot, j, n, u: Math.max(0, tot - j.length - n.length), sobra: Math.max(0, (pm[k]?.j.length || 0) + (pm[k]?.n.length || 0) - tot) };
     }).filter(m => m.tot > 0);
@@ -193,7 +200,7 @@ Object.assign(app, {
     const pl = j ? Math.min(j.justificados || 0, dj) : 0, cert = Math.max(0, dj - pl);
     return `<div class="asj-detalle"><h4>${ico('calendar-check')}Días en que no asistió</h4>
       <p class="small"><span class="asj-chip asj-chip--j">justificado (con respaldo)</span> <span class="asj-chip asj-chip--n">sin justificar</span>${sinAnotar ? ' <span class="asj-chip asj-chip--u">?</span> <span class="muted">día ausente sin fecha informada (toque para ver qué significa)</span>' : ''}</p>
-      ${meses.length ? `<div class="asj-meses">${meses.map(m => `<div class="asj-mes"><strong>${MESES_NOMBRE[m.k]} <span class="muted small">(${m.tot} día${m.tot === 1 ? '' : 's'})</span></strong>${m.j.map(d => `<button type="button" class="asj-chip asj-chip--j" onclick="app.asjExplica('j', ${jsq(MESES_NOMBRE[m.k])}, ${d})">${d}</button>`).join('')}${m.n.map(d => `<button type="button" class="asj-chip asj-chip--n" onclick="app.asjExplica('n', ${jsq(MESES_NOMBRE[m.k])}, ${d})">${d}</button>`).join('')}${`<button type="button" class="asj-chip asj-chip--u" onclick="app.asjExplica('u', ${jsq(MESES_NOMBRE[m.k])}, 0, ${m.tot}, ${m.j.length + m.n.length})">?</button>`.repeat(m.u)}</div>`).join('')}</div>` : '<p class="muted small">No hay inasistencias por mes cargadas.</p>'}
+      ${meses.length ? `<div class="asj-meses">${meses.map(m => `<div class="asj-mes"><strong>${MESES_NOMBRE[m.k]} <span class="muted small">(${m.tot} día${m.tot === 1 ? '' : 's'})</span></strong>${m.j.map(d => `<button type="button" class="asj-chip asj-chip--j" onclick="app.asjExplica('j', ${jsq(MESES_NOMBRE[m.k])}, ${d})">${d}</button>`).join('')}${m.n.map(d => `<button type="button" class="asj-chip asj-chip--n" onclick="app.asjExplica('n', ${jsq(MESES_NOMBRE[m.k])}, ${d})">${d}</button>`).join('')}${`<button type="button" class="asj-chip asj-chip--u" onclick="app.asjExplica('u', ${jsq(MESES_NOMBRE[m.k])}, 0, ${m.tot}, ${m.j.length + m.n.length}, ${jsq(String(s.id))}, '${m.k}')">?</button>`.repeat(m.u)}</div>`).join('')}</div>` : '<p class="muted small">No hay inasistencias por mes cargadas.</p>'}
       <p class="small"><strong>${inas}</strong> inasistencia(s) en total = <strong>${dj}</strong> justificada(s)${cert ? ` (${pl} de la planilla y ${cert} por certificados médicos)` : ''} + <strong>${Math.max(0, inas - dj)}</strong> sin justificar.</p>
       ${jm.sinMes > 0 ? `<p class="muted small">${jm.sinMes} día(s) justificado(s) no se pudieron ubicar en un mes (sin fecha o fuera de los meses con inasistencias).</p>` : ''}
       ${meses.some(m => m.sobra) ? `<p class="muted small">En ${meses.filter(m => m.sobra).map(m => MESES_NOMBRE[m.k].toLowerCase()).join(", ")} la planilla anota más días que el total mensual cargado; se muestran los primeros hasta completar el total del mes.</p>` : ''}
@@ -201,13 +208,15 @@ Object.assign(app, {
       ${j ? `<p class="muted small">Fuente: ${esc(j.fuente)} (${fmtDate(j.actualizado)}).</p>` : ''}</div>`;
   },
   /** Explica qué significa un día al tocarlo (verde, rojo o «?»). */
-  asjExplica(tipo, mes, dia, total, conDia) {
+  asjExplica(tipo, mes, dia, total, conDia, sid, k) {
     const cfg = {
       j: ['check-circle-2', 'conv', `${dia} de ${mes}: día justificado`, 'El estudiante faltó este día y la falta tiene respaldo (por ejemplo un certificado médico o un justificativo registrado). Cuenta como inasistencia, pero se suma a la «asistencia con días justificados».'],
       n: ['x-circle', 'proto', `${dia} de ${mes}: día sin justificar`, 'El estudiante faltó este día y no hay respaldo registrado. Cuenta como inasistencia en la asistencia real y también en la asistencia con días justificados.'],
       u: ['help-circle', 'warn', `Día ausente sin fecha informada (${mes})`, `En ${mes} el estudiante tiene <strong>${total} inasistencia(s)</strong> cargadas, pero solo se conoce qué día fueron <strong>${conDia}</strong>. Cada «?» es un día ausente que ya está contado en el total y se considera <strong>sin justificar</strong>, pero no se sabe en qué fecha ocurrió. Para ver la fecha, cargue la planilla de asistencia con el detalle de los días (columna Monitoreo) en «Cargas masivas → Días justificados».`]
     }[tipo];
-    ui.modal({ title: cfg[2], icon: cfg[0], tone: cfg[1], size: 'sm', hideOk: true, cancelText: 'Entendido', body: `<p class="modal__msg">${cfg[3]}</p>` });
+    const anotar = tipo === 'u' && sid && this.ascPuedeAnotar && this.ascPuedeAnotar();
+    ui.modal({ title: cfg[2], icon: cfg[0], tone: cfg[1], size: 'sm', hideOk: true, cancelText: 'Entendido',
+      body: `<p class="modal__msg">${cfg[3]}</p>${tipo === 'u' ? `<p class="small muted">También se completa solo cuando se marca la asistencia por día o por mes en «Asistencia».</p>` : ''}${anotar ? `<div class="row-actions"><button type="button" class="btn btn--primary" onclick="ui.close(); app.asjAnotar(${jsq(sid)}, '${k}')">${ico('calendar-plus')}Anotar los días ausentes</button></div>` : ''}` });
   },
   /** Días justificados de cada mes (planilla + certificados médicos con sus fechas), sin pasar de las inasistencias del mes. */
   asjJustPorMes(s) {

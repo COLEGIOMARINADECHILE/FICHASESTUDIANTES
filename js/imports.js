@@ -126,6 +126,9 @@ Object.assign(app, {
       r.cursoActual = raw ? this.courseNameOf(raw) : '';
       r.estado = destino && N(r.cursoActual) !== N(destino) ? 'otroCurso' : 'ok';
     });
+    // Contraste con lo que ya hay en la plataforma (contradicciones por estudiante)
+    imp.registros.forEach(r => { const raw = r.studentId ? State.rawStudents.find(x => sameId(x.id, r.studentId)) : null; r.control = raw && this.ascControl ? this.ascControl(raw, { total: r.total, meses: r.meses }) : []; });
+    const nCtl = imp.registros.filter(r => r.control.length).length;
     const nuevos = imp.registros.filter(r => r.estado === 'nuevo').length;
     const otro = imp.registros.filter(r => r.estado === 'otroCurso').length;
     const idsExcel = new Set(imp.registros.filter(r => r.studentId).map(r => r.studentId));
@@ -155,10 +158,11 @@ Object.assign(app, {
         ${opt('att-import-withdraw', 'retirar', ausentes.length, 'proto', `Marcar como retirados a ${ausentes.length} estudiante(s)`, 'Están en el curso, pero no aparecen en el Excel.')}
       </div>
       ${ausentes.length ? `<p class="note">${ico('user-minus')}Registrados en ${esc(destino)} que no aparecen en el Excel: ${ausentes.map(x => esc(x.name || 'Sin nombre')).join(', ')}.</p>` : ''}
+      ${this.ascBanner ? this.ascBanner(nCtl, imp.revisado, 'State.attendanceImport.revisado=this.checked') : ''}
       <p class="muted small">Revise los datos antes de guardar. Se reemplazan las inasistencias anteriores de cada estudiante por las de este archivo. El porcentaje del Excel no se utiliza.</p>
       <div class="table-wrap"><table class="table table--dense">
-        <thead><tr><th class="t-num">N°</th><th>Estudiante</th>${MESES.map(m => `<th class="t-num">${m}</th>`).join('')}<th class="t-num">Total</th><th>Estado</th></tr></thead>
-        <tbody>${imp.registros.map((r, i) => `<tr><td class="t-num num">${i + 1}</td><td><span class="cell-title">${esc(r.nombre)}</span><span class="cell-sub num">${esc(r.rutOriginal)}</span></td>${MESES.map(m => `<td class="t-num num" data-level="${r.meses[m] >= 5 ? 'high' : r.meses[m] > 0 ? 'low' : 'none'}">${r.meses[m]}</td>`).join('')}<td class="t-num num"><strong>${r.total}</strong></td><td>${tag(r)}</td></tr>`).join('')}</tbody>
+        <thead><tr><th class="t-num">N°</th><th>Estudiante</th>${MESES.map(m => `<th class="t-num">${m}</th>`).join('')}<th class="t-num">Total</th><th>Estado</th><th>Control</th></tr></thead>
+        <tbody>${imp.registros.map((r, i) => `<tr><td class="t-num num">${i + 1}</td><td><span class="cell-title">${esc(r.nombre)}</span><span class="cell-sub num">${esc(r.rutOriginal)}</span></td>${MESES.map(m => `<td class="t-num num" data-level="${r.meses[m] >= 5 ? 'high' : r.meses[m] > 0 ? 'low' : 'none'}">${r.meses[m]}</td>`).join('')}<td class="t-num num"><strong>${r.total}</strong></td><td>${tag(r)}</td><td class="small">${this.ascCeldaHtml ? this.ascCeldaHtml(r, `(v => { State.attendanceImport.registros[${i}].omitir = v; })`) : ''}</td></tr>`).join('')}</tbody>
       </table></div>`;
     icons();
   },
@@ -167,10 +171,12 @@ Object.assign(app, {
     const imp = State.attendanceImport;
     const curso = el('att-import-course').value;
     if (!curso) { toast('Seleccione el curso de destino', 'error'); return false; }
+    if (imp.registros.some(r => r.control && r.control.length) && !imp.revisado) { toast('Hay contradicciones: revíselas y marque «Revisé las contradicciones y confirmo guardar»', 'error'); return false; }
     const hoy = today();
     const ops = [];
     let actualizados = 0, creados = 0, movidos = 0, retirados = 0, omitidos = 0;
     imp.registros.forEach(r => {
+      if (r.omitir) { omitidos++; return; }
       const datos = { inasistencias: r.total, inasistenciasMensuales: r.meses, inasistenciasActualizadas: hoy, inasistenciasFuente: imp.archivo };
       if (r.studentId) {
         if (imp.opts.mover && r.estado === 'otroCurso') { Object.assign(datos, { curso, courseId: curso, status: 'active' }); movidos++; }
