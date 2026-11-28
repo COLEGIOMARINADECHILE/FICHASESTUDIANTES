@@ -9,10 +9,27 @@ Object.assign(app, {
   esActa(e) { return !!(e && (e.cartaId || e.transversal || e.type === ACTA_TIPO_G)); },
   actaPuedeCambiar(e) { return !!e && ((this.canUploadActas && this.canUploadActas()) || sameId(e.uploaderId, State.currentUser.id) || !!(this.esAutorPlataforma && this.esAutorPlataforma())); },
   actaCambiarBtn(e) { return this.actaPuedeCambiar(e) ? `<button class="icon-btn" aria-label="Cambiar esta acta a otro estudiante" title="Cambiar esta acta a otro estudiante" onclick="app.actaReasignar(${jsq(e.id)})">${ico('repeat')}</button>` : ''; },
+  /** ¿La carta de esta acta se registró junto con ella (escaneada) y no tiene otra acta? Entonces se mueve con el acta. */
+  actaCartaPropia(e) {
+    const old = e.cartaId && (State.rawInterventions || []).find(h => sameId(h.id, e.cartaId));
+    return old && old.cartaEscaneada && !(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, old.id) && !sameId(x.id, e.id)) ? old : null;
+  },
   /** Las cartas del estudiante elegido, para vincular el acta a la que corresponde. */
   actaCartasOpciones(studentId, actual) {
-    const cartas = studentId ? this.cartasOf(studentId) : [];
-    return options([['', 'Acta transversal (sin carta; el estudiante puede tener varias)'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, c.id) && !sameId(x.id, State.ar.id)) ? ' (ya tiene otra acta)' : ''}`])], actual || '');
+    const e = (State.rawEvidences || []).find(x => sameId(x.id, State.ar.id)) || {}, cartas = studentId ? this.cartasOf(studentId) : [], propia = this.actaCartaPropia(e);
+    return options([...(propia ? [['__keep', 'Pasar también su carta (se registró junto con el acta)']] : []), ['__new', 'Registrar como carta nueva en la ficha'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, c.id) && !sameId(x.id, State.ar.id)) ? ' (ya tiene otra acta)' : ''}`]), ['', 'Acta transversal (sin carta; el estudiante puede tener varias)']], actual || '');
+  },
+  /** Opción automática: la carta que viaja con el acta; si era transversal sigue siéndolo; si no, la primera carta libre del estudiante. */
+  actaCartaAuto(studentId, e) {
+    if (this.actaCartaPropia(e)) return '__keep';
+    if (!e.cartaId) return '';
+    return this.cartaPorDefecto(studentId, {}, '');
+  },
+  actaElegirEstudiante(valor) {
+    const s = this.studentByLabel(valor); State.ar.studentId = s ? String(s.id) : '';
+    const e = (State.rawEvidences || []).find(x => sameId(x.id, State.ar.id)), sel = el('ar-carta'); if (!sel || !e) return;
+    State.ar.cartaId = State.ar.studentId ? this.actaCartaAuto(State.ar.studentId, e) : '';
+    sel.innerHTML = this.actaCartasOpciones(State.ar.studentId, State.ar.cartaId); sel.disabled = !State.ar.studentId;
   },
   actaReasignar(id) {
     const e = (State.rawEvidences || []).find(x => sameId(x.id, id)); if (!e) return;
@@ -21,27 +38,31 @@ Object.assign(app, {
     State.ar = { id: e.id, studentId: '', cartaId: '' };
     ui.modal({ title: 'Cambiar el acta a otro estudiante', icon: 'repeat', size: 'md', okText: 'Guardar el cambio',
       body: `<div class="stack">
-        <p class="note">${ico('info')}<span>El acta <strong>${esc(e.fileName || e.description || '')}</strong> está en la ficha de <strong>${esc(s0 ? this.formatStudentName(this.clean(s0.name)) : e.studentName || 'otro estudiante')}</strong>. Elija a quién corresponde en realidad.</span></p>
+        <p class="note">${ico('info')}<span>El acta <strong>${esc(e.fileName || e.description || '')}</strong> está en la ficha de <strong>${esc(s0 ? this.formatStudentName(this.clean(s0.name)) : e.studentName || 'otro estudiante')}</strong>. Elija a quién corresponde en realidad: la carta se pasa sola y desaparece de la lista del estudiante equivocado.</span></p>
         ${this.studentDatalist('ar-est')}
-        ${fieldHtml('Estudiante al que corresponde', `<input id="ar-est-in" class="input" list="ar-est" placeholder="Escriba el nombre o RUN" onchange="const s=app.studentByLabel(this.value); State.ar.studentId=s?String(s.id):''; State.ar.cartaId=''; el('ar-carta').innerHTML=app.actaCartasOpciones(State.ar.studentId,''); el('ar-carta').disabled=!State.ar.studentId">`)}
+        ${fieldHtml('Estudiante al que corresponde', `<input id="ar-est-in" class="input" list="ar-est" placeholder="Escriba el nombre o RUN" onchange="app.actaElegirEstudiante(this.value)">`)}
         ${fieldHtml('Carta a la que corresponde', `<select id="ar-carta" class="input" disabled onchange="State.ar.cartaId=this.value">${this.actaCartasOpciones('', '')}</select>`)}
-        <p class="muted small">El PDF no se vuelve a subir: solo cambia la ficha a la que pertenece. Si la carta anterior queda sin acta, vuelve a «pendiente de firma».</p></div>`,
+        <p class="muted small">El PDF no se vuelve a subir: solo cambia la ficha a la que pertenece.</p></div>`,
       onOk: async () => {
-        const v = el('ar-est-in').value, st = State.ar.studentId ? State.rawStudents.find(x => sameId(x.id, State.ar.studentId)) : this.studentByLabel(v);
+        const st = State.ar.studentId ? State.rawStudents.find(x => sameId(x.id, State.ar.studentId)) : this.studentByLabel(el('ar-est-in').value);
         if (!st) { toast('Elija un estudiante de la lista', 'error'); return false; }
-        const nueva = el('ar-carta').value || '', antes = e.cartaId;
-        const c = nueva ? (State.rawInterventions || []).find(h => sameId(h.id, nueva)) : null;
+        let nueva = el('ar-carta').value || '';
+        const old = e.cartaId ? (State.rawInterventions || []).find(h => sameId(h.id, e.cartaId)) : null, propia = this.actaCartaPropia(e), antes = e.cartaId;
+        let c = null;
+        if (nueva === '__keep' && propia) { await DB.patch('interventions', propia.id, { studentId: String(st.id), studentName: st.name }); nueva = String(propia.id); c = propia; }
+        else if (nueva === '__new') { c = { id: Date.now(), studentId: String(st.id), studentName: st.name, date: (old && old.date) || e.date || today(), type: (old && old.type) || 'Carta Compromiso', professional: State.currentUser.name, professionalId: State.currentUser.id, background: `**DOCUMENTO OFICIAL:**\n\n${(old && old.type) || 'Carta Compromiso'} firmada en papel. El documento escaneado está guardado como acta firmada.`, isPrivate: false, sharedWith: [], agreements: [], cartaEscaneada: true }; await DB.save('interventions', c); nueva = String(c.id); }
+        else if (nueva) c = (State.rawInterventions || []).find(h => sameId(h.id, nueva)) || null;
         await DB.patch('evidences', e.id, { studentId: String(st.id), studentName: st.name, course: this.courseNameOf(st), cartaId: nueva, transversal: !nueva, description: c ? `Acta firmada de ${c.type} del ${fmtDate(c.date)}` : 'Acta transversal firmada', reasignadaDe: String(e.studentId || ''), reasignadaFecha: today() });
-        // La carta anterior sin acta vuelve a pendiente; la nueva carta pasa a firmada
         try {
-          if (antes && !(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, antes))) { const ca = (State.rawInterventions || []).find(h => sameId(h.id, antes)); if (ca && ca.cartaMeta) await DB.patch('interventions', ca.id, { estadoCarta: 'pendiente' }); }
+          // La carta que se registró solo por este acta y ya no se usa desaparece de la lista del estudiante equivocado
+          if (propia && String(propia.id) !== nueva) await DB.remove('interventions', propia.id);
+          else if (antes && String(antes) !== nueva && !(State.rawEvidences || []).some(x => x.cartaId && sameId(x.cartaId, antes))) { if (old && old.cartaMeta) await DB.patch('interventions', old.id, { estadoCarta: 'pendiente' }); }
           if (c && c.cartaMeta) await DB.patch('interventions', c.id, { estadoCarta: 'firmada', fechaFirma: today() });
         } catch (er) { /* el acta ya quedó cambiada */ }
         toast(`Acta cambiada a ${this.formatStudentName(this.clean(st.name))}`);
-        this.render();
+        if (State.currentView === 'cartas_fmt') this.renderCartasFmt(); else this.render();
       } });
-  },
-  /** Todas las actas guardadas (para encontrar las que están en el estudiante equivocado). */
+  },  /** Todas las actas guardadas (para encontrar las que están en el estudiante equivocado). */
   actasGuardadasHtml() {
     const lista = (State.rawEvidences || []).filter(e => this.esActa(e)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const filas = lista.slice(0, 300).map(e => { const s = State.rawStudents.find(x => sameId(x.id, e.studentId)), c = e.cartaId && (State.rawInterventions || []).find(h => sameId(h.id, e.cartaId));

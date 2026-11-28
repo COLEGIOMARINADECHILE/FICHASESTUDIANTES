@@ -274,11 +274,15 @@ Object.assign(app, {
     if (!this.cfPuedeEliminar(h)) return toast('Solo quien creó la carta o el autor de la plataforma puede editarla', 'error');
     const m = h.cartaMeta || {}, txt = String(h.background || '').replace(/^\*\*DOCUMENTO OFICIAL:\*\*\s*/, '');
     ui.modal({ title: 'Editar la carta', icon: 'pencil', size: 'lg', okText: 'Guardar cambios',
-      body: `<div class="stack">${fieldHtml('Apoderado(a)', `<input id="cf-ed-apo" class="input" value="${esc(m.apoderado || '')}">`)}${fieldHtml('Fecha', `<input id="cf-ed-fecha" type="date" class="input" value="${esc(String(h.date || '').slice(0, 10))}">`)}${fieldHtml('Texto de la carta', `<textarea id="cf-ed-txt" class="input" rows="14">${esc(txt)}</textarea>`)}<p class="muted small">Esto corrige el registro en la ficha. Para cambiar el documento Word, use «Ver / Imprimir» y descárguelo.</p></div>`,
+      body: `<div class="stack">${this.studentDatalist('cf-ed-est')}${fieldHtml('Estudiante (si la carta quedó en otro, cámbiela aquí: se pasa sola con su acta)', `<input id="cf-ed-est-in" class="input" list="cf-ed-est" value="${esc((State.rawStudents.find(x => sameId(x.id, h.studentId)) && this.studentLabel(State.rawStudents.find(x => sameId(x.id, h.studentId)))) || '')}" placeholder="Escriba el nombre o RUN">`)}${fieldHtml('Apoderado(a)', `<input id="cf-ed-apo" class="input" value="${esc(m.apoderado || '')}">`)}${fieldHtml('Fecha', `<input id="cf-ed-fecha" type="date" class="input" value="${esc(String(h.date || '').slice(0, 10))}">`)}${fieldHtml('Texto de la carta', `<textarea id="cf-ed-txt" class="input" rows="14">${esc(txt)}</textarea>`)}<p class="muted small">Esto corrige el registro en la ficha. Para cambiar el documento Word, use «Ver / Imprimir» y descárguelo.</p></div>`,
       onOk: async () => {
         const t = el('cf-ed-txt').value.trim(), d = el('cf-ed-fecha').value || h.date;
         if (!t) { toast('El texto no puede quedar vacío', 'error'); return false; }
-        await DB.patch('interventions', h.id, { background: `**DOCUMENTO OFICIAL:**\n\n${t}`, date: d, cartaMeta: { ...m, apoderado: el('cf-ed-apo').value.trim(), editada: today() } });
+        const nuevo = this.studentByLabel(el('cf-ed-est-in').value); if (!nuevo) { toast('Elija un estudiante de la lista', 'error'); return false; }
+        const cambia = !sameId(nuevo.id, h.studentId);
+        await DB.patch('interventions', h.id, { background: `**DOCUMENTO OFICIAL:**\n\n${t}`, date: d, ...(cambia ? { studentId: String(nuevo.id), studentName: nuevo.name } : {}), cartaMeta: { ...m, apoderado: el('cf-ed-apo').value.trim(), editada: today() } });
+        // Las actas firmadas de esta carta se van con ella (desaparecen del estudiante equivocado)
+        if (cambia) for (const ev of (State.rawEvidences || []).filter(x => x.cartaId && sameId(x.cartaId, h.id))) await DB.patch('evidences', ev.id, { studentId: String(nuevo.id), studentName: nuevo.name, course: this.courseNameOf(nuevo) });
         toast('Carta actualizada'); if (State.currentView === 'cartas_fmt') this.renderCartasFmt(); else this.render();
       } });
   },
