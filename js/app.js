@@ -1259,6 +1259,7 @@ window.app = {
         <p class="muted small">${ico('paperclip')}${esc(e.fileName)}</p>
         <footer class="record__foot"><span>Cargado por ${esc(e.uploadedBy || 'Sistema')}</span>
           <span class="row-actions"><button class="icon-btn" aria-label="Abrir o descargar" title="Abrir o descargar" onclick="app.openEvidence(${jsq(e.id)})">${ico('external-link')}</button>
+          ${this.actaCambiarBtn && (e.cartaId || e.transversal || e.type === 'Acta o Compromiso Firmado') ? this.actaCambiarBtn(e) : ''}
           ${(String(e.uploaderId) === String(State.currentUser.id) || hasAccess('editar_fichas')) ? `<button class="icon-btn icon-btn--danger" aria-label="Eliminar respaldo" title="Eliminar respaldo" onclick="app.deleteEvidence(${jsq(e.id)})">${ico('trash-2')}</button>` : ''}</span></footer>
       </article>`).join('');
     this.panel(`${this.panelHead('Respaldos y archivos del estudiante', 'archive', chip(`${evs.length} documento(s)`, 'conv'))}${form}${list ? `<div class="grid-2">${list}</div>` : empty('folder-open', 'No hay documentos de respaldo cargados para este estudiante.', 'conv')}`);

@@ -52,7 +52,7 @@ Object.assign(app, {
   /** Botones de la tarjeta de una carta: ver el acta firmada o subirla. */
   actaButtonHtml(s, c) {
     const acta = this.actaOf(c.id);
-    if (acta) return `<button class="btn btn--sm" title="Ver acta firmada" onclick="app.openEvidence(${jsq(acta.id)})">${ico('file-check')}Acta firmada</button>`;
+    if (acta) return `<button class="btn btn--sm" title="Ver acta firmada" onclick="app.openEvidence(${jsq(acta.id)})">${ico('file-check')}Acta firmada</button>${this.actaCambiarBtn ? this.actaCambiarBtn(acta) : ''}`;
     return this.canUploadActas() ? `<button class="btn btn--sm" title="Subir el acta firmada en PDF" onclick="app.openActasImport({ studentId: ${jsq(s.id)}, cartaId: ${jsq(c.id)} })">${ico('upload')}Subir acta</button>` : '';
   },
   openActasImport(preset = {}) {
@@ -102,6 +102,7 @@ Object.assign(app, {
   /** Carta por defecto para un acta: la primera sin acta; si no hay, se registra una nueva. */
   cartaPorDefecto(studentId, preset, texto = '') {
     if (preset && preset.cartaId) return String(preset.cartaId);
+    if (preset && preset.transversal) return ''; // acta transversal: no depende de una carta
     const libres = this.cartasOf(studentId).filter(c => !this.actaOf(c.id)), t = this.normalizarTexto(texto).toLowerCase();
     // Si el documento dice cuál es el formato (COMPROMISO DE ASISTENCIA, REFORZAMIENTO...), se elige la carta pendiente de ese formato
     const porTitulo = t && libres.find(c => c.cartaMeta && c.cartaMeta.titulo && t.includes(this.normalizarTexto(c.cartaMeta.titulo).toLowerCase()));
@@ -375,7 +376,7 @@ Object.assign(app, {
           <div class="acta-group__form">
             <label class="check"><input type="checkbox" ${f.incluir ? 'checked' : ''} onchange="app.actaGroups()[${gi}].first.incluir=this.checked; app.renderActas()"><span><strong>Acta ${gi + 1}</strong> · ${g.pages.length} página(s)${f.detected && sameId(f.detected, f.studentId) ? ' · estudiante reconocido en el documento' : ''}</span></label>
             ${fieldHtml('Estudiante', `<input class="input" list="actas-students" value="${esc(etiqueta(f.studentId))}" placeholder="Escriba nombre o RUN..." autocomplete="off" onchange="app.setActaStudentText(${gi}, this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">`)}
-            ${fieldHtml('Carta de compromiso a la que corresponde', `<select class="input" ${f.studentId ? '' : 'disabled'} onchange="app.actaGroups()[${gi}].first.cartaId=this.value; app.renderActas()">${options([['__new', 'Registrar como carta nueva en la ficha'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${this.actaOf(c.id) ? ' (ya tiene acta)' : ''}`]), ['', 'Solo guardar el PDF, sin carta']], f.cartaId)}</select>`)}
+            ${fieldHtml('Carta de compromiso a la que corresponde', `<select class="input" ${f.studentId ? '' : 'disabled'} onchange="app.actaGroups()[${gi}].first.cartaId=this.value; app.renderActas()">${options([['__new', 'Registrar como carta nueva en la ficha'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${this.actaOf(c.id) ? ' (ya tiene acta)' : ''}`]), ['', 'Acta transversal (sin carta; el estudiante puede tener varias actas)']], f.cartaId)}</select>`)}
             ${this.cotejoHtml ? this.cotejoHtml(g, gi) : ''}
             ${f.cartaId === '__new' && f.studentId ? `<div class="grid-2">
               ${fieldHtml('Fecha de la carta', `<input type="date" class="input" value="${esc(f.fechaCarta)}" max="${today()}" onchange="app.actaGroups()[${gi}].first.fechaCarta=this.value">`)}
@@ -417,7 +418,7 @@ Object.assign(app, {
         const fecha = today();
         const nombre = `${fecha}_Acta_firmada_${this.clean(s.name).replace(/\s+/g, '_')}.pdf`;
         const up = await API.call('upload', { folderName: `${s.curso} - ${s.name}`, fileName: nombre, mimeType: 'application/pdf', base64: this.u8ToBase64(bytes) });
-        await DB.save('evidences', { id: newId(), studentId: String(s.id), studentName: s.name, course: s.curso, date: fecha, type: ACTA_TIPO, cartaId: carta ? String(carta.id) : '', description: carta ? `Acta firmada de ${carta.type} del ${fmtDate(carta.date)}` : 'Acta firmada de carta de compromiso', fileName: nombre, mimeType: 'application/pdf', uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: up.fileId, url: up.url, archivado: true, paginas: g.pages.length });
+        await DB.save('evidences', { id: newId(), studentId: String(s.id), studentName: s.name, course: s.curso, date: fecha, type: ACTA_TIPO, cartaId: carta ? String(carta.id) : '', description: carta ? `Acta firmada de ${carta.type} del ${fmtDate(carta.date)}` : 'Acta transversal firmada', transversal: !carta, fileName: nombre, mimeType: 'application/pdf', uploaderId: String(State.currentUser.id), uploadedBy: State.currentUser.name, storage: 'drive', driveId: up.fileId, url: up.url, archivado: true, paginas: g.pages.length });
         // Una carta generada desde un formato deja de estar «pendiente de firma»
         if (carta && carta.cartaMeta) { try { await DB.patch('interventions', carta.id, { estadoCarta: 'firmada', fechaFirma: fecha, background: String(carta.background || '').replace(/Pendiente de firma[^.]*\./i, `Firmada y guardada el ${fmtDate(fecha)}.`) }); } catch (e) { /* el acta ya quedó guardada */ } }
         ok++;
