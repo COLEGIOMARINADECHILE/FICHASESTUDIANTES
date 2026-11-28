@@ -416,7 +416,7 @@ window.app = {
       ['alerts', 'bell-ring', 'Alertas preventivas', hasAccess('ver_top_intervenciones'), ['alerts']],
       ['reuniones', 'users-round', 'Reuniones de nivel', hasAccess('ver_fichas') || hasAccess('agregar_entrevistas') || hasAccess('editar_fichas'), ['reuniones']],
       ['pick_dia', 'bar-chart-3', 'Resultados DIA y Dominio lector', hasAccess('ver_fichas'), ['dia']],
-      ['cartas', 'file-check', 'Cartas de compromiso', !!(this.canUploadActas && this.canUploadActas()), []],
+      ['cartas_fmt', 'file-signature', 'Cartas de compromiso', !!this.renderCartasFmt && !!(this.cfPuede && this.cfPuede()), ['cartas_fmt']],
       ['pie', 'puzzle', 'Programa PIE', hasAccess('ver_fichas'), ['pie']],
       ['course_summary', 'bar-chart-2', 'Resumen por cursos', hasAccess('ver_resumen_cursos'), ['course_summary']],
       ['sin_reportes', 'user-search', 'Estudiantes sin reportes', hasAccess('ver_fichas'), ['sin_reportes']],
@@ -428,7 +428,7 @@ window.app = {
       ['admin', 'settings', 'Administración', hasAccess('gestionar_usuarios') || hasAccess('configurar_sistema'), ['admin']]
     ];
     // Menú ordenado por cómo se usa: inicio, registrar, seguimiento de estudiantes, equipos, informes y datos, plataforma
-    const GRUPOS = [['', ['dashboard', 'mine', 'quick', 'courses']], ['Registrar', ['asistencia', 'enfermeria', 'cartas']], ['Seguimiento de estudiantes', ['pick_traspaso', 'pick_riesgos', 'alerts', 'consejo', 'pie', 'sin_reportes', 'pick_dia']], ['Equipos y reuniones', ['reuniones', 'entrevistas_reg', 'course_summary', 'presentaciones']], ['Informes y datos', ['reportes', 'report', 'cargas', 'audit']], ['Plataforma', ['manual', 'admin']]];
+    const GRUPOS = [['', ['dashboard', 'mine', 'quick', 'courses']], ['Registrar', ['asistencia', 'enfermeria', 'cartas_fmt']], ['Seguimiento de estudiantes', ['pick_traspaso', 'pick_riesgos', 'alerts', 'consejo', 'pie', 'sin_reportes', 'pick_dia']], ['Equipos y reuniones', ['reuniones', 'entrevistas_reg', 'course_summary', 'presentaciones']], ['Informes y datos', ['reportes', 'report', 'cargas', 'audit']], ['Plataforma', ['manual', 'admin']]];
     const visibles = items.filter(i => i[3]), usados = new Set();
     const boton = ([id, icon, label, , views]) => `<button type="button" class="nav__item" ${views.includes(v) ? 'aria-current="page"' : ''} onclick="${id === 'manual' ? 'app.abrirManual()' : id === 'report' ? 'app.openStaffReportModal()' : id === 'cartas' ? 'app.openCartasHub()' : id.startsWith('pick_') ? `app.openCoursePicker('${id.slice(5)}')` : `app.navigate('${id}')`}">${ico(icon)}<span>${label}</span></button>`;
     let html = '';

@@ -1940,3 +1940,15 @@ button.asj-chip{cursor:pointer;font:inherit}button.asj-chip:hover{filter:brightn
 .asc-lista{list-style:none;margin:6px 0;padding:0;display:grid;gap:5px}.asc-lista li{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.35}.asc-lista li[data-n=alta]{color:#b42318}.asc-lista li[data-n=media]{color:#92400e}
 .asc-det summary{cursor:pointer;font-weight:700;display:flex;gap:6px;align-items:center}.asc-warn{color:#b45309}
 .asc-dias{display:flex;flex-wrap:wrap;gap:6px}.asc-dia{width:44px;height:44px;border-radius:10px;border:1px solid var(--color-rule);background:#fff;font-weight:700;cursor:pointer}.asc-dia.is-sel{background:#b42318;color:#fff;border-color:#b42318}.asc-dia:disabled{opacity:.35;cursor:not-allowed;background:repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 4px,#e5e7eb 4px,#e5e7eb 8px)}
+
+.cf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:10px}.cf-card{border:1px solid var(--color-rule);border-radius:14px;padding:14px;background:var(--color-paper-2,#fff);display:flex;flex-direction:column;gap:6px}.cf-card__h{display:flex;gap:8px;align-items:center}.cf-card__h h3{margin:0;font-size:1rem}
+.cf-lista{max-height:260px;overflow:auto;border:1px solid var(--color-rule);border-radius:10px;padding:8px;display:grid;gap:4px}
+.cf-cotejo{margin-top:8px;padding:8px 10px;border-radius:10px;background:#f0fdf4;border:1px solid #86efac}.cf-cotejo[data-n=aviso]{background:#fff7ed;border-color:#f59e0b}.cf-cotejo p{display:flex;gap:6px;align-items:flex-start;margin:2px 0}.cf-aviso{color:#b45309;font-weight:600}
+
+/* Administración: las tablas caben completas, sin desplazarse al costado */
+#admin-content table.table{width:100%;font-size:13px}
+#admin-content table.table th,#admin-content table.table td{white-space:normal;padding:8px 8px;overflow-wrap:anywhere;vertical-align:top}
+#admin-content .input--email{min-width:0;width:100%}
+#admin-content td.t-actions{white-space:normal}#admin-content td.t-actions .row-actions{flex-wrap:wrap;justify-content:flex-end;gap:6px}
+
+#admin-content table.table td .input--email{min-width:200px}

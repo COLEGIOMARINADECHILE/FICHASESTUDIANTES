@@ -154,7 +154,7 @@ Object.assign(app, {
         const det = preset.studentId ? null : (pg.text.trim() ? this.studentInText(pg.text, pool) : null);
         pg.detected = det ? String(det.id) : '';
         pg.fechaDoc = this.fechaEnTexto(pg.text);
-        delete pg.page; delete pg.text;
+        pg.texto = String(pg.text || '').slice(0, 8000); delete pg.page; delete pg.text;
       });
       State.actas = { files: sources, pages, preset, porCarta: 1 };
       State.actasDocs = {};
@@ -373,6 +373,7 @@ Object.assign(app, {
             <label class="check"><input type="checkbox" ${f.incluir ? 'checked' : ''} onchange="app.actaGroups()[${gi}].first.incluir=this.checked; app.renderActas()"><span><strong>Acta ${gi + 1}</strong> · ${g.pages.length} página(s)${f.detected && sameId(f.detected, f.studentId) ? ' · estudiante reconocido en el documento' : ''}</span></label>
             ${fieldHtml('Estudiante', `<input class="input" list="actas-students" value="${esc(etiqueta(f.studentId))}" placeholder="Escriba nombre o RUN..." autocomplete="off" onchange="app.setActaStudentText(${gi}, this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">`)}
             ${fieldHtml('Carta de compromiso a la que corresponde', `<select class="input" ${f.studentId ? '' : 'disabled'} onchange="app.actaGroups()[${gi}].first.cartaId=this.value; app.renderActas()">${options([['__new', 'Registrar como carta nueva en la ficha'], ...cartas.map(c => [String(c.id), `${fmtDate(c.date)} · ${c.type}${this.actaOf(c.id) ? ' (ya tiene acta)' : ''}`]), ['', 'Solo guardar el PDF, sin carta']], f.cartaId)}</select>`)}
+            ${this.cotejoHtml ? this.cotejoHtml(g, gi) : ''}
             ${f.cartaId === '__new' && f.studentId ? `<div class="grid-2">
               ${fieldHtml('Fecha de la carta', `<input type="date" class="input" value="${esc(f.fechaCarta)}" max="${today()}" onchange="app.actaGroups()[${gi}].first.fechaCarta=this.value">`)}
               ${fieldHtml('Tipo', `<select class="input" onchange="app.actaGroups()[${gi}].first.tipoCarta=this.value">${options(['Carta Compromiso', 'Carta Compromiso Familiar', 'Carta Compromiso Estudiante', 'Carta de Condicionalidad'], f.tipoCarta)}</select>`)}
@@ -387,6 +388,8 @@ Object.assign(app, {
     const a = State.actas;
     const groups = this.actaGroups().filter(g => g.first.incluir && g.first.studentId);
     if (!groups.length) { toast('Asigne un estudiante al menos a un acta', 'error'); return false; }
+    const sinRevisar = this.cartaCotejo ? groups.filter(g => { const k = this.cartaCotejo(g); return k && k.avisos.length && !g.first.cotejoRevisado; }) : [];
+    if (sinRevisar.length) { toast(`Hay ${sinRevisar.length} acta(s) con diferencias: revíselas y marque «Revisé estas diferencias» en cada una`, 'error'); this.renderActas(); return false; }
     ui.close();
     const done = ui.busy('Guardando actas firmadas', '');
     let ok = 0;
