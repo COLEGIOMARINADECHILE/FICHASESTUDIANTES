@@ -42,7 +42,7 @@ Object.assign(app, {
     const tipos = Object.fromEntries(HF_TIPOS.map(([k]) => [k, el('hf-t-' + k).checked]));
     if (!Object.values(tipos).some(Boolean)) { toast('Elija al menos un tipo de registro', 'error'); return false; }
     Object.assign(State.export, { context: 'staff_report', customSignatures: [], tempProfId: State.hf.uid, tempPer: per, tempOpts: { tipos, orden: el('hf-ord').value, detalle: el('hf-det').value, privadas: el('hf-priv').checked }, tempType: per.mes ? 'monthly' : 'annual', tempTime: per.todo ? 'todo' : (per.mes ? `${per.anio}-${per.mes}` : per.anio) });
-    ui.close(); this.executeExport({ includeSig: false }); return false;
+    ui.close(); this.hfAbrirExport('staff_report'); return false;
   }
 });
 
@@ -78,9 +78,10 @@ Object.assign(app, {
     const cols = o.detalle === 'sin' ? ['Fecha', 'Tipo', 'Estudiante', 'Curso'] : ['Fecha', 'Tipo', 'Estudiante', 'Curso', 'Detalle'];
     const cuerpo = `${docKv([[['Funcionario', `${esc(name)}${prof?.customRole ? ' — ' + esc(prof.customRole) : ''}`]], [['Período', esc(periodoTxt)]], [['Total de registros', `<strong>${regs.length}</strong>`]]])}
         ${docH('Resumen por tipo de acción')}${docTable(['Tipo de acción', 'Cantidad'], Object.entries(resumen).map(([k, v]) => [esc(k), `<strong>${v}</strong>`]), 'Sin registros en el período.')}
+        ${regs.length ? `<div class="doc-avoid" style="text-align:center"><img src="${app.hfDonaImg(Object.entries(resumen), regs.length)}" alt="Distribución de los registros por tipo" style="width:100%;max-width:760px"></div>` : ''}
         ${docH('Detalle cronológico')}${docTable(cols, regs.map(r => [fmtDate(r[0]), `<strong>${esc(r[1])}</strong>`, esc(r[2]), esc(r[3]), ...(o.detalle === 'sin' ? [] : [esc(r[4])])]), 'No se registran acciones en el período seleccionado.')}
         ${reservados.n && !o.privadas ? `<p class="doc-muted">${reservados.n} registro(s) confidencial(es) con el detalle reservado.</p>` : ''}`;
-    return { name, nomPer, cuerpo, total: regs.length };
+    return { name, nomPer, cuerpo, total: regs.length, prof };
   },
   /** Opciones por defecto del informe (todo el año de la pantalla, todos los tipos, detalle en resumen). */
   hfOpcionesBase() { return { tipos: Object.fromEntries(HF_TIPOS.map(([k]) => [k, true])), orden: 'fecha', detalle: 'resumen', privadas: false }; },
@@ -88,15 +89,52 @@ Object.assign(app, {
   hfInformeDirecto(uid) {
     const per = { ...this.gsPeriodo() }; if (!per.anio) per.todo = true;
     Object.assign(State.export, { context: 'staff_report', customSignatures: [], tempProfId: String(uid), tempPer: per, tempOpts: this.hfOpcionesBase(), tempType: per.mes ? 'monthly' : 'annual', tempTime: per.mes ? `${per.anio}-${per.mes}` : per.anio });
-    this.executeExport({ includeSig: false });
+    this.hfAbrirExport('staff_report');
   },
   /** Un solo PDF con el informe de varias personas (una por página). */
   hfInformeVarios(ids) {
     const per = { ...this.gsPeriodo() };
     Object.assign(State.export, { context: 'staff_report_varios', customSignatures: [], tempIds: ids.map(String), tempPer: per, tempOpts: this.hfOpcionesBase(), tempType: per.mes ? 'monthly' : 'annual', tempTime: per.mes ? `${per.anio}-${per.mes}` : per.anio });
-    this.executeExport({ includeSig: false });
+    this.hfAbrirExport('staff_report_varios');
+  },
+  /** Abre las opciones de descarga (formato, papel y firmas) con el funcionario y la dirección como firmantes. */
+  hfAbrirExport(ctx) {
+    const ex = State.export; this.openExportModal(ctx);
+    const prof = State.users.find(u => String(u.id) === String(ex.tempProfId)), s0 = ex.customSignatures.find(s => s.role === 'FUNCIONARIO/A RESPONSABLE');
+    if (s0) {
+      if (ctx === 'staff_report_varios') Object.assign(s0, { role: 'FUNCIONARIO/A DE CADA INFORME', name: 'CADA FUNCIONARIO/A', porPersona: true, checked: true });
+      else if (prof) Object.assign(s0, { role: String(prof.customRole || prof.role || 'FUNCIONARIO/A').toUpperCase(), name: prof.name.toUpperCase(), checked: true });
+    }
+    const dir = ex.customSignatures.find(s => s.role === 'DIRECTORA'); if (dir) dir.checked = true;
+    this.renderCustomSignatures();
+  },
+  /** Gráfico circular (con el total al centro y la leyenda) como imagen, para PDF y Word. */
+  hfDonaImg(items, total) {
+    const pal = ['#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#6b7280'];
+    items = items.slice().sort((a, b) => b[1] - a[1]); if (items.length > 8) { const r = items.slice(7).reduce((t, i) => t + i[1], 0); items = [...items.slice(0, 7), ['Otros tipos', r]]; }
+    const W = 1520, H = Math.max(520, 150 + items.length * 62), c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
+    const cx = 300, cy = H / 2, R = 230, r = 140; let a0 = -Math.PI / 2;
+    items.forEach(([k, n], i) => { const a1 = a0 + n / total * Math.PI * 2; x.beginPath(); x.arc(cx, cy, R, a0, a1); x.arc(cx, cy, r, a1, a0, true); x.closePath(); x.fillStyle = pal[i % pal.length]; x.fill(); x.lineWidth = 6; x.strokeStyle = '#ffffff'; x.stroke(); a0 = a1; });
+    x.fillStyle = '#0f172a'; x.textAlign = 'center'; x.font = 'bold 84px Arial'; x.fillText(String(total), cx, cy + 14); x.font = '32px Arial'; x.fillStyle = '#475569'; x.fillText('registros', cx, cy + 58);
+    x.textAlign = 'left'; x.font = 'bold 36px Arial'; x.fillStyle = '#0f172a'; x.fillText('Distribución de los registros por tipo', 620, 70);
+    items.forEach(([k, n], i) => { const y = 130 + i * 62, p = Math.round(n / total * 100); x.fillStyle = pal[i % pal.length]; x.beginPath(); x.roundRect ? x.roundRect(620, y - 28, 40, 40, 10) : x.rect(620, y - 28, 40, 40); x.fill(); x.fillStyle = '#0f172a'; x.font = '34px Arial'; const t = String(k).length > 34 ? String(k).slice(0, 33) + '…' : String(k); x.fillText(t, 680, y + 4); x.textAlign = 'right'; x.font = 'bold 34px Arial'; x.fillText(`${n}  (${p} %)`, W - 40, y + 4); x.textAlign = 'left'; });
+    return c.toDataURL('image/png');
+  },
+  /** Firmas de un informe dentro de un PDF con varios funcionarios (el funcionario de cada informe + los demás elegidos). */
+  hfFirmasPara(prof) {
+    const ex = State.export; if (!el('export-sig')?.checked) return '';
+    const orig = ex.customSignatures;
+    ex.customSignatures = orig.map(s => s.porPersona ? { ...s, name: String(prof?.name || '').toUpperCase(), role: String(prof?.customRole || prof?.role || 'FUNCIONARIO/A').toUpperCase() } : s);
+    ex.__sigEmb = true; try { return this.signaturesHtml(); } finally { ex.customSignatures = orig; ex.__sigEmb = false; }
   }
 });
+
+(() => {
+  // En el PDF con varios funcionarios la firma va al final de cada informe, no una sola vez al final
+  const sig0 = app.signaturesHtml;
+  app.signaturesHtml = function () { if (State.export.context === 'staff_report_varios' && !State.export.__sigEmb) return ''; return sig0.apply(this, arguments); };
+})();
 
 Object.assign(app.REPORTS, {
   staff_report() {
@@ -109,7 +147,7 @@ Object.assign(app.REPORTS, {
     const infs = (ex.tempIds || []).map(id => app.hfInforme(id, per, o));
     const nomPer = per.todo ? 'historial' : (per.mes ? `${per.anio}_${per.mes}` : per.anio);
     return { filename: `Informes_de_gestion_${nomPer}.pdf`, title: 'INFORME DE GESTIÓN DE FUNCIONARIO', wide: true,
-      body: infs.map((i, n) => `<div${n ? ' style="page-break-before:always"' : ''}>${i.cuerpo}</div>`).join('') };
+      body: infs.map((i, n) => `<div${n ? ' style="page-break-before:always"' : ''}>${i.cuerpo}${app.hfFirmasPara(i.prof)}</div>`).join('') };
   }
 });
 
